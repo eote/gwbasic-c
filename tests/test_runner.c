@@ -80,6 +80,15 @@ void test_gioscn_screen(void);
 void test_gioscn_pset(void);
 void test_gioscn_preset(void);
 void test_gioscn_point(void);
+void test_gwlist_init(void);
+void test_gwlist_add_line(void);
+void test_gwlist_delete_line(void);
+void test_gwlist_list(void);
+void test_bistrs_init(void);
+void test_bistrs_left_right_mid(void);
+void test_bistrs_len_asc_chr(void);
+void test_bistrs_str_val(void);
+void test_bistrs_string_space(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -116,6 +125,15 @@ int main(void) {
     failed += run_test("gioscn_pset", test_gioscn_pset);
     failed += run_test("gioscn_preset", test_gioscn_preset);
     failed += run_test("gioscn_point", test_gioscn_point);
+    failed += run_test("gwlist_init", test_gwlist_init);
+    failed += run_test("gwlist_add_line", test_gwlist_add_line);
+    failed += run_test("gwlist_delete_line", test_gwlist_delete_line);
+    failed += run_test("gwlist_list", test_gwlist_list);
+    failed += run_test("bistrs_init", test_bistrs_init);
+    failed += run_test("bistrs_left_right_mid", test_bistrs_left_right_mid);
+    failed += run_test("bistrs_len_asc_chr", test_bistrs_len_asc_chr);
+    failed += run_test("bistrs_str_val", test_bistrs_str_val);
+    failed += run_test("bistrs_string_space", test_bistrs_string_space);
     
     print_test_summary();
     

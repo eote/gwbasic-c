@@ -45,6 +45,13 @@ struct variable {
     struct variable *next;
 };
 
+/* Program line for tokenized program storage */
+struct program_line {
+    int number;
+    char *text;
+    struct program_line *next;
+};
+
 /* String heap for dynamic string storage */
 #define STRING_HEAP_SIZE  16384
 
@@ -120,5 +127,25 @@ void gioscn_screen(int mode);
 void gioscn_pset(int x, int y, int color);
 void gioscn_preset(int x, int y);
 int gioscn_point(int x, int y);
+
+/* GWLIST module functions */
+void gwlist_init(void);
+void gwlist_add_line(int number, const char *text);
+struct program_line *gwlist_find_line(int number);
+void gwlist_delete_line(int number);
+void gwlist_list(int start, int end);
+
+/* BISTRS module functions */
+void bistrs_init(void);
+char *bistrs_left(const char *str, int n);
+char *bistrs_right(const char *str, int n);
+char *bistrs_mid(const char *str, int start, int len);
+int bistrs_len(const char *str);
+int bistrs_asc(const char *str);
+char *bistrs_chr(int code);
+char *bistrs_str(double val);
+double bistrs_val(const char *str);
+char *bistrs_string(int n, char ch);
+char *bistrs_space(int n);
 
 #endif /* GWBASIC_H */
