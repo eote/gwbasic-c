@@ -134,6 +134,7 @@ void gwlist_add_line(int number, const char *text);
 struct program_line *gwlist_find_line(int number);
 void gwlist_delete_line(int number);
 void gwlist_list(int start, int end);
+struct program_line *gwlist_get_first_line(void);
 
 /* BISTRS module functions */
 void bistrs_init(void);

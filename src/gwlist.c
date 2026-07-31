@@ -89,3 +89,7 @@ void gwlist_list(int start, int end) {
         curr = curr->next;
     }
 }
+
+struct program_line *gwlist_get_first_line(void) {
+    return g_program_head;
+}

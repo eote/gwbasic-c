@@ -165,10 +165,21 @@ static void run_interpreter(void) {
         }
         
         /* Check for RUN command */
-        if (strcasecmp(trimmed, "RUN") == 0) {
-            printf("RUN not fully implemented yet\n");
-            continue;
-        }
+                if (strcasecmp(trimmed, "RUN") == 0) {
+                    /* Execute all program lines in order */
+                    struct program_line *curr = gwlist_get_first_line();
+                    while (curr) {
+                        if (curr->text) {
+                            int rc = gwsts_exec_statement(curr->text);
+                            if (rc != 0) {
+                                printf("Error at line %d\n", curr->number);
+                                break;
+                            }
+                        }
+                        curr = curr->next;
+                    }
+                    continue;
+                }
         
         /* If line starts with number, it's a program line */
         if (has_line_number(trimmed)) {
