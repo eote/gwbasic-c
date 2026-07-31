@@ -14,7 +14,7 @@ typedef uint8_t   BYTE;
 typedef int16_t   SWORD;
 typedef uint16_t  WORD;
 typedef int32_t   SDWORD;
-typedef uint32_t  DWORD;
+typedef uint32_t  UDWORD;
 
 /* Function result codes */
 #define SUCCESS     0
@@ -100,5 +100,13 @@ float gweval_eval_numeric(const char *expr);
 /* GWSTS module functions */
 void gwsts_init(void);
 int gwsts_exec_statement(const char *stmt);
+
+/* GIOCON module functions */
+void giocon_init(void);
+void giocon_print_num(float val);
+void giocon_print_str(const char *str);
+void giocon_locate(int row, int col);
+void giocon_color(int fg, int bg);
+void giocon_cls(void);
 
 #endif /* GWBASIC_H */

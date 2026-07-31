@@ -48,7 +48,8 @@ TEST_SRCS = \
 	../tests/test_gwdata.c \
 	../tests/test_gwram.c \
 	../tests/test_gwinit.c \
-	../tests/test_gwsts_gweval.c
+	../tests/test_gwsts_gweval.c \
+	../tests/test_giocon.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o

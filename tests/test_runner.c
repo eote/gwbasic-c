@@ -67,6 +67,11 @@ void test_gweval_variables(void);
 void test_gwsts_let(void);
 void test_gwsts_print(void);
 void test_gwsts_if(void);
+void test_giocon_init(void);
+void test_giocon_print(void);
+void test_giocon_locate(void);
+void test_giocon_color(void);
+void test_giocon_cls(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -90,6 +95,11 @@ int main(void) {
     failed += run_test("gwsts_let", test_gwsts_let);
     failed += run_test("gwsts_print", test_gwsts_print);
     failed += run_test("gwsts_if", test_gwsts_if);
+    failed += run_test("giocon_init", test_giocon_init);
+    failed += run_test("giocon_print", test_giocon_print);
+    failed += run_test("giocon_locate", test_giocon_locate);
+    failed += run_test("giocon_color", test_giocon_color);
+    failed += run_test("giocon_cls", test_giocon_cls);
     
     print_test_summary();
     
