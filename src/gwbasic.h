@@ -149,4 +149,17 @@ double bistrs_val(const char *str);
 char *bistrs_string(int n, char ch);
 char *bistrs_space(int n);
 
+/* BIPRTU module functions */
+void biprtu_init(void);
+void biprtu_print_using(const char *fmt, double val);
+void biprtu_print_using_str(const char *fmt, const char *str);
+
+/* BIPTRG module functions */
+void biptrg_init(void);
+int biptrg_dim_array(const char *name, int size, var_type_t type);
+int biptrg_set_array_element(const char *name, int index, float val);
+float biptrg_get_array_element(const char *name, int index);
+int biptrg_set_array_string(const char *name, int index, const char *str);
+char *biptrg_get_array_string(const char *name, int index);
+
 #endif /* GWBASIC_H */

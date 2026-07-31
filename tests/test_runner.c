@@ -89,6 +89,11 @@ void test_bistrs_left_right_mid(void);
 void test_bistrs_len_asc_chr(void);
 void test_bistrs_str_val(void);
 void test_bistrs_string_space(void);
+void test_biprtu_init(void);
+void test_biprtu_print_using(void);
+void test_biptrg_init(void);
+void test_biptrg_array(void);
+void test_biptrg_string_array(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -134,6 +139,11 @@ int main(void) {
     failed += run_test("bistrs_len_asc_chr", test_bistrs_len_asc_chr);
     failed += run_test("bistrs_str_val", test_bistrs_str_val);
     failed += run_test("bistrs_string_space", test_bistrs_string_space);
+    failed += run_test("biprtu_init", test_biprtu_init);
+    failed += run_test("biprtu_print_using", test_biprtu_print_using);
+    failed += run_test("biptrg_init", test_biptrg_init);
+    failed += run_test("biptrg_array", test_biptrg_array);
+    failed += run_test("biptrg_string_array", test_biptrg_string_array);
     
     print_test_summary();
     

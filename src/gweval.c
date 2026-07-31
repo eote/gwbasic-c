@@ -83,6 +83,19 @@ static float parse_factor(parser_t *p) {
         }
         name[i] = '\0';
         
+        /* Check for array reference: A(5) */
+        if (parser_peek(p) == '(') {
+            parser_get(p);  /* consume '(' */
+            
+            /* Parse index expression */
+            float index_val = parse_expression(p);
+            int index = (int)index_val;
+            
+            if (parser_match(p, ')')) {
+                return biptrg_get_array_element(name, index);
+            }
+        }
+        
         struct variable *v = gwdata_find_variable(name);
         if (v && v->type == VT_SINGLE) {
             return v->value.f;
