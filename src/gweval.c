@@ -91,6 +91,9 @@ static float parse_factor(parser_t *p) {
             float index_val = parse_expression(p);
             int index = (int)index_val;
             
+            /* GW-BASIC: negative index treated as 0 */
+            if (index < 0) index = 0;
+            
             if (parser_match(p, ')')) {
                 return biptrg_get_array_element(name, index);
             }

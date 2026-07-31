@@ -68,7 +68,9 @@ int biptrg_set_array_element(const char *name, int index, float val) {
     array_desc_t *desc = (array_desc_t *)v->value.s;
     if (!desc) return ERROR;
     
-    if (index < 0 || index >= desc->size) return ERROR;
+    /* GW-BASIC: clamp index to valid range */
+    if (index < 0) index = 0;
+    if (index >= desc->size) index = desc->size - 1;
     
     if (desc->type == VT_INTEGER) {
         int32_t *data = (int32_t *)desc->data;
@@ -95,8 +97,11 @@ float biptrg_get_array_element(const char *name, int index) {
     
     array_desc_t *desc = (array_desc_t *)v->value.s;
     if (!desc) return 0.0f;
+    if (!desc->data) return 0.0f;  /* Defensive check */
     
-    if (index < 0 || index >= desc->size) return 0.0f;
+    /* GW-BASIC: clamp index to valid range */
+    if (index < 0) index = 0;
+    if (index >= desc->size) index = desc->size - 1;
     
     if (desc->type == VT_INTEGER) {
         int32_t *data = (int32_t *)desc->data;
@@ -123,7 +128,10 @@ int biptrg_set_array_string(const char *name, int index, const char *str) {
     if (!desc) return ERROR;
     
     if (desc->type != VT_STRING) return ERROR;
-    if (index < 0 || index >= desc->size) return ERROR;
+    
+    /* GW-BASIC: clamp index to valid range */
+    if (index < 0) index = 0;
+    if (index >= desc->size) index = desc->size - 1;
     
     char **data = (char **)desc->data;
     
@@ -151,7 +159,10 @@ char *biptrg_get_array_string(const char *name, int index) {
     if (!desc) return NULL;
     
     if (desc->type != VT_STRING) return NULL;
-    if (index < 0 || index >= desc->size) return NULL;
+    
+    /* GW-BASIC: clamp index to valid range */
+    if (index < 0) index = 0;
+    if (index >= desc->size) index = desc->size - 1;
     
     char **data = (char **)desc->data;
     return data[index];
