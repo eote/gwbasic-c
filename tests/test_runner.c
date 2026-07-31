@@ -53,6 +53,10 @@ void print_test_summary(void) {
 void test_gwdata_init(void);
 void test_gwdata_variable_table(void);
 void test_gwdata_string_heap(void);
+void test_gwram_alloc_free(void);
+void test_gwram_realloc(void);
+void test_gwram_calloc(void);
+void test_gwram_oom_handling(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -62,6 +66,10 @@ int main(void) {
     failed += run_test("gwdata_init", test_gwdata_init);
     failed += run_test("gwdata_variable_table", test_gwdata_variable_table);
     failed += run_test("gwdata_string_heap", test_gwdata_string_heap);
+    failed += run_test("gwram_alloc_free", test_gwram_alloc_free);
+    failed += run_test("gwram_realloc", test_gwram_realloc);
+    failed += run_test("gwram_calloc", test_gwram_calloc);
+    failed += run_test("gwram_oom_handling", test_gwram_oom_handling);
     
     print_test_summary();
     

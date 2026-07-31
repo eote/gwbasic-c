@@ -83,4 +83,11 @@ struct variable *gwdata_find_variable(const char *name);
 char *gwdata_alloc_string(size_t len);
 void gwdata_free_string(char *s);
 
+/* GWRAM module functions */
+void gwram_init(void);
+void *gwram_alloc(size_t size);
+void *gwram_realloc(void *ptr, size_t size);
+void *gwram_calloc(size_t nmemb, size_t size);
+void gwram_free(void *ptr);
+
 #endif /* GWBASIC_H */

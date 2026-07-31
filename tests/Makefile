@@ -45,7 +45,8 @@ TEST_SRCS = \
 	../src/oemsnd.c \
 	../src/scndrv.c \
 	../src/scnedt.c \
-	../tests/test_gwdata.c
+	../tests/test_gwdata.c \
+	../tests/test_gwram.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o

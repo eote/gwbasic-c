@@ -48,7 +48,7 @@ OBJS = $(SRCS:.c=.o)
 TARGET = gwbasic.exe
 
 # Test infrastructure
-TEST_SRCS = tests/test_runner.c tests/test_gwdata.c
+TEST_SRCS = tests/test_runner.c tests/test_gwdata.c tests/test_gwram.c
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_TARGET = test_gwbasic.exe
 
