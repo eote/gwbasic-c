@@ -4,6 +4,8 @@
 #include "gwbasic.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
 /* Forward declarations for module init functions */
 extern void advgrp_init(void);
@@ -87,6 +89,117 @@ static void init_all_modules(void) {
     scnedt_init();
 }
 
+/* Check if string is a direct command (no line number) */
+static bool is_direct_command(const char *line) {
+    while (*line && isspace((unsigned char)*line)) line++;
+    if (!*line) return false;
+    return !isdigit((unsigned char)*line);
+}
+
+/* Check if string starts with a line number */
+static bool has_line_number(const char *line) {
+    while (*line && isspace((unsigned char)*line)) line++;
+    return *line && isdigit((unsigned char)*line);
+}
+
+/* Extract line number from start of string */
+static int extract_line_number(const char *line, const char **rest) {
+    while (*line && isspace((unsigned char)*line)) line++;
+    
+    int num = 0;
+    while (*line && isdigit((unsigned char)*line)) {
+        num = num * 10 + (*line - '0');
+        line++;
+    }
+    
+    while (*line && isspace((unsigned char)*line)) line++;
+    
+    if (rest) *rest = line;
+    return num;
+}
+
+/* Main interpreter loop */
+static void run_interpreter(void) {
+    char input[256];
+    
+    printf("GW-BASIC C Port\n");
+    printf("Based on Microsoft GW-BASIC 1983 Source Code\n");
+    printf("Type 'BYE' to exit\n\n");
+    printf("Ok\n");
+    
+    while (g_state && g_state->running) {
+        /* Display prompt */
+        printf("Ok\n");
+        fflush(stdout);
+        
+        /* Read input line */
+        if (!fgets(input, sizeof(input), stdin)) {
+            break;  /* EOF */
+        }
+        
+        /* Remove trailing newline */
+        input[strcspn(input, "\n")] = '\0';
+        
+        /* Skip empty lines */
+        char *trimmed = input;
+        while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+        if (!*trimmed) continue;
+        
+        /* Check for BYE/EXIT */
+        if (strcasecmp(trimmed, "BYE") == 0 || strcasecmp(trimmed, "EXIT") == 0) {
+            break;
+        }
+        
+        /* Check for LIST command */
+        if (strncasecmp(trimmed, "LIST", 4) == 0 && (trimmed[4] == '\0' || isspace((unsigned char)trimmed[4]))) {
+            gwlist_list(0, 0);
+            continue;
+        }
+        
+        /* Check for NEW command */
+        if (strcasecmp(trimmed, "NEW") == 0) {
+            /* Clear program - reinitialize gwlist */
+            gwlist_init();
+            printf("Ok\n");
+            continue;
+        }
+        
+        /* Check for RUN command */
+        if (strcasecmp(trimmed, "RUN") == 0) {
+            printf("RUN not fully implemented yet\n");
+            continue;
+        }
+        
+        /* If line starts with number, it's a program line */
+        if (has_line_number(trimmed)) {
+            const char *rest;
+            int line_num = extract_line_number(trimmed, &rest);
+            
+            if (line_num > 0 && line_num <= 65529) {
+                if (*rest == '\0') {
+                    /* Delete line */
+                    gwlist_delete_line(line_num);
+                } else {
+                    /* Add/replace line */
+                    gwlist_add_line(line_num, rest);
+                }
+                printf("Ok\n");
+            } else {
+                printf("Illegal line number\n");
+            }
+            continue;
+        }
+        
+        /* Otherwise execute as direct statement */
+        int rc = gwsts_exec_statement(trimmed);
+        if (rc != 0) {
+            printf("Error executing statement\n");
+        }
+    }
+    
+    printf("\nGoodbye!\n");
+}
+
 /* Main entry point */
 int main(int argc, char *argv[]) {
     (void)argc;
@@ -99,10 +212,8 @@ int main(int argc, char *argv[]) {
         return ERROR;
     }
     
-    /* TODO: Main interpreter loop */
-    printf("GW-BASIC C Port - Stub Implementation\n");
-    printf("Based on Microsoft GW-BASIC 1983 Source Code\n\n");
-    printf("This is a skeleton - interpreter not yet implemented.\n");
+    /* Run the interpreter */
+    run_interpreter();
     
     /* Cleanup */
     free(g_state);
