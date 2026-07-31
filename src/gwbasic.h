@@ -93,4 +93,12 @@ void gwram_free(void *ptr);
 /* GWINIT module functions */
 void gwinit_init(void);
 
+/* GWEVAL module functions */
+void gweval_init(void);
+float gweval_eval_numeric(const char *expr);
+
+/* GWSTS module functions */
+void gwsts_init(void);
+int gwsts_exec_statement(const char *stmt);
+
 #endif /* GWBASIC_H */

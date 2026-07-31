@@ -1,9 +1,156 @@
-/* GWEVAL - Brief Description */
+/* GWEVAL - Expression Evaluation */
 /* Based on GWEVAL.ASM */
 
 #include "gwbasic.h"
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <math.h>
 
-/* Module initialization */
+/* Parser state */
+typedef struct {
+    const char *input;
+    size_t pos;
+    size_t len;
+} parser_t;
+
+static void parser_init(parser_t *p, const char *input) {
+    p->input = input;
+    p->pos = 0;
+    p->len = strlen(input);
+}
+
+static char parser_peek(parser_t *p) {
+    while (p->pos < p->len && isspace((unsigned char)p->input[p->pos])) {
+        p->pos++;
+    }
+    if (p->pos < p->len) return p->input[p->pos];
+    return '\0';
+}
+
+static char parser_get(parser_t *p) {
+    char c = parser_peek(p);
+    if (c) p->pos++;
+    return c;
+}
+
+static bool parser_match(parser_t *p, char c) {
+    if (parser_peek(p) == c) {
+        parser_get(p);
+        return true;
+    }
+    return false;
+}
+
+static float parse_expression(parser_t *p);
+
+static float parse_factor(parser_t *p) {
+    char c = parser_peek(p);
+    
+    if (c == '(') {
+        parser_get(p); /* consume '(' */
+        float result = parse_expression(p);
+        parser_match(p, ')'); /* consume ')' */
+        return result;
+    }
+    
+    if (c == '-') {
+        parser_get(p);
+        return -parse_factor(p);
+    }
+    
+    if (c == '+') {
+        parser_get(p);
+        return parse_factor(p);
+    }
+    
+    /* Number or variable */
+    if (isdigit((unsigned char)c) || c == '.') {
+        char buf[64];
+        size_t i = 0;
+        while (p->pos < p->len && (isdigit((unsigned char)p->input[p->pos]) || p->input[p->pos] == '.') && i < sizeof(buf) - 1) {
+            buf[i++] = p->input[p->pos++];
+        }
+        buf[i] = '\0';
+        return (float)atof(buf);
+    }
+    
+    if (isalpha((unsigned char)c)) {
+        char name[41];
+        size_t i = 0;
+        while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_') && i < sizeof(name) - 1) {
+            name[i++] = p->input[p->pos++];
+        }
+        name[i] = '\0';
+        
+        struct variable *v = gwdata_find_variable(name);
+        if (v && v->type == VT_SINGLE) {
+            return v->value.f;
+        }
+        return 0.0f;
+    }
+    
+    return 0.0f;
+}
+
+static float parse_power(parser_t *p) {
+    float left = parse_factor(p);
+    
+    while (parser_match(p, '^')) {
+        float right = parse_factor(p);
+        left = powf(left, right);
+    }
+    
+    return left;
+}
+
+static float parse_term(parser_t *p) {
+    float left = parse_power(p);
+    
+    while (true) {
+        char c = parser_peek(p);
+        if (c == '*') {
+            parser_get(p);
+            left *= parse_power(p);
+        } else if (c == '/') {
+            parser_get(p);
+            float right = parse_power(p);
+            if (right != 0.0f) left /= right;
+        } else {
+            break;
+        }
+    }
+    
+    return left;
+}
+
+static float parse_expression(parser_t *p) {
+    float left = parse_term(p);
+    
+    while (true) {
+        char c = parser_peek(p);
+        if (c == '+') {
+            parser_get(p);
+            left += parse_term(p);
+        } else if (c == '-') {
+            parser_get(p);
+            left -= parse_term(p);
+        } else {
+            break;
+        }
+    }
+    
+    return left;
+}
+
 void gweval_init(void) {
-    /* TODO: Initialize GWEVAL module */
+    /* No initialization needed */
+}
+
+float gweval_eval_numeric(const char *expr) {
+    if (!expr) return 0.0f;
+    
+    parser_t parser;
+    parser_init(&parser, expr);
+    return parse_expression(&parser);
 }

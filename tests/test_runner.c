@@ -60,6 +60,13 @@ void test_gwram_oom_handling(void);
 void test_gwinit_basic(void);
 void test_gwinit_constants(void);
 void test_gwinit_function_table(void);
+void test_gweval_literal(void);
+void test_gweval_binary_ops(void);
+void test_gweval_precedence(void);
+void test_gweval_variables(void);
+void test_gwsts_let(void);
+void test_gwsts_print(void);
+void test_gwsts_if(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -76,6 +83,13 @@ int main(void) {
     failed += run_test("gwinit_basic", test_gwinit_basic);
     failed += run_test("gwinit_constants", test_gwinit_constants);
     failed += run_test("gwinit_function_table", test_gwinit_function_table);
+    failed += run_test("gweval_literal", test_gweval_literal);
+    failed += run_test("gweval_binary_ops", test_gweval_binary_ops);
+    failed += run_test("gweval_precedence", test_gweval_precedence);
+    failed += run_test("gweval_variables", test_gweval_variables);
+    failed += run_test("gwsts_let", test_gwsts_let);
+    failed += run_test("gwsts_print", test_gwsts_print);
+    failed += run_test("gwsts_if", test_gwsts_if);
     
     print_test_summary();
     
