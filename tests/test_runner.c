@@ -72,6 +72,14 @@ void test_giocon_print(void);
 void test_giocon_locate(void);
 void test_giocon_color(void);
 void test_giocon_cls(void);
+void test_giokyb_init(void);
+void test_giokyb_inkey(void);
+void test_giokyb_input(void);
+void test_gioscn_init(void);
+void test_gioscn_screen(void);
+void test_gioscn_pset(void);
+void test_gioscn_preset(void);
+void test_gioscn_point(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -100,6 +108,14 @@ int main(void) {
     failed += run_test("giocon_locate", test_giocon_locate);
     failed += run_test("giocon_color", test_giocon_color);
     failed += run_test("giocon_cls", test_giocon_cls);
+    failed += run_test("giokyb_init", test_giokyb_init);
+    failed += run_test("giokyb_inkey", test_giokyb_inkey);
+    failed += run_test("giokyb_input", test_giokyb_input);
+    failed += run_test("gioscn_init", test_gioscn_init);
+    failed += run_test("gioscn_screen", test_gioscn_screen);
+    failed += run_test("gioscn_pset", test_gioscn_pset);
+    failed += run_test("gioscn_preset", test_gioscn_preset);
+    failed += run_test("gioscn_point", test_gioscn_point);
     
     print_test_summary();
     

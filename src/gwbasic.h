@@ -109,4 +109,16 @@ void giocon_locate(int row, int col);
 void giocon_color(int fg, int bg);
 void giocon_cls(void);
 
+/* GIOKYB module functions */
+void giokyb_init(void);
+char *giokyb_inkey(void);
+char *giokyb_input(int n);
+
+/* GIOSCN module functions */
+void gioscn_init(void);
+void gioscn_screen(int mode);
+void gioscn_pset(int x, int y, int color);
+void gioscn_preset(int x, int y);
+int gioscn_point(int x, int y);
+
 #endif /* GWBASIC_H */
