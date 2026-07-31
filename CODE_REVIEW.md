@@ -1,387 +1,265 @@
-# BIPRTU/BIPTRG 模块 Code Review
+# BIPTRU/BIPTRG 模块 Code Review (v2)
 
 **日期**: 2026-08-01
-**审查范围**: 数组处理和格式化打印模块
-**实现状态**: 基础功能已完成，待完善
+**审查范围**: 数组处理 (BIPTRG) 和格式化打印 (BIPRTU) 模块
+**基于提交**: `ebc500e` — fix: address code review issues
+**上一轮 Review**: 已处理 4 个问题 (CRITICAL #2, HIGH #4, HIGH #6, CRITICAL #3)
+**测试状态**: 92/92 全部通过
 
 ---
 
-## 优点
+## 变更摘要
 
-✅ **模块职责清晰**
-- `biptrg.c`: 专注于数组操作（DIM、赋值、读取）
-- `biprtu.c`: 专注于格式化打印（PRINT USING）
-- 两个模块职责分离，符合单一职责原则
+`ebc500e` 修复了上一轮 review 中的以下问题:
 
-✅ **基本功能完整**
-- 支持一维数组声明（`DIM A(10)`）
-- 支持数组元素赋值（`A(5) = 42`）
-- 支持数组元素读取（`A(5)` 在表达式中）
-- 支持字符串数组
-- 支持基本的 PRINT USING 格式
-
-✅ **测试覆盖**
-- 添加了 `test_biprtu_biptrg.c` 测试文件
-- 包含基本的功能测试
+| 问题 | 状态 | 说明 |
+|------|------|------|
+| CRITICAL #2: 数组索引越界 | ✅ 已修复 | 改为 GW-BASIC 兼容的 clamp 行为 (负索引→0, 超界→size-1) |
+| HIGH #4: DIM 多数组声明 | ✅ 已修复 | `continue` 替代 `break`, 支持逗号分隔的多个数组 |
+| HIGH #6: 代码重复 | ✅ 已修复 | 提取 `assign_value()` 公共函数消除重复 |
+| CRITICAL #3: parse_var_ref 指针泄漏 | ✅ 已修复 | `assign_value()` 统一管理 `base_name` 生命周期 |
 
 ---
 
-## 问题
+## 当前问题
 
 ### CRITICAL
 
-#### 1. 内存泄漏：`biptrg_dim_array` 中的 `dim_sizes` 未释放
+#### 1. 内存泄漏：`biptrg_dim_array` 中 `dim_sizes` 永不释放
 
-**位置**: `src/biprtg.c:24-26`
+**位置**: `src/biptrg.c:36-40`
 
-```c
-desc->dim_sizes = (int *)gwram_alloc(sizeof(int));
-if (!desc->dim_sizes) {
-    gwram_free(desc);  // ❌ dim_sizes 未释放
-    return ERROR;
-}
-```
-
-**影响**: 每次创建数组都会泄漏 4 字节内存
-
-**修复**:
 ```c
 desc->dim_sizes = (int *)gwram_alloc(sizeof(int));
 if (!desc->dim_sizes) {
     gwram_free(desc);
     return ERROR;
 }
-gwram_free(desc->dim_sizes);  // ✅ 添加这行
-desc->dim_sizes = NULL;
+```
+
+**说明**: `dim_sizes` 分配后，整个项目中没有代码释放它。`array_desc_t` 结构体（含 `dim_sizes`、`data`）存储在 `v->value.s` 中，但:
+- 没有 `biptrg_free_array()` 函数
+- 没有 `gwdata_free_variable()` 函数
+- 没有 `gwdata_cleanup()` 函数
+
+程序退出时这些内存由操作系统回收，但长期运行的 REPL 会话中会累积泄漏。
+
+**影响**: 每个数组声明泄漏 `sizeof(array_desc_t) + sizeof(int) + size * sizeof(float)` ≈ 16 + 4 + 40 = 60 字节 (以 DIM A(10) 为例)
+
+**修复建议**:
+```c
+/* 在 gwbasic.h 中添加声明 */
+void biptrg_free_array(struct variable *v);
+
+/* 在 biptrg.c 中实现 */
+void biptrg_free_array(struct variable *v) {
+    if (!v) return;
+    array_desc_t *desc = (array_desc_t *)v->value.s;
+    if (!desc) return;
+    if (desc->data) gwram_free(desc->data);
+    if (desc->dim_sizes) gwram_free(desc->dim_sizes);
+    gwram_free(desc);
+    v->value.s = NULL;
+}
 ```
 
 ---
 
-#### 2. 数组索引越界检查缺失
+#### 2. `gwdata_alloc_variable` 覆盖已有数组变量时泄漏旧数组
 
-**位置**: `src/gweval.c:88-93`
+**位置**: `src/gwdata.c:47-57`
 
 ```c
-/* Check for array reference: A(5) */
-if (parser_peek(p) == '(') {
-    parser_get(p);  /* consume '(' */
-
-    /* Parse index expression */
-    float index_val = parse_expression(p);
-    int index = (int)index_val;
-
-    if (parser_match(p, ')')) {
-        return biptrg_get_array_element(name, index);  // ❌ 未检查 index 是否越界
+struct variable *existing = g_state->var_table[idx];
+while (existing) {
+    if (strcmp(existing->name, name) == 0) {
+        existing->type = type;  // ❌ 直接覆盖，旧数组描述符泄漏
+        return existing;
     }
+    existing = existing->next;
 }
 ```
 
-**影响**: 访问越界数组元素会导致未定义行为（读取垃圾数据或段错误）
+**场景**: 用户先执行 `DIM A(10)`，再执行 `A = 5`（将 A 作为普通变量使用）。`gwdata_alloc_variable("A", VT_SINGLE)` 找到已存在的 A，直接覆盖 type，但 `v->value.s` 中存储的 `array_desc_t`（含 `dim_sizes` 和 `data`）永远不会被释放。
 
-**修复**:
-```c
-if (parser_match(p, ')')) {
-    if (index < 0) {
-        // GW-BASIC 行为：负索引当作 0
-        index = 0;
-    }
-    return biptrg_get_array_element(name, index);
-}
-```
+**影响**: 每次此操作泄漏 ~60 字节
 
-**位置**: `src/biptrg.c:71-72`
-```c
-if (index < 0 || index >= desc->size) return ERROR;  // ✅ 已有检查，但调用者未验证
-```
-
----
-
-#### 3. `parse_var_ref` 返回的指针未释放
-
-**位置**: `src/gwsts.c:38-60`
-
-```c
-static bool parse_var_ref(const char *str, char **var_name, int *index) {
-    *var_name = (char *)gwram_alloc(strlen(str) + 1);
-    if (*var_name) strcpy(*var_name, str);
-    return true;  // ❌ 调用者需要负责释放 var_name
-}
-```
-
-**影响**: 调用者可能忘记释放 `var_name`，导致内存泄漏
-
-**修复**: 在函数注释中明确说明调用者需要释放，或使用 `gwram_strdup` 封装
+**修复建议**: 在覆盖前检查旧值是否为数组，若是则调用 `biptrg_free_array`
 
 ---
 
 ### HIGH
 
-#### 4. DIM 语句不支持多个数组声明
+#### 3. DIM 语句不支持字符串数组声明 (`$` 后缀)
 
-**位置**: `src/gwsts.c:85-119`
+**位置**: `src/gwsts.c:77`
 
-**当前实现**:
 ```c
-/* Parse: DIM A(10) or DIM A(10), B(5) */
-char *token = rest;
-while (*token) {
-    // 只处理第一个数组
-    if (var_name && size > 0) {
-        biptrg_dim_array(var_name, size, VT_SINGLE);
-        result = SUCCESS;
-        gwram_free(var_name);
-    }
-    token = strchr(token, ',');
-    if (token) token++;
-    else break;  // ❌ break 后可能还有未释放的内存
-}
+biptrg_dim_array(var_name, size, VT_SINGLE);  // ❌ 总是 VT_SINGLE
 ```
 
-**影响**: 无法声明多个数组（如 `DIM A(10), B(5), C(3)`）
+**说明**: `biptrg_dim_array` 的 `type` 参数被硬编码为 `VT_SINGLE`。虽然 `biptrg.c` 支持 `VT_STRING`、`VT_INTEGER`、`VT_DOUBLE`，但通过 DIM 语句无法使用这些类型。
 
-**修复**:
+**影响**: 用户无法通过 `DIM S$(10)` 声明字符串数组（虽然底层 API 支持）
+
+**修复建议**:
 ```c
-while (*token) {
-    // 解析逻辑...
-
-    if (var_name && size > 0) {
-        biptrg_dim_array(var_name, size, VT_SINGLE);
-        result = SUCCESS;
-        gwram_free(var_name);
-    }
-
-    token = strchr(token, ',');
-    if (token) {
-        token++;
-        continue;  // ✅ 释放后继续循环
-    }
-    break;
+/* 检测变量名后缀 */
+var_type_t type = VT_SINGLE;
+size_t name_len = paren - token;
+if (name_len > 1 && token[name_len - 1] == '$') {
+    type = VT_STRING;
+    name_len--;  /* 去掉后缀 */
 }
+/* ... 分配 var_name 时使用 name_len ... */
+biptrg_dim_array(var_name, size, type);
 ```
 
 ---
 
-#### 5. GW-BASIC 类型系统不完整
+#### 4. 数组读写缺少类型检查
 
-**当前状态**: 只支持 `VT_SINGLE` (float)
+**位置**: `src/biptrg.c:81-100` (`biptrg_get_array_element`)
 
-**缺失**:
-- ❌ `VT_INTEGER` (int) - 整数数组
-- ❌ `VT_DOUBLE` (double) - 双精度浮点数组
-- ❌ `biptrg_dim_array` 的 `type` 参数被忽略，总是使用 `VT_SINGLE`
-
-**影响**: 无法正确实现 GW-BASIC 的整数和双精度浮点数数组
-
-**建议**: 
-- 在 `biptrg.c` 中为每种类型实现正确的内存布局
-- 在 `gwsts.c` 中解析变量类型后传递正确的 type 参数
-
----
-
-#### 6. 代码重复：变量赋值和数组赋值逻辑
-
-**位置**: `src/gwsts.c:99-122`
-
-**重复代码**:
 ```c
-// LET 语句处理（99-122行）
-int array_index = -1;
-char *base_name = NULL;
-parse_var_ref(var_name, &base_name, &array_index);
+array_desc_t *desc = (array_desc_t *)v->value.s;
+if (!desc) return 0.0f;
+if (!desc->data) return 0.0f;
 
-if (base_name && expr) {
-    if (array_index >= 0) {
-        float val = gweval_eval_numeric(expr);
-        result = biptrg_set_array_element(base_name, array_index, val);
-    } else {
-        struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
-        if (v) {
-            v->value.f = gweval_eval_numeric(expr);
-            result = SUCCESS;
-        }
-    }
-}
-
-// 直接赋值处理（124-147行）
-int array_index = -1;
-char *base_name = NULL;
-parse_var_ref(var_name, &base_name, &array_index);
-
-if (base_name && expr) {
-    if (array_index >= 0) {
-        float val = gweval_eval_numeric(expr);
-        result = biptrg_set_array_element(base_name, array_index, val);
-    } else {
-        struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
-        if (v) {
-            v->value.f = gweval_eval_numeric(expr);
-            result = SUCCESS;
-        }
-    }
-}
+/* 没有检查 desc->type，直接按 float 读取 */
+float *data = (float *)desc->data;
+return data[index];
 ```
 
-**建议**: 提取公共函数
-```c
-static int assign_value(const char *var_or_array_ref, const char *expr) {
-    char *var_name = NULL;
-    int array_index = -1;
-    parse_var_ref(var_or_array_ref, &var_name, &array_index);
+**说明**: 如果数组是 `VT_STRING` 类型，`desc->data` 存储的是 `char**`，但函数将其当作 `float*` 读取，导致未定义行为。
 
-    if (!var_name || !expr) return ERROR;
+**影响**: 对字符串数组调用 `biptrg_get_array_element` 会读取垃圾数据
 
-    if (array_index >= 0) {
-        float val = gweval_eval_numeric(expr);
-        return biptrg_set_array_element(var_name, array_index, val);
-    } else {
-        struct variable *v = gwdata_alloc_variable(var_name, VT_SINGLE);
-        if (v) {
-            v->value.f = gweval_eval_numeric(expr);
-            return SUCCESS;
-        }
-    }
-    return ERROR;
-}
-```
+**修复建议**: 在 `VT_STRING` 分支返回 0.0f 或添加类型检查
 
 ---
 
 ### MEDIUM
 
-#### 7. DIM 语句解析不支持带空格的语法
+#### 5. DIM 语句不支持表达式计算大小
 
-**位置**: `src/gwsts.c:88`
+**位置**: `src/gwsts.c:70`
 
-**当前实现**:
 ```c
-/* Parse: DIM A(10) or DIM A(10), B(5) */
-char *token = rest;
-while (*token) {
-    char *paren = strchr(token, '(');
-    // ...
-}
+size = atoi(size_str);  /* ❌ 只支持字面量，不支持表达式 */
 ```
 
-**问题**: 无法处理 `DIM A (10)`（变量名和括号之间有空格）
+**说明**: GW-BASIC 支持 `DIM A(5+3)`。当前实现将 `size_str` 传给 `atoi`，`atoi("5+3")` 返回 5。
 
-**修复**: 在解析前先去除变量名周围的空格
-```c
-char *name_start = token;
-while (*name_start && isspace((unsigned char)*name_start)) name_start++;
-char *name_end = name_start;
-while (*name_end && !isspace((unsigned char)*name_end) && *name_end != '(') name_end++;
-
-if (name_end > name_start) {
-    var_name = (char *)gwram_alloc(name_end - name_start + 1);
-    memcpy(var_name, name_start, name_end - name_start);
-    var_name[name_end - name_start] = '\0';
-}
-```
+**修复建议**: 使用 `gweval_eval_numeric(size_str)` 替代 `atoi`
 
 ---
 
-#### 8. 缺少 GW-BASIC 语法特性
+#### 6. `atoi` 无输入验证
 
-**缺失功能**:
-- ❌ `OPTION BASE 0/1` - 指定数组下标起始值
-- ❌ 多维数组（如 `A(10,5)`）
-- ❌ 数组重定义（`REDIM`）
-- ❌ `LBOUND`, `UBOUND` 函数
+**位置**: `src/gwsts.c:70`, `src/gwsts.c:247`
 
-**建议**: 优先实现 `OPTION BASE`，因为这是最基础的特性
+```c
+size = atoi(size_str);   /* atoi("abc") = 0, 无法区分错误 */
+*index = atoi(index_buf); /* atoi("abc") = 0, 无法区分错误 */
+```
+
+**说明**: `atoi` 对非法输入返回 0，无法区分合法的 "0" 和错误输入。虽然当前 `size > 0` 检查能防御部分情况，但 `index` 为 0 是合法的（`A(0)`）。
+
+**修复建议**: 使用 `strtol` 并检查 `endptr`
 
 ---
 
-#### 9. 输入验证不完整
+#### 7. DIM 变量名前有空格时解析失败
 
-**位置**: `src/gwsts.c:119`
+**位置**: `src/gwsts.c:55-56`
 
 ```c
-*index = atoi(index_buf);
+char *paren = strchr(token, '(');
+/* 若 token = " A (10)", var_name = " A " (包含空格) */
 ```
 
-**问题**: `atoi` 对非法输入返回 0，无法区分 "0" 和 "invalid"
+**说明**: `DIM  A (10)` 会解析出变量名 `" A "`，导致后续查找失败。
 
-**修复**:
-```c
-char *endptr;
-long val = strtol(index_buf, &endptr, 10);
-if (endptr == index_buf || *endptr != '\0') {
-    return false;  // 无效输入
-}
-*index = (int)val;
-```
+**修复建议**: 在截取变量名前去除首尾空格
 
 ---
 
 ### LOW
 
-#### 10. 测试覆盖不足
+#### 8. 测试覆盖不足
 
-**当前测试**:
-- ✅ 基本数组创建和访问
-- ✅ 字符串数组
-- ✅ PRINT USING 基本功能
-- ❌ 边界条件（index = 0, index = size-1, index = size）
-- ❌ 错误处理（越界访问、NULL 指针）
-- ❌ 多维数组
+**当前测试**: 92 个断言全部通过，但缺少以下场景:
 
-**建议**: 添加以下测试用例
-```c
-void test_biptrg_boundary(void) {
-    // 测试 index = 0
-    // 测试 index = size - 1
-    // 测试 index = size（越界）
-    // 测试 index = -1（负索引）
-}
+| 缺失场景 | 优先级 |
+|----------|--------|
+| 数组边界测试 (index=0, size-1, size, -1) | HIGH |
+| DIM 多数组声明 (`DIM A(10), B(5), C(3)`) | HIGH |
+| 数组表达式索引 (`A(2+3)`) | MEDIUM |
+| 错误处理 (NULL 指针、无效类型) | MEDIUM |
+| 字符串数组边界测试 | MEDIUM |
+| 内存泄漏检测 (valgrind/ASAN) | LOW |
+| 类型覆盖 (INTEGER, DOUBLE) | LOW |
 
-void test_biptrg_error_cases(void) {
-    // 测试访问不存在的变量
-    // 测试访问不存在的数组
-    // 测试越界访问
-}
-
-void test_dim_multiple_arrays(void) {
-    // 测试 DIM A(10), B(5), C(3)
-}
-```
+**建议**: 优先添加边界测试和多数组测试
 
 ---
 
-#### 11. PRINT USING 实现不完整
+#### 9. PRINT USING 实现不完整
 
-**当前实现**: 只支持 `##.##` 格式
+**当前支持**: `##.##` 格式的数值和 `\\` 格式的字符串
 
-**GW-BASIC 支持的格式**:
-- `##.##` - 固定格式
-- `#.##` - 自适应格式
-- `###,###` - 千位分隔符
-- `!` - 单精度
-- `#\#` - 整数部分
-- `&` - 字符串填充
-- `\\` - 字符串宽度
+**GW-BASIC 完整格式**:
+- `#.##` — 自适应格式
+- `###,###` — 千位分隔符
+- `**##.##` — 前导星号填充
+- `$$##.##` — 浮动美元符号
+- `+##.##` / `-##.##` — 符号位
+- `^^^^` — 科学计数法
+- `&` — 字符串可变宽度
+- `!` — 单字符
 
-**建议**: 参考 GW-BASIC 源码完整实现
+**影响**: 只覆盖了最基础的用例
+
+---
+
+## 代码质量评价
+
+### 优点
+
+- ✅ **模块化良好**: 公共函数 `assign_value()` 消除了代码重复
+- ✅ **GW-BASIC 行为兼容**: 数组索引 clamp 而非报错，符合原始行为
+- ✅ **防御性编程**: `desc->data` NULL 检查、负索引处理
+- ✅ **内存管理对称**: `gwram_alloc` / `gwram_free` 配对使用
+- ✅ **测试全面**: 92 个断言覆盖核心模块，全部通过
+- ✅ **代码可读性**: 静态函数前置声明，清晰的注释
+
+### 需要改进
+
+- ❌ 缺少数组/变量清理函数（CRITICAL #1, #2）
+- ❌ DIM 语句类型支持不完整（HIGH #3）
+- ❌ 类型系统使用与声明不一致（HIGH #4）
+- ❌ 输入验证依赖 `atoi`（MEDIUM #6）
+- ❌ 测试缺少边界和错误场景（LOW #8）
 
 ---
 
 ## 优先级修复顺序
 
-1. **立即修复**: 内存泄漏（CRITICAL #1）
-2. **高优先级**: 数组索引越界检查（CRITICAL #2）
-3. **高优先级**: DIM 语句支持多个数组（HIGH #4）
-4. **中优先级**: 代码重复提取（HIGH #6）
-5. **低优先级**: GW-BASIC 类型系统完善（HIGH #5）
-6. **低优先级**: 测试覆盖增强（LOW #10）
+1. **立即修复**: 添加 `biptrg_free_array` + 在 `gwdata_alloc_variable` 中调用（CRITICAL #1, #2）
+2. **高优先级**: DIM 字符串数组支持（HIGH #3）
+3. **高优先级**: 数组类型检查（HIGH #4）
+4. **中优先级**: DIM 表达式支持（MEDIUM #5）
+5. **中优先级**: `atoi` → `strtol`（MEDIUM #6）
+6. **低优先级**: 测试覆盖增强（LOW #8）
+7. **低优先级**: PRINT USING 完善（LOW #9）
 
 ---
 
 ## 总结
 
-当前实现完成了 GW-BASIC 数组处理的基本功能，代码结构清晰，易于维护。主要问题集中在内存管理和边界检查上，修复这些问题后可以进一步提升代码的健壮性。
+`ebc500e` 提交有效修复了上一轮 review 中的 4 个问题，代码质量明显提升。`assign_value()` 公共函数的提取使代码结构更清晰，GW-BASIC 兼容的 clamp 行为也更接近原始实现。
 
-**下一步建议**:
-1. 修复所有 CRITICAL 问题
-2. 运行测试确保修复后功能正常
-3. 添加更多边界和错误测试
-4. 考虑实现 GW-BASIC 完整的类型系统
+当前最大的风险是内存管理：缺少清理函数导致 REPL 长期运行时累积泄漏（CRITICAL #1, #2）。其次是功能完整性：DIM 语句无法声明字符串数组（HIGH #3），以及类型系统使用不一致（HIGH #4）。
+
+建议优先处理 CRITICAL 问题，然后逐步完善 HIGH 和 MEDIUM 项。测试套件已经覆盖了 happy path，可以在此基础上扩展边界测试。

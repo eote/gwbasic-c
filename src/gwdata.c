@@ -20,7 +20,18 @@ static unsigned int hash_name(const char *name) {
 }
 
 void gwdata_init(void) {
-    if (g_state) return;
+    if (g_state) {
+        /* Reset variable table for test isolation - just clear pointers, let OS reclaim at exit */
+        for (int i = 0; i < MAX_VARIABLES; i++) {
+            g_state->var_table[i] = NULL;
+        }
+        g_state->str_heap.used = 0;
+        g_state->prog_buf.used = 0;
+        g_state->current_line = 0;
+        g_state->in_direct_mode = true;
+        g_state->running = true;
+        return;
+    }
     
     g_state = (struct _runtime_state *)calloc(1, sizeof(struct _runtime_state));
     if (!g_state) return;
@@ -47,7 +58,12 @@ struct variable *gwdata_alloc_variable(const char *name, var_type_t type) {
     struct variable *existing = g_state->var_table[idx];
     while (existing) {
         if (strcmp(existing->name, name) == 0) {
+            /* If existing variable has an array descriptor, free it first */
+            if (existing->value.s != NULL) {
+                biptrg_free_array(existing);
+            }
             existing->type = type;
+            existing->value.s = NULL;  /* Clear any stale pointer */
             return existing;
         }
         existing = existing->next;

@@ -7,12 +7,15 @@
 
 /* Array descriptor structure */
 typedef struct {
+    uint32_t magic;       /* Magic number to identify valid array descriptors */
     var_type_t type;
     int size;
     int dimensions;
     int *dim_sizes;  /* For multi-dimensional arrays */
     void *data;      /* Array data */
 } array_desc_t;
+
+#define ARRAY_MAGIC 0x41525241  /* "ARRA" */
 
 void biptrg_init(void) {
     /* No initialization needed */
@@ -29,6 +32,7 @@ int biptrg_dim_array(const char *name, int size, var_type_t type) {
     array_desc_t *desc = (array_desc_t *)gwram_alloc(sizeof(array_desc_t));
     if (!desc) return ERROR;
     
+    desc->magic = ARRAY_MAGIC;
     desc->type = type;
     desc->size = size;
     desc->dimensions = 1;
@@ -166,4 +170,21 @@ char *biptrg_get_array_string(const char *name, int index) {
     
     char **data = (char **)desc->data;
     return data[index];
+}
+
+/* Free array descriptor and data */
+void biptrg_free_array(struct variable *v) {
+    if (!v) return;
+    array_desc_t *desc = (array_desc_t *)v->value.s;
+    if (!desc) return;
+    
+    /* Validate that this is actually an array descriptor using magic number */
+    if (desc->magic != ARRAY_MAGIC) {
+        return;  // Not a valid array descriptor
+    }
+    
+    if (desc->data) gwram_free(desc->data);
+    if (desc->dim_sizes) gwram_free(desc->dim_sizes);
+    gwram_free(desc);
+    v->value.s = NULL;
 }

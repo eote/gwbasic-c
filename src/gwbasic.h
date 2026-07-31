@@ -161,5 +161,6 @@ int biptrg_set_array_element(const char *name, int index, float val);
 float biptrg_get_array_element(const char *name, int index);
 int biptrg_set_array_string(const char *name, int index, const char *str);
 char *biptrg_get_array_string(const char *name, int index);
+void biptrg_free_array(struct variable *v);
 
 #endif /* GWBASIC_H */
