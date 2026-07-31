@@ -90,4 +90,7 @@ void *gwram_realloc(void *ptr, size_t size);
 void *gwram_calloc(size_t nmemb, size_t size);
 void gwram_free(void *ptr);
 
+/* GWINIT module functions */
+void gwinit_init(void);
+
 #endif /* GWBASIC_H */

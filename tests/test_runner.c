@@ -57,6 +57,9 @@ void test_gwram_alloc_free(void);
 void test_gwram_realloc(void);
 void test_gwram_calloc(void);
 void test_gwram_oom_handling(void);
+void test_gwinit_basic(void);
+void test_gwinit_constants(void);
+void test_gwinit_function_table(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -70,6 +73,9 @@ int main(void) {
     failed += run_test("gwram_realloc", test_gwram_realloc);
     failed += run_test("gwram_calloc", test_gwram_calloc);
     failed += run_test("gwram_oom_handling", test_gwram_oom_handling);
+    failed += run_test("gwinit_basic", test_gwinit_basic);
+    failed += run_test("gwinit_constants", test_gwinit_constants);
+    failed += run_test("gwinit_function_table", test_gwinit_function_table);
     
     print_test_summary();
     
