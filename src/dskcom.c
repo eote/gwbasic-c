@@ -227,3 +227,45 @@ int dskcom_seek(int filenum, long record) {
     DWORD result = SetFilePointer(fd->handle, offset, NULL, FILE_BEGIN);
     return (result != INVALID_SET_FILE_POINTER) ? SUCCESS : ERROR;
 }
+
+/* GET statement: GET #filenum, [record], variable */
+int dskcom_get(int filenum, long record, void *buffer, int buflen) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_RANDOM && fd->mode != FM_BINARY) return ERROR;
+    
+    /* Seek to record if specified */
+    if (record > 0) {
+        int rc = dskcom_seek(filenum, record);
+        if (rc != SUCCESS) return ERROR;
+    }
+    
+    /* Read record_length bytes */
+    int read_len = fd->record_length;
+    if (buflen < read_len) read_len = buflen;
+    
+    DWORD read;
+    if (!ReadFile(fd->handle, buffer, read_len, &read, NULL)) return ERROR;
+    return (read == (DWORD)read_len) ? SUCCESS : ERROR;
+}
+
+/* PUT statement: PUT #filenum, [record], variable */
+int dskcom_put(int filenum, long record, const void *buffer, int buflen) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_RANDOM && fd->mode != FM_BINARY) return ERROR;
+    
+    /* Seek to record if specified */
+    if (record > 0) {
+        int rc = dskcom_seek(filenum, record);
+        if (rc != SUCCESS) return ERROR;
+    }
+    
+    /* Write record_length bytes */
+    int write_len = fd->record_length;
+    if (buflen < write_len) write_len = buflen;
+    
+    DWORD written;
+    if (!WriteFile(fd->handle, buffer, write_len, &written, NULL)) return ERROR;
+    return (written == (DWORD)write_len) ? SUCCESS : ERROR;
+}

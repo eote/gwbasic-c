@@ -185,3 +185,45 @@ void test_dskcom_write_seek(void) {
     
     TEST_PASS("write/seek random");
 }
+
+void test_dskcom_get_put(void) {
+    gwdata_init(); gwram_init(); gwinit_init();
+    dskcom_init();
+    
+    /* Test PUT and GET with numeric variable */
+    int rc = dskcom_open("test_getput.dat", 1, FM_RANDOM, 32);
+    TEST_ASSERT_EQ_INT(rc, 0, "OPEN FOR RANDOM");
+    
+    struct file_desc *fd = dskcom_find_file(1);
+    TEST_ASSERT(fd != NULL, "File descriptor exists");
+    TEST_ASSERT_EQ_INT(fd->record_length, 32, "Record length set");
+    
+    /* PUT integer */
+    int32_t test_int = 42;
+    rc = dskcom_put(1, 1, &test_int, sizeof(int32_t));
+    TEST_ASSERT_EQ_INT(rc, 0, "PUT integer");
+    
+    /* GET integer */
+    int32_t read_int = 0;
+    rc = dskcom_get(1, 1, &read_int, sizeof(int32_t));
+    TEST_ASSERT_EQ_INT(rc, 0, "GET integer");
+    TEST_ASSERT_EQ_INT(read_int, 42, "Integer value correct");
+    
+    /* PUT float */
+    float test_float = 3.14159f;
+    rc = dskcom_put(1, 2, &test_float, sizeof(float));
+    TEST_ASSERT_EQ_INT(rc, 0, "PUT float");
+    
+    /* GET float */
+    float read_float = 0.0f;
+    rc = dskcom_get(1, 2, &read_float, sizeof(float));
+    TEST_ASSERT_EQ_INT(rc, 0, "GET float");
+    TEST_ASSERT(read_float > 3.14f && read_float < 3.15f, "Float value correct");
+    
+    rc = dskcom_close(1);
+    TEST_ASSERT_EQ_INT(rc, 0, "CLOSE");
+    
+    remove("test_getput.dat");
+    
+    TEST_PASS("get/put");
+}

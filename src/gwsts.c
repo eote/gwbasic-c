@@ -12,6 +12,8 @@ extern int biptrg_dim_array(const char *name, int size, var_type_t type);
 extern int biptrg_set_array_element(const char *name, int index, float val);
 extern int dskcom_open(const char *filename, int filenum, int mode, int reclen);
 extern int dskcom_close(int filenum);
+extern int dskcom_get(int filenum, long record, void *buffer, int buflen);
+extern int dskcom_put(int filenum, long record, const void *buffer, int buflen);
 
 /* Forward declarations for static functions */
 static char *strdup_trim(const char *s);
@@ -283,6 +285,164 @@ int gwsts_exec_statement(const char *stmt) {
                 result = SUCCESS;
             }
             gwram_free(var_ref);
+        }
+    }
+    /* GET statement: GET #filenum, [record], variable */
+    else if (starts_with(trimmed, "GET ")) {
+        char *rest = trimmed + 4;
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        int filenum = 0;
+        long record = 0;
+        char *var_ref = NULL;
+        
+        /* Parse #filenum */
+        if (*rest == '#') {
+            rest++;
+            filenum = (int)gweval_eval_numeric(rest);
+            char *comma = strchr(rest, ',');
+            if (comma) rest = comma + 1;
+        }
+        
+        /* Skip whitespace */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        /* Parse optional record number */
+        if (*rest && isdigit((unsigned char)*rest)) {
+            record = (int)gweval_eval_numeric(rest);
+            char *comma = strchr(rest, ',');
+            if (comma) rest = comma + 1;
+        }
+        
+        /* Skip whitespace */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        var_ref = strdup_trim(rest);
+        if (var_ref && filenum > 0) {
+            /* Determine buffer size based on variable type */
+            struct variable *v = gwdata_find_variable(var_ref);
+            int buflen = 0;
+            if (v) {
+                if (v->type == VT_STRING) {
+                    /* For strings, use a reasonable buffer */
+                    buflen = 256;
+                } else if (v->type == VT_INTEGER) {
+                    buflen = sizeof(int32_t);
+                } else if (v->type == VT_DOUBLE) {
+                    buflen = sizeof(double);
+                } else {
+                    buflen = sizeof(float);  /* Default to single precision */
+                }
+            } else {
+                /* Default to float size for new variables */
+                buflen = sizeof(float);
+            }
+            
+            char *buffer = (char *)gwram_alloc(buflen);
+            if (buffer) {
+                int rc = dskcom_get(filenum, record, buffer, buflen);
+                if (rc == SUCCESS) {
+                    /* Assign to variable based on type */
+                    if (v && v->type == VT_STRING) {
+                        /* Null-terminate and assign */
+                        buffer[buflen - 1] = '\0';
+                        char *expr = (char *)gwram_alloc(buflen + 3);
+                        if (expr) {
+                            expr[0] = '"';
+                            strcpy(expr + 1, buffer);
+                            strcat(expr, "\"");
+                            result = assign_value(var_ref, expr);
+                            gwram_free(expr);
+                        }
+                    } else if (v && v->type == VT_INTEGER) {
+                        int32_t val = *(int32_t *)buffer;
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "%d", val);
+                        result = assign_value(var_ref, buf);
+                    } else if (v && v->type == VT_DOUBLE) {
+                        double val = *(double *)buffer;
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "%g", val);
+                        result = assign_value(var_ref, buf);
+                    } else {
+                        /* Default to float */
+                        float val = *(float *)buffer;
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "%g", val);
+                        result = assign_value(var_ref, buf);
+                    }
+                }
+                gwram_free(buffer);
+            }
+            if (var_ref) gwram_free(var_ref);
+        }
+    }
+    /* PUT statement: PUT #filenum, [record], variable */
+    else if (starts_with(trimmed, "PUT ")) {
+        char *rest = trimmed + 4;
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        int filenum = 0;
+        long record = 0;
+        char *var_ref = NULL;
+        
+        /* Parse #filenum */
+        if (*rest == '#') {
+            rest++;
+            filenum = (int)gweval_eval_numeric(rest);
+            char *comma = strchr(rest, ',');
+            if (comma) rest = comma + 1;
+        }
+        
+        /* Skip whitespace */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        /* Parse optional record number */
+        if (*rest && isdigit((unsigned char)*rest)) {
+            record = (int)gweval_eval_numeric(rest);
+            char *comma = strchr(rest, ',');
+            if (comma) rest = comma + 1;
+        }
+        
+        /* Skip whitespace */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        var_ref = strdup_trim(rest);
+        if (var_ref && filenum > 0) {
+            struct variable *v = gwdata_find_variable(var_ref);
+            if (v) {
+                int buflen = 0;
+                char *buffer = NULL;
+                
+                if (v->type == VT_STRING) {
+                    buflen = 256;
+                    buffer = (char *)gwram_alloc(buflen);
+                    if (buffer && v->value.s) {
+                        strncpy(buffer, v->value.s, buflen - 1);
+                        buffer[buflen - 1] = '\0';
+                    }
+                } else if (v->type == VT_INTEGER) {
+                    buflen = sizeof(int32_t);
+                    buffer = (char *)gwram_alloc(buflen);
+                    if (buffer) *(int32_t *)buffer = v->value.i;
+                } else if (v->type == VT_DOUBLE) {
+                    buflen = sizeof(double);
+                    buffer = (char *)gwram_alloc(buflen);
+                    if (buffer) *(double *)buffer = v->value.d;
+                } else {
+                    /* Default to float */
+                    buflen = sizeof(float);
+                    buffer = (char *)gwram_alloc(buflen);
+                    if (buffer) *(float *)buffer = v->value.f;
+                }
+                
+                if (buffer) {
+                    int rc = dskcom_put(filenum, record, buffer, buflen);
+                    if (rc == SUCCESS) result = SUCCESS;
+                    gwram_free(buffer);
+                }
+            }
+            if (var_ref) gwram_free(var_ref);
         }
     }
     /* Direct assignment (A = 5 or A(5) = 42) */

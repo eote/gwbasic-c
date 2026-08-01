@@ -102,6 +102,7 @@ void test_dskcom_print(void);
 void test_dskcom_input(void);
 void test_dskcom_line_input(void);
 void test_dskcom_write_seek(void);
+void test_dskcom_get_put(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -160,6 +161,7 @@ int main(void) {
     failed += run_test("dskcom_input", test_dskcom_input);
     failed += run_test("dskcom_line_input", test_dskcom_line_input);
     failed += run_test("dskcom_write_seek", test_dskcom_write_seek);
+    failed += run_test("dskcom_get_put", test_dskcom_get_put);
     
     print_test_summary();
     

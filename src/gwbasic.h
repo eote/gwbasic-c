@@ -193,5 +193,7 @@ int dskcom_write(int filenum, const void *data, int len);
 int dskcom_input(int filenum, char *buffer, int maxlen);
 int dskcom_line_input(int filenum, char *buffer, int maxlen);
 int dskcom_seek(int filenum, long record);
+int dskcom_get(int filenum, long record, void *buffer, int buflen);
+int dskcom_put(int filenum, long record, const void *buffer, int buflen);
 
 #endif /* GWBASIC_H */
