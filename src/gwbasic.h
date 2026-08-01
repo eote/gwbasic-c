@@ -7,7 +7,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <windows.h>
+
+/* Windows.h defines ERROR as 0, but we need it as -1 */
+#ifdef ERROR
+#undef ERROR
+#endif
 
 /* Basic type definitions */
 typedef int8_t    SBYTE;
@@ -174,26 +178,11 @@ void biptrg_free_array(struct variable *v);
 #define FM_APPEND 4
 #define FM_BINARY 5
 
-/* File descriptor structure */
-struct file_desc {
-    int filenum;              /* GW-BASIC file number (1-255) */
-    int mode;                 /* FM_INPUT, FM_OUTPUT, etc. */
-    HANDLE handle;            /* Windows file handle */
-    char *filename;           /* Full path */
-    int record_length;        /* For random files */
-    struct file_desc *next;   /* Linked list */
-};
+/* File descriptor structure - opaque handle for cross-platform compatibility */
+/* Defined in dskcom.h */
+struct file_desc;
 
+/* DSKCOM module functions are declared in dskcom.h */
 void dskcom_init(void);
-int dskcom_open(const char *filename, int filenum, int mode, int reclen);
-int dskcom_close(int filenum);
-struct file_desc *dskcom_find_file(int filenum);
-int dskcom_print(int filenum, const char *data);
-int dskcom_write(int filenum, const void *data, int len);
-int dskcom_input(int filenum, char *buffer, int maxlen);
-int dskcom_line_input(int filenum, char *buffer, int maxlen);
-int dskcom_seek(int filenum, long record);
-int dskcom_get(int filenum, long record, void *buffer, int buflen);
-int dskcom_put(int filenum, long record, const void *buffer, int buflen);
 
 #endif /* GWBASIC_H */

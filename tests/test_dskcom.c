@@ -2,6 +2,7 @@
 
 #include "test_framework.h"
 #include "../src/gwbasic.h"
+#include "../src/dskcom.h"
 
 void test_dskcom_init(void) {
     gwdata_init(); gwram_init(); gwinit_init();

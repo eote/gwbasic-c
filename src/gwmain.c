@@ -89,13 +89,6 @@ static void init_all_modules(void) {
     scnedt_init();
 }
 
-/* Check if string is a direct command (no line number) */
-static bool is_direct_command(const char *line) {
-    while (*line && isspace((unsigned char)*line)) line++;
-    if (!*line) return false;
-    return !isdigit((unsigned char)*line);
-}
-
 /* Check if string starts with a line number */
 static bool has_line_number(const char *line) {
     while (*line && isspace((unsigned char)*line)) line++;

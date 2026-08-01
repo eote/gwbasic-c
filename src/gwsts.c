@@ -12,8 +12,11 @@ extern int biptrg_dim_array(const char *name, int size, var_type_t type);
 extern int biptrg_set_array_element(const char *name, int index, float val);
 extern int dskcom_open(const char *filename, int filenum, int mode, int reclen);
 extern int dskcom_close(int filenum);
+extern int dskcom_close_all(void);
 extern int dskcom_get(int filenum, long record, void *buffer, int buflen);
 extern int dskcom_put(int filenum, long record, const void *buffer, int buflen);
+extern int dskcom_print(int filenum, const char *data);
+extern int dskcom_line_input(int filenum, char *buffer, int maxlen);
 
 /* Forward declarations for static functions */
 static char *strdup_trim(const char *s);
@@ -118,23 +121,27 @@ int gwsts_exec_statement(const char *stmt) {
             char *rest = trimmed + 7;
             int filenum = (int)gweval_eval_numeric(rest);
             
-            /* Find comma */
-            char *comma = strchr(rest, ',');
-            if (comma && filenum > 0) {
-                *comma = '\0';
-                char *expr = strdup_trim(comma + 1);
-                if (expr) {
-                    char *str_val = gweval_eval_string(expr);
-                    if (str_val) {
-                        result = dskcom_print(filenum, str_val);
-                    } else {
-                        float val = gweval_eval_numeric(expr);
-                        char buf[64];
-                        snprintf(buf, sizeof(buf), "%g", val);
-                        result = dskcom_print(filenum, buf);
+            /* Find comma - make a copy to avoid modifying original */
+            char *rest_copy = strdup_trim(rest);
+            if (rest_copy) {
+                char *comma = strchr(rest_copy, ',');
+                if (comma && filenum > 0) {
+                    *comma = '\0';
+                    char *expr = strdup_trim(comma + 1);
+                    if (expr) {
+                        char *str_val = gweval_eval_string(expr);
+                        if (str_val) {
+                            result = dskcom_print(filenum, str_val);
+                        } else {
+                            float val = gweval_eval_numeric(expr);
+                            char buf[64];
+                            snprintf(buf, sizeof(buf), "%g", val);
+                            result = dskcom_print(filenum, buf);
+                        }
+                        gwram_free(expr);
                     }
-                    gwram_free(expr);
                 }
+                gwram_free(rest_copy);
             }
         } else {
             /* Regular PRINT to console */
@@ -243,9 +250,8 @@ int gwsts_exec_statement(const char *stmt) {
             if (filenum > 0) {
                 result = dskcom_close(filenum);
             } else {
-                /* CLOSE without filenum - close all */
-                /* For simplicity, just return success */
-                result = SUCCESS;
+                /* CLOSE without filenum - close all open files */
+                result = dskcom_close_all();
             }
         }
     }

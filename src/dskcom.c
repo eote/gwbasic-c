@@ -1,6 +1,7 @@
 /* DSKCOM - Disk Communication / File I/O */
 /* Based on DSKCOM.ASM */
 
+#include "dskcom.h"
 #include "gwbasic.h"
 #include <windows.h>
 #include <stdlib.h>
@@ -109,15 +110,15 @@ int dskcom_open(const char *filename, int filenum, int mode, int reclen) {
 int dskcom_close(int filenum) {
     struct file_desc *fd = g_file_list;
     struct file_desc *prev = NULL;
-    
+
     while (fd) {
         if (fd->filenum == filenum) {
             CloseHandle(fd->handle);
             if (fd->filename) gwram_free(fd->filename);
-            
+
             if (prev) prev->next = fd->next;
             else g_file_list = fd->next;
-            
+
             gwram_free(fd);
             return SUCCESS;
         }
@@ -127,21 +128,35 @@ int dskcom_close(int filenum) {
     return ERROR;
 }
 
+/* CLOSE all open files */
+int dskcom_close_all(void) {
+    struct file_desc *fd = g_file_list;
+    while (fd) {
+        struct file_desc *next = fd->next;
+        CloseHandle(fd->handle);
+        if (fd->filename) gwram_free(fd->filename);
+        gwram_free(fd);
+        fd = next;
+    }
+    g_file_list = NULL;
+    return SUCCESS;
+}
+
 /* PRINT# statement: PRINT #filenum, data */
 int dskcom_print(int filenum, const char *data) {
     struct file_desc *fd = dskcom_find_file(filenum);
     if (!fd) return ERROR;
     if (fd->mode != FM_OUTPUT && fd->mode != FM_APPEND) return ERROR;
-    
+
     /* Write data followed by newline (GW-BASIC behavior) */
     DWORD written;
     WriteFile(fd->handle, data, (DWORD)strlen(data), &written, NULL);
     if (written != strlen(data)) return ERROR;
-    
-    /* Add newline */
-    const char *nl = "\n";
-    WriteFile(fd->handle, nl, 1, &written, NULL);
-    
+
+    /* Add newline (Windows CRLF) */
+    const char *nl = "\r\n";
+    WriteFile(fd->handle, nl, 2, &written, NULL);
+
     return SUCCESS;
 }
 
@@ -213,8 +228,11 @@ int dskcom_line_input(int filenum, char *buffer, int maxlen) {
         buffer[pos++] = ch;
     }
     buffer[pos] = '\0';
-    
-    return (pos > 0 || read == 0) ? SUCCESS : ERROR;
+
+    /* Return ERROR if EOF reached immediately (empty file) */
+    if (pos == 0 && read == 0) return ERROR;
+
+    return SUCCESS;
 }
 
 /* SEEK statement: SEEK #filenum, record */
@@ -223,6 +241,9 @@ int dskcom_seek(int filenum, long record) {
     if (!fd) return ERROR;
     if (fd->mode != FM_RANDOM) return ERROR;
     
+    /* Validate record number (must be >= 1) */
+    if (record < 1) return ERROR;
+
     long offset = (record - 1) * fd->record_length;
     DWORD result = SetFilePointer(fd->handle, offset, NULL, FILE_BEGIN);
     return (result != INVALID_SET_FILE_POINTER) ? SUCCESS : ERROR;
@@ -233,20 +254,29 @@ int dskcom_get(int filenum, long record, void *buffer, int buflen) {
     struct file_desc *fd = dskcom_find_file(filenum);
     if (!fd) return ERROR;
     if (fd->mode != FM_RANDOM && fd->mode != FM_BINARY) return ERROR;
-    
+
     /* Seek to record if specified */
     if (record > 0) {
         int rc = dskcom_seek(filenum, record);
         if (rc != SUCCESS) return ERROR;
     }
-    
-    /* Read record_length bytes */
-    int read_len = fd->record_length;
-    if (buflen < read_len) read_len = buflen;
-    
+
+    /* Read min(buflen, record_length) bytes */
+    int read_len = (buflen < fd->record_length) ? buflen : fd->record_length;
     DWORD read;
     if (!ReadFile(fd->handle, buffer, read_len, &read, NULL)) return ERROR;
-    return (read == (DWORD)read_len) ? SUCCESS : ERROR;
+    
+    /* If we read less than requested (EOF), zero-pad the rest */
+    if (read < (DWORD)read_len) {
+        memset((char *)buffer + read, 0, read_len - read);
+    }
+    
+    /* If user buffer is smaller than record_length, skip remaining bytes to align to next record */
+    if (buflen < fd->record_length) {
+        SetFilePointer(fd->handle, fd->record_length - read_len, NULL, FILE_CURRENT);
+    }
+    
+    return SUCCESS;
 }
 
 /* PUT statement: PUT #filenum, [record], variable */
@@ -254,18 +284,31 @@ int dskcom_put(int filenum, long record, const void *buffer, int buflen) {
     struct file_desc *fd = dskcom_find_file(filenum);
     if (!fd) return ERROR;
     if (fd->mode != FM_RANDOM && fd->mode != FM_BINARY) return ERROR;
-    
+
     /* Seek to record if specified */
     if (record > 0) {
         int rc = dskcom_seek(filenum, record);
         if (rc != SUCCESS) return ERROR;
     }
-    
-    /* Write record_length bytes */
-    int write_len = fd->record_length;
-    if (buflen < write_len) write_len = buflen;
-    
+
+    /* Write record_length bytes (pad with zeros if buffer smaller) */
     DWORD written;
-    if (!WriteFile(fd->handle, buffer, write_len, &written, NULL)) return ERROR;
-    return (written == (DWORD)write_len) ? SUCCESS : ERROR;
+    
+    /* Write user data */
+    if (!WriteFile(fd->handle, buffer, buflen, &written, NULL)) return ERROR;
+    
+    /* If user data is shorter than record_length, pad with zeros in batch */
+    if (buflen < fd->record_length) {
+        int pad_len = fd->record_length - buflen;
+        char *zeros = (char *)calloc(1, pad_len);
+        if (!zeros) return ERROR;
+        
+        if (!WriteFile(fd->handle, zeros, pad_len, &written, NULL)) {
+            free(zeros);
+            return ERROR;
+        }
+        free(zeros);
+    }
+    
+    return SUCCESS;
 }

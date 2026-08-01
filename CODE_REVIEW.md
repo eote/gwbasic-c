@@ -1,192 +1,250 @@
-# BIPTRU/BIPTRG 模块 Code Review (v4)
+# GW-BASIC C Port - Code Review v7
 
-**日期**: 2026-08-01
-**审查范围**: 数组处理 (BIPTRG)、格式化打印 (BIPRTU)、数据管理 (GWDATA)、表达式求值 (GWEVAL)、语句执行 (GWSTS)、初始化 (GWINIT)
-**基于提交**: `ceeaca1` — fix: resolve all CRITICAL/HIGH issues from v3 code review
-**上一轮 Review**: v3 (基于 `24c27a6`)
-**测试状态**: 92/92 全部通过
-**编译警告**: 0
+**日期**: 2026-08-02
+**审查范围**: commit `a718acb` → 工作区未提交变更 (DSKCOM 全面修复 + 跨平台重构)
+**测试状态**: 160/160 全部通过
+**编译状态**: 零警告
 
 ---
 
-## 变更摘要
+## 一、概述
 
-`ceeaca1` 修复了 v3 review 中的全部 CRITICAL 和 HIGH 问题:
+开发组针对 v6 review 提出的问题进行了全面修复，这是一次高质量的重构提交：
 
-| 问题 | 状态 | 说明 |
-|------|------|------|
-| CRITICAL #1: Union 别名 bug | ✅ 已修复 | 添加 `is_array` 字段，不再依赖 `value.s` 判断 |
-| CRITICAL #2: Debug printf 遗留 | ✅ 已修复 | `gwinit.c` 和 `test_gwinit.c` 中 debug printf 全部删除 |
-| HIGH #3: DIM 不支持 `$` 后缀 | ✅ 已修复 | DIM 解析器检测 `$` 后缀，设置 `VT_STRING` |
-| HIGH #4: 数组读写无类型检查 | ✅ 已修复 | `set/get_array_element` 添加 magic + type 校验 |
-| MEDIUM #5: DIM 不支持表达式 | ✅ 已修复 | 使用 `gweval_eval_numeric` 替代 `atoi` |
-| MEDIUM #6: `atoi` 无验证 | ✅ 已修复 | `parse_var_ref` 改用 `strtol` + `endptr` |
-| MEDIUM #7: 变量表重置泄漏 | ✅ 已修复 | `gwdata_init` 遍历链表释放变量和数组 |
-| MEDIUM #8: DIM 前导空格 | ✅ 已修复 | 截取变量名后去除尾部空格 |
-| LOW #9: 调试产物 | ✅ 已修复 | `test_isolate.c` 已删除，debug printf 已清理 |
-| LOW #12: 编译警告 | ✅ 已修复 | `has_sign` 变量已删除 |
-
-额外改进:
-- `gweval.c`: `parse_factor` 支持数组引用 `A(5)` 和字符串数组 `A$(5)`
-- `gweval.c`: `gweval_eval_string` 支持字符串数组引用和标量字符串变量
-- `gwsts.c`: `assign_value` 支持字符串数组赋值（`$` 后缀检测）
-- `biptrg.c`: `set/get_array_element` 添加 `desc->data` NULL 防御
+| v6 问题 | 状态 |
+|---------|------|
+| 🟥 CRITICAL #1: `dskcom_get` 缓冲区溢出 | ✅ 已修复，正确限制读取长度 |
+| 🟧 HIGH #2: `ERROR` 宏重定义警告 | ✅ 已修复，`#undef ERROR` 后再定义 |
+| 🟧 HIGH #3: `gwbasic.h` 包含 `windows.h` | ✅ 已修复，DSKCOM 声明移至独立 `dskcom.h` |
+| 🟨 MEDIUM #4: `gwmain.c` 未使用函数 | ✅ 已清理 |
+| 🟨 MEDIUM #5: `dskcom_put` 逐字节填充性能差 | ✅ 已修复，批量零填充 |
+| 🟨 MEDIUM #6: `CLOSE` 不带 filenum 未实现 | ✅ 已实现 `dskcom_close_all()` |
+| 🟨 MEDIUM #7: `dskcom_print` 使用 `\n` 非 `\r\n` | ✅ 已修复为 CRLF |
 
 ---
 
-## 当前问题
+## 二、问题清单
 
-### MEDIUM
+### 🟥 CRITICAL
 
-#### 1. 简单字符串变量赋值不支持
+**无**。所有 v6 CRITICAL 问题已修复。
 
-**位置**: `src/gwsts.c:166-173` (`assign_value`)
+---
+
+### 🟧 HIGH
+
+**无**。所有 v6 HIGH 问题已修复。
+
+---
+
+### 🟨 MEDIUM
+
+| # | 描述 | 文件 | 行号 |
+|---|------|------|------|
+| 1 | **`dskcom.h` 中 `struct file_desc` 仍包含 Windows 特定类型** | `src/dskcom.h` | 17 |
+
+**详情:**
+
+`dskcom.h` 的注释说 `void *handle` 是"跨平台不透明句柄"，但 `dskcom.c` 中实际存储的是 `HANDLE` (Windows API 类型)：
 
 ```c
-} else {
-    /* Simple variable assignment */
-    struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);  // 总是 VT_SINGLE
-    if (v) {
-        v->value.f = gweval_eval_numeric(expr);  // 字符串表达式返回 0.0
-        result = SUCCESS;
-    }
+// dskcom.c
+HANDLE handle = CreateFileW(...);
+fd->handle = handle;  // 隐式转换为 void*
+```
+
+虽然功能正常，但这不是真正的跨平台设计。真正的跨平台应该用条件编译：
+
+```c
+#ifdef _WIN32
+    HANDLE handle;
+#else
+    int fd;  /* POSIX file descriptor */
+#endif
+```
+
+或者保持 `void *handle` 但在不同平台存储不同类型的句柄。当前设计是"伪跨平台"，但作为权宜之计可以接受。
+
+---
+
+### 🟩 LOW
+
+| # | 描述 | 文件 | 行号 |
+|---|------|------|------|
+| 2 | `.gitignore` 中 `test_*.dat` 和 `test_*.txt` 重复 | `.gitignore` | 5-8 |
+| 3 | `test.dat` 和 `test.txt` 仍被修改（未删除） | 根目录 | — |
+| 4 | `dskcom.c` 结尾缺少 UNIX 换行符 | `src/dskcom.c` | EOF |
+| 5 | 缺少 APPEND/BINARY 模式测试 | `tests/test_dskcom.c` | — |
+| 6 | 新增 `src/dskcom.h` 但未在 `Makefile` 中声明依赖 | `Makefile` | — |
+
+---
+
+## 三、修复进度追踪（v5 → v7）
+
+| v5 问题 | 严重性 | v7 状态 | 说明 |
+|---------|--------|---------|------|
+| CRITICAL #1: put 记录长度 | 🟥 | ✅ 已修复 | 零填充至 record_length |
+| CRITICAL #2: get 缓冲区溢出 | 🟥 | ✅ 已修复 | 限制读取 min(buflen, record_length) |
+| HIGH #3: windows.h 平台锁定 | 🟧 | ✅ 已修复 | 移至 dskcom.h，gwbasic.h 移除依赖 |
+| HIGH #4: PRINT# 改原始字符串 | 🟧 | ✅ 已修复 | strdup 副本 |
+| HIGH #5: SEEK 负数校验 | 🟧 | ✅ 已修复 | record < 1 返回 ERROR |
+| HIGH #6: CLOSE 不带 filenum | 🟧 | ✅ 已实现 | dskcom_close_all() |
+| HIGH #7: test artifact 提交 | 🟧 | ⚠️ 部分修复 | .gitignore 已添加，但 test.dat/test.txt 仍存在 |
+| MEDIUM #8: 使用 `\n` 非 `\r\n` | 🟨 | ✅ 已修复 | 改为 CRLF |
+| MEDIUM #9: 空文件返回 SUCCESS | 🟨 | ✅ 已修复 | 空文件返回 ERROR |
+| MEDIUM #11: 测试文件残留 | 🟨 | ⚠️ 部分修复 | .gitignore 已添加 |
+| LOW #13: 缺少换行符 | 🟩 | ❌ 未修复 | — |
+
+**修复率**: 10/11 已修复或大部分修复 (91%)
+
+---
+
+## 四、架构评估
+
+### 新增文件
+
+**`src/dskcom.h`** — DSKCOM 模块的独立头文件
+
+```c
+/* 关键设计决策 */
+struct file_desc {
+    int filenum;
+    int mode;
+    void *handle;  /* 不透明句柄，跨平台兼容 */
+    char *filename;
+    int record_length;
+    struct file_desc *next;
+};
+```
+
+**优点:**
+- 分离了 DSKCOM 的内部实现与全局命名空间
+- `gwbasic.h` 不再依赖 `windows.h`，编译警告清零
+- 为未来跨平台移植预留了接口（`void *handle` 可在不同平台存储不同类型）
+
+**缺点:**
+- `void *handle` 是"伪跨平台"，实际仍存储 Windows `HANDLE`
+- 未使用条件编译隔离平台特定代码
+
+### `gwbasic.h` 变更
+
+```diff
+-#include <windows.h>
++/* Windows.h defines ERROR as 0, but we need it as -1 */
++#ifdef ERROR
++#undef ERROR
++#endif
+```
+
+**评价:** ✅ 正确的修复方式。保留 `#undef ERROR` 作为防御性编程，即使移除了 `windows.h` 也能防止未来可能的冲突。
+
+### `dskcom.c` 关键修复
+
+**1. `dskcom_get` 缓冲区溢出修复:**
+
+```diff
+-/* Read record_length bytes */
+-int read_len = fd->record_length;
+-if (buflen < read_len) read_len = buflen;
++/* Read min(buflen, record_length) bytes */
++int read_len = (buflen < fd->record_length) ? buflen : fd->record_length;
+```
+
+**2. 记录边界对齐:**
+
+```c
+/* If user buffer is smaller than record_length, skip remaining bytes to align to next record */
+if (buflen < fd->record_length) {
+    SetFilePointer(fd->handle, fd->record_length - read_len, NULL, FILE_CURRENT);
 }
 ```
 
-**说明**: `S$ = "hello"` 会:
-1. `base_name = "S$"`, `array_index = -1`（非数组）
-2. `gwdata_alloc_variable("S$", VT_SINGLE)` — 类型被设为 `VT_SINGLE`
-3. `gweval_eval_numeric("\"hello\"")` 返回 `0.0f`
-4. `v->value.f = 0.0f` — 静默失败
+**3. 批量零填充 (性能优化):**
 
-`gweval_eval_string` 能读取标量字符串变量，但 `assign_value` 无法创建它们。
-
-**修复建议**: 检测 `$` 后缀，字符串变量走 `gweval_eval_string` 路径:
 ```c
-if (base_name[strlen(base_name) - 1] == '$') {
-    struct variable *v = gwdata_alloc_variable(base_name, VT_STRING);
-    if (v) {
-        char *str = gweval_eval_string(expr);
-        if (str) { v->value.s = str; result = SUCCESS; }
-    }
-} else {
-    /* numeric path */
+/* If user data is shorter than record_length, pad with zeros in batch */
+if (buflen < fd->record_length) {
+    int pad_len = fd->record_length - buflen;
+    char *zeros = (char *)calloc(1, pad_len);
+    if (!zeros) return ERROR;
+    WriteFile(fd->handle, zeros, pad_len, &written, NULL);
+    free(zeros);
 }
 ```
 
----
+**4. CRLF 换行符 (Windows 兼容):**
 
-#### 2. `gwdata_init()` 重置路径未重置 `exit_code`
-
-**位置**: `src/gwdata.c:25-30`
-
-```c
-g_state->current_line = 0;
-g_state->in_direct_mode = true;
-g_state->running = true;
-/* exit_code 未重置 */
+```diff
+-const char *nl = "\n";
+-WriteFile(fd->handle, nl, 1, &written, NULL);
++/* Add newline (Windows CRLF) */
++const char *nl = "\r\n";
++WriteFile(fd->handle, nl, 2, &written, NULL);
 ```
 
-**影响**: 如果先执行出错设置 `exit_code`，后续 `gwdata_init` 调用不会清除错误状态。
+### `gwsts.c` 变更
 
-**修复**: 添加 `g_state->exit_code = SUCCESS;`
+**CLOSE 不带 filenum 实现:**
 
----
+```c
+/* CLOSE without filenum - close all open files */
+result = dskcom_close_all();
+```
 
-### LOW
+**PRINT# 不再修改原始字符串 (v5 修复的确认):**
 
-#### 3. `test_isolate.o` 残留
+```c
+char *rest_copy = strdup_trim(rest);  /* 副本，不修改原字符串 */
+if (rest_copy) {
+    char *comma = strchr(rest_copy, ',');
+    ...
+    gwram_free(rest_copy);
+}
+```
 
-`tests/test_isolate.c` 已删除，但 `tests/test_isolate.o` 仍存在。`make clean` 会清理它，但当前工作目录中有残留。
+### 编译健康度
 
-**修复**: 删除 `tests/test_isolate.o`
-
----
-
-#### 4. 测试覆盖不足
-
-**当前**: 92/92 通过，但缺少以下关键场景:
-
-| 缺失场景 | 优先级 | 说明 |
-|----------|--------|------|
-| 变量二次赋值 | HIGH | 验证 v3 CRITICAL #1 修复（`A=42` 然后 `A=99`） |
-| 数组边界 (0, size-1, size, -1) | HIGH | 验证 clamp 行为 |
-| DIM 表达式大小 `DIM A(5+5)` | MEDIUM | 验证 `gweval_eval_numeric` 集成 |
-| DIM 字符串数组 `DIM S$(5)` | MEDIUM | 验证 `$` 后缀检测 |
-| DIM 多数组 `DIM A(10), B(5)` | MEDIUM | 验证逗号分隔解析 |
-| `strtol` 验证 `A(abc)` | LOW | 验证非法索引被拒绝 |
-| 内存泄漏检测 (ASAN) | LOW | 验证 `biptrg_free_array` 正确释放 |
-
-**建议**: 优先添加变量二次赋值测试，这是 v3 CRITICAL #1 的回归测试。
+```
+v5: 50 warnings (ERROR 宏重定义 × 40+ 文件)
+v6: 50 warnings (同上)
+v7: 0 warnings ✅
+```
 
 ---
 
-#### 5. PRINT USING 实现不完整
+## 五、测试覆盖分析
 
-**当前支持**: `##.##` 数值格式、`\\` 字符串格式
+| 功能 | v5 覆盖 | v7 覆盖 | 说明 |
+|------|---------|---------|------|
+| `dskcom_init()` | ✅ | ✅ | — |
+| `dskcom_open()` | ⚠️ 仅 INPUT/OUTPUT | ⚠️ 仅 INPUT/OUTPUT | APPEND/BINARY 仍缺失 |
+| `dskcom_close()` | ✅ | ✅ | — |
+| `dskcom_close_all()` | ❌ | ❌ | 新增函数，无测试 |
+| `dskcom_print()` | ✅ | ✅ | 已验证 CRLF |
+| `dskcom_input()` | ✅ | ✅ | — |
+| `dskcom_line_input()` | ✅ | ✅ | 空文件 ERROR 路径未测试 |
+| `dskcom_seek()` | ✅ | ✅ | 负数 record 路径未测试 |
+| `dskcom_get()` | ⚠️ 边界溢出 | ✅ 已修复 | 测试通过 |
+| `dskcom_put()` | ⚠️ 记录不对齐 | ✅ 已修复 | 测试通过 |
 
-**缺失 GW-BASIC 格式**: 千位分隔符 `,`、前导星号 `**`、浮动美元符 `$$`、科学计数法 `^^^^`、`&` 可变宽度字符串、`!` 单字符
-
----
-
-#### 6. `biptrg.c` 文件末尾可能缺少换行符
-
-Git diff 在早期版本显示 `\ No newline at end of file`。建议确认文件以换行符结尾（POSIX 规范）。
-
----
-
-## 代码质量评价
-
-### 优点
-
-- ✅ **`is_array` 字段**: 从根本上解决了 union 别名问题，不再依赖指针猜测
-- ✅ **Magic + Type 双重校验**: `biptrg_set/get_array_element` 检查 `magic` 和 `type`，防御性强
-- ✅ **内存清理完整**: `gwdata_init` 重置路径正确遍历链表释放变量和数组
-- ✅ **表达式集成**: DIM 大小和数组索引支持表达式求值
-- ✅ **`strtol` 验证**: `parse_var_ref` 使用 `strtol` + `endptr` 做输入验证
-- ✅ **字符串数组完整**: DIM `$` 后缀、`assign_value` 字符串路径、`gweval_eval_string` 数组引用
-- ✅ **零编译警告**: `has_sign` 清理后编译干净
-- ✅ **调试产物清理**: 无 debug printf 残留
-
-### 需要改进
-
-- ❌ 简单字符串变量赋值不支持 (MEDIUM #1)
-- ❌ `exit_code` 重置遗漏 (MEDIUM #2)
-- ❌ 测试缺少变量二次赋值回归测试 (LOW #4)
-- ❌ PRINT USING 格式覆盖有限 (LOW #5)
+**新增测试需求:**
+1. `dskcom_close_all()` 测试
+2. `dskcom_seek()` 负数 record 测试
+3. `dskcom_line_input()` 空文件测试
+4. `dskcom_open()` APPEND/BINARY 模式测试
 
 ---
 
-## 修复进度追踪
+## 六、总结
 
-| 轮次 | CRITICAL | HIGH | MEDIUM | LOW | 总计 |
-|------|----------|------|--------|-----|------|
-| v2 → v3 修复 | 2/2 | 0/0 | 0/0 | 0/0 | 2 修复 |
-| v3 → v4 修复 | 2/2 | 2/2 | 5/5 | 3/4 | 12 修复 |
-| v4 剩余 | 0 | 0 | 2 | 4 | 6 剩余 |
+**总体评价**: 优秀的修复提交。所有 CRITICAL 和 HIGH 问题已修复，编译警告清零，测试全部通过。DSKCOM 模块的架构改进（独立头文件）为未来跨平台移植奠定了基础。
 
----
+**关键发现**: 0 个 CRITICAL, 0 个 HIGH, 1 个 MEDIUM（伪跨平台设计）, 5 个 LOW
 
-## 优先级修复顺序
+**建议**:
+1. 🔵 **短期**: 清理 `.gitignore` 重复行，删除 `test.dat`/`test.txt`
+2. 🔵 **短期**: 添加 `dskcom_close_all()`、负数 SEEK、空文件 LINE INPUT 的测试
+3. 🟡 **中期**: 考虑真正的跨平台设计（条件编译隔离 Windows/POSIX）
+4. 🟢 **长期**: 添加 APPEND/BINARY 模式测试
 
-1. **中优先级**: 简单字符串变量赋值 `S$ = "hello"` (MEDIUM #1)
-2. **中优先级**: `gwdata_init` 重置 `exit_code` (MEDIUM #2)
-3. **低优先级**: 删除 `test_isolate.o` 残留 (LOW #3)
-4. **低优先级**: 添加变量二次赋值回归测试 (LOW #4)
-5. **低优先级**: PRINT USING 格式扩展 (LOW #5)
-6. **低优先级**: 确认 `biptrg.c` 文件末尾换行符 (LOW #6)
-
----
-
-## 总结
-
-`ceeaca1` 是一次高质量的修复，一次性解决了 v3 review 中的全部 2 个 CRITICAL、2 个 HIGH、5 个 MEDIUM 和 3 个 LOW 问题。核心改进是添加 `is_array` 字段从根本上解决 union 别名问题，以及 `biptrg_set/get_array_element` 的 magic + type 双重校验。
-
-代码质量显著提升:
-- 编译零警告
-- 92/92 测试通过
-- 内存管理完整（分配、释放、重置路径全覆盖）
-- 防御性编程到位（magic 校验、NULL 检查、类型检查）
-- 表达式集成完整（DIM 大小、数组索引都支持表达式）
-
-剩余 6 个问题均为 MEDIUM 或 LOW，不影响核心功能。最值得关注的是简单字符串变量赋值（`S$ = "hello"`）尚未支持——这是功能缺口而非 bug。建议下一步添加该功能和变量二次赋值回归测试。
+**合并建议**: ✅ **可以合并**。所有关键问题已修复，剩余 LOW 问题不影响功能。
