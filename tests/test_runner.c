@@ -94,6 +94,8 @@ void test_biprtu_print_using(void);
 void test_biptrg_init(void);
 void test_biptrg_array(void);
 void test_biptrg_string_array(void);
+void test_variable_reassignment(void);
+void test_array_bounds(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -144,6 +146,8 @@ int main(void) {
     failed += run_test("biptrg_init", test_biptrg_init);
     failed += run_test("biptrg_array", test_biptrg_array);
     failed += run_test("biptrg_string_array", test_biptrg_string_array);
+    failed += run_test("variable_reassignment", test_variable_reassignment);
+    failed += run_test("array_bounds", test_array_bounds);
     
     print_test_summary();
     

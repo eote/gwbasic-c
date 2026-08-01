@@ -39,6 +39,7 @@ void gwdata_init(void) {
         g_state->current_line = 0;
         g_state->in_direct_mode = true;
         g_state->running = true;
+        g_state->exit_code = SUCCESS;
         return;
     }
     

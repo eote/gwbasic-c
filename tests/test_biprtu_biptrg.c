@@ -73,3 +73,75 @@ void test_biptrg_string_array(void) {
     
     TEST_PASS("string array");
 }
+
+void test_variable_reassignment(void) {
+    gwdata_init(); gwram_init(); gwinit_init();
+    gwsts_init();
+    
+    /* Test numeric variable reassignment (v3 CRITICAL #1 regression test) */
+    int rc = gwsts_exec_statement("A = 42");
+    TEST_ASSERT_EQ_INT(rc, 0, "A = 42 executes");
+    
+    struct variable *a = gwdata_find_variable("A");
+    TEST_ASSERT(a != NULL, "A exists after first assignment");
+    TEST_ASSERT_EQ_INT((int)a->value.f, 42, "A = 42");
+    
+    rc = gwsts_exec_statement("A = 99");
+    TEST_ASSERT_EQ_INT(rc, 0, "A = 99 executes");
+    
+    a = gwdata_find_variable("A");
+    TEST_ASSERT(a != NULL, "A exists after reassignment");
+    TEST_ASSERT_EQ_INT((int)a->value.f, 99, "A = 99 after reassignment");
+    TEST_ASSERT(!a->is_array, "A is not array after reassignment");
+    
+    /* Test string variable reassignment */
+    rc = gwsts_exec_statement("S$ = \"hello\"");
+    TEST_ASSERT_EQ_INT(rc, 0, "S$ = hello executes");
+    
+    struct variable *s = gwdata_find_variable("S$");
+    TEST_ASSERT(s != NULL, "S$ exists");
+    TEST_ASSERT_EQ_STR(s->value.s, "hello", "S$ = hello");
+    
+    rc = gwsts_exec_statement("S$ = \"world\"");
+    TEST_ASSERT_EQ_INT(rc, 0, "S$ = world executes");
+    
+    s = gwdata_find_variable("S$");
+    TEST_ASSERT(s != NULL, "S$ exists after reassignment");
+    TEST_ASSERT_EQ_STR(s->value.s, "world", "S$ = world after reassignment");
+    
+    TEST_PASS("variable reassignment");
+}
+
+void test_array_bounds(void) {
+    gwdata_init(); gwram_init(); gwinit_init();
+    biptrg_init();
+    
+    /* Test array bounds clamp behavior */
+    int rc = biptrg_dim_array("A", 10, VT_SINGLE);
+    TEST_ASSERT_EQ_INT(rc, 0, "DIM A(10)");
+    
+    /* Valid indices */
+    rc = biptrg_set_array_element("A", 0, 1.0f);
+    TEST_ASSERT_EQ_INT(rc, 0, "set A(0)");
+    rc = biptrg_set_array_element("A", 9, 2.0f);
+    TEST_ASSERT_EQ_INT(rc, 0, "set A(9)");
+    
+    float val = biptrg_get_array_element("A", 0);
+    TEST_ASSERT_EQ_INT((int)val, 1, "get A(0)");
+    val = biptrg_get_array_element("A", 9);
+    TEST_ASSERT_EQ_INT((int)val, 2, "get A(9)");
+    
+    /* Negative index clamped to 0 */
+    rc = biptrg_set_array_element("A", -1, 3.0f);
+    TEST_ASSERT_EQ_INT(rc, 0, "set A(-1) clamped");
+    val = biptrg_get_array_element("A", 0);
+    TEST_ASSERT_EQ_INT((int)val, 3, "A(-1) -> A(0)");
+    
+    /* Index >= size clamped to size-1 */
+    rc = biptrg_set_array_element("A", 10, 4.0f);
+    TEST_ASSERT_EQ_INT(rc, 0, "set A(10) clamped");
+    val = biptrg_get_array_element("A", 9);
+    TEST_ASSERT_EQ_INT((int)val, 4, "A(10) -> A(9)");
+    
+    TEST_PASS("array bounds clamp");
+}

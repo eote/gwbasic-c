@@ -192,10 +192,25 @@ static int assign_value(const char *var_ref, const char *expr) {
             }
         } else {
             /* Simple variable assignment */
-            struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
-            if (v) {
-                v->value.f = gweval_eval_numeric(expr);
-                result = SUCCESS;
+            /* Check if string variable (name ends with $) */
+            size_t name_len = strlen(base_name);
+            bool is_string_var = (name_len > 0 && base_name[name_len - 1] == '$');
+            
+            if (is_string_var) {
+                struct variable *v = gwdata_alloc_variable(base_name, VT_STRING);
+                if (v) {
+                    char *str_val = gweval_eval_string(expr);
+                    if (str_val) {
+                        v->value.s = str_val;
+                        result = SUCCESS;
+                    }
+                }
+            } else {
+                struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
+                if (v) {
+                    v->value.f = gweval_eval_numeric(expr);
+                    result = SUCCESS;
+                }
             }
         }
     }
