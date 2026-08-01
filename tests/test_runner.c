@@ -96,6 +96,12 @@ void test_biptrg_array(void);
 void test_biptrg_string_array(void);
 void test_variable_reassignment(void);
 void test_array_bounds(void);
+void test_dskcom_init(void);
+void test_dskcom_open_close(void);
+void test_dskcom_print(void);
+void test_dskcom_input(void);
+void test_dskcom_line_input(void);
+void test_dskcom_write_seek(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -148,6 +154,12 @@ int main(void) {
     failed += run_test("biptrg_string_array", test_biptrg_string_array);
     failed += run_test("variable_reassignment", test_variable_reassignment);
     failed += run_test("array_bounds", test_array_bounds);
+    failed += run_test("dskcom_init", test_dskcom_init);
+    failed += run_test("dskcom_open_close", test_dskcom_open_close);
+    failed += run_test("dskcom_print", test_dskcom_print);
+    failed += run_test("dskcom_input", test_dskcom_input);
+    failed += run_test("dskcom_line_input", test_dskcom_line_input);
+    failed += run_test("dskcom_write_seek", test_dskcom_write_seek);
     
     print_test_summary();
     

@@ -1,9 +1,229 @@
-/* DSKCOM - Brief Description */
+/* DSKCOM - Disk Communication / File I/O */
 /* Based on DSKCOM.ASM */
 
 #include "gwbasic.h"
+#include <windows.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+/* File descriptor list */
+static struct file_desc *g_file_list = NULL;
 
 /* Module initialization */
 void dskcom_init(void) {
-    /* TODO: Initialize DSKCOM module */
+    g_file_list = NULL;
+}
+
+/* Find file descriptor by file number */
+struct file_desc *dskcom_find_file(int filenum) {
+    struct file_desc *fd = g_file_list;
+    while (fd) {
+        if (fd->filenum == filenum) return fd;
+        fd = fd->next;
+    }
+    return NULL;
+}
+
+/* OPEN statement: OPEN "filename" FOR mode AS #filenum [LEN=reclen] */
+int dskcom_open(const char *filename, int filenum, int mode, int reclen) {
+    if (!filename || filenum < 1 || filenum > 255) return ERROR;
+    
+    /* Check if already open */
+    if (dskcom_find_file(filenum)) return ERROR;
+    
+    DWORD desired_access = 0;
+    DWORD creation_disposition = 0;
+    DWORD flags = FILE_ATTRIBUTE_NORMAL;
+    
+    switch (mode) {
+        case FM_INPUT:
+            desired_access = GENERIC_READ;
+            creation_disposition = OPEN_EXISTING;
+            break;
+        case FM_OUTPUT:
+            desired_access = GENERIC_WRITE;
+            creation_disposition = CREATE_ALWAYS;
+            break;
+        case FM_APPEND:
+            desired_access = GENERIC_WRITE | FILE_APPEND_DATA;
+            creation_disposition = OPEN_ALWAYS;
+            break;
+        case FM_RANDOM:
+            desired_access = GENERIC_READ | GENERIC_WRITE;
+            creation_disposition = OPEN_ALWAYS;
+            break;
+        case FM_BINARY:
+            desired_access = GENERIC_READ | GENERIC_WRITE;
+            creation_disposition = OPEN_ALWAYS;
+            break;
+        default:
+            return ERROR;
+    }
+    
+    /* Convert filename to wide char for Windows API */
+    int wlen = MultiByteToWideChar(CP_ACP, 0, filename, -1, NULL, 0);
+    if (wlen == 0) return ERROR;
+    
+    wchar_t *wfilename = (wchar_t *)gwram_alloc(wlen * sizeof(wchar_t));
+    if (!wfilename) return ERROR;
+    MultiByteToWideChar(CP_ACP, 0, filename, -1, wfilename, wlen);
+    
+    HANDLE handle = CreateFileW(wfilename, desired_access, FILE_SHARE_READ, 
+                                NULL, creation_disposition, flags, NULL);
+    gwram_free(wfilename);
+    
+    if (handle == INVALID_HANDLE_VALUE) return ERROR;
+    
+    /* For APPEND mode, seek to end */
+    if (mode == FM_APPEND) {
+        SetFilePointer(handle, 0, NULL, FILE_END);
+    }
+    
+    /* Create file descriptor */
+    struct file_desc *fd = (struct file_desc *)gwram_alloc(sizeof(struct file_desc));
+    if (!fd) {
+        CloseHandle(handle);
+        return ERROR;
+    }
+    
+    fd->filenum = filenum;
+    fd->mode = mode;
+    fd->handle = handle;
+    fd->record_length = (reclen > 0) ? reclen : 128;  /* Default record length */
+    
+    size_t fn_len = strlen(filename) + 1;
+    fd->filename = (char *)gwram_alloc(fn_len);
+    if (fd->filename) {
+        memcpy(fd->filename, filename, fn_len);
+    }
+    
+    /* Add to list */
+    fd->next = g_file_list;
+    g_file_list = fd;
+    
+    return SUCCESS;
+}
+
+/* CLOSE statement: CLOSE [#filenum] */
+int dskcom_close(int filenum) {
+    struct file_desc *fd = g_file_list;
+    struct file_desc *prev = NULL;
+    
+    while (fd) {
+        if (fd->filenum == filenum) {
+            CloseHandle(fd->handle);
+            if (fd->filename) gwram_free(fd->filename);
+            
+            if (prev) prev->next = fd->next;
+            else g_file_list = fd->next;
+            
+            gwram_free(fd);
+            return SUCCESS;
+        }
+        prev = fd;
+        fd = fd->next;
+    }
+    return ERROR;
+}
+
+/* PRINT# statement: PRINT #filenum, data */
+int dskcom_print(int filenum, const char *data) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_OUTPUT && fd->mode != FM_APPEND) return ERROR;
+    
+    /* Write data followed by newline (GW-BASIC behavior) */
+    DWORD written;
+    WriteFile(fd->handle, data, (DWORD)strlen(data), &written, NULL);
+    if (written != strlen(data)) return ERROR;
+    
+    /* Add newline */
+    const char *nl = "\n";
+    WriteFile(fd->handle, nl, 1, &written, NULL);
+    
+    return SUCCESS;
+}
+
+/* WRITE# statement: WRITE #filenum, data */
+int dskcom_write(int filenum, const void *data, int len) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_OUTPUT && fd->mode != FM_APPEND && 
+        fd->mode != FM_RANDOM && fd->mode != FM_BINARY) return ERROR;
+    
+    DWORD written;
+    WriteFile(fd->handle, data, (DWORD)len, &written, NULL);
+    return (written == (DWORD)len) ? SUCCESS : ERROR;
+}
+
+/* INPUT# statement: INPUT #filenum, var1, var2, ... */
+int dskcom_input(int filenum, char *buffer, int maxlen) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_INPUT && fd->mode != FM_RANDOM) return ERROR;
+    
+    /* Read until comma or newline */
+    char ch;
+    int pos = 0;
+    DWORD read;
+    bool in_quotes = false;
+    
+    while (pos < maxlen - 1 && ReadFile(fd->handle, &ch, 1, &read, NULL) && read == 1) {
+        if (ch == '"') {
+            in_quotes = !in_quotes;
+            continue;
+        }
+        if (!in_quotes && (ch == ',' || ch == '\n' || ch == '\r')) {
+            if (ch == '\r') {
+                /* Peek next char for \n */
+                char next;
+                if (ReadFile(fd->handle, &next, 1, &read, NULL) && read == 1 && next != '\n') {
+                    SetFilePointer(fd->handle, -1, NULL, FILE_CURRENT);
+                }
+            }
+            break;
+        }
+        buffer[pos++] = ch;
+    }
+    buffer[pos] = '\0';
+    
+    /* Trim whitespace */
+    while (pos > 0 && (buffer[pos-1] == ' ' || buffer[pos-1] == '\t')) {
+        buffer[--pos] = '\0';
+    }
+    
+    return (pos > 0) ? SUCCESS : ERROR;
+}
+
+/* LINE INPUT# statement: LINE INPUT #filenum, var$ */
+int dskcom_line_input(int filenum, char *buffer, int maxlen) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_INPUT && fd->mode != FM_RANDOM) return ERROR;
+    
+    /* Read entire line up to newline */
+    char ch;
+    int pos = 0;
+    DWORD read;
+    
+    while (pos < maxlen - 1 && ReadFile(fd->handle, &ch, 1, &read, NULL) && read == 1) {
+        if (ch == '\n') break;
+        if (ch == '\r') continue;  /* Skip CR */
+        buffer[pos++] = ch;
+    }
+    buffer[pos] = '\0';
+    
+    return (pos > 0 || read == 0) ? SUCCESS : ERROR;
+}
+
+/* SEEK statement: SEEK #filenum, record */
+int dskcom_seek(int filenum, long record) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_RANDOM) return ERROR;
+    
+    long offset = (record - 1) * fd->record_length;
+    DWORD result = SetFilePointer(fd->handle, offset, NULL, FILE_BEGIN);
+    return (result != INVALID_SET_FILE_POINTER) ? SUCCESS : ERROR;
 }

@@ -10,6 +10,8 @@
 /* Forward declarations */
 extern int biptrg_dim_array(const char *name, int size, var_type_t type);
 extern int biptrg_set_array_element(const char *name, int index, float val);
+extern int dskcom_open(const char *filename, int filenum, int mode, int reclen);
+extern int dskcom_close(int filenum);
 
 /* Forward declarations for static functions */
 static char *strdup_trim(const char *s);
@@ -109,18 +111,44 @@ int gwsts_exec_statement(const char *stmt) {
     }
     /* PRINT statement */
     else if (starts_with(trimmed, "PRINT ")) {
-        char *expr = strdup_trim(trimmed + 6);
-        if (expr) {
-            /* Try string evaluation first, then numeric */
-            char *str_val = gweval_eval_string(expr);
-            if (str_val) {
-                printf("%s\n", str_val);
-            } else {
-                float val = gweval_eval_numeric(expr);
-                printf("%g\n", val);
+        /* Check for PRINT #filenum, (file output) */
+        if (trimmed[6] == '#') {
+            char *rest = trimmed + 7;
+            int filenum = (int)gweval_eval_numeric(rest);
+            
+            /* Find comma */
+            char *comma = strchr(rest, ',');
+            if (comma && filenum > 0) {
+                *comma = '\0';
+                char *expr = strdup_trim(comma + 1);
+                if (expr) {
+                    char *str_val = gweval_eval_string(expr);
+                    if (str_val) {
+                        result = dskcom_print(filenum, str_val);
+                    } else {
+                        float val = gweval_eval_numeric(expr);
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "%g", val);
+                        result = dskcom_print(filenum, buf);
+                    }
+                    gwram_free(expr);
+                }
             }
-            gwram_free(expr);
-            result = SUCCESS;
+        } else {
+            /* Regular PRINT to console */
+            char *expr = strdup_trim(trimmed + 6);
+            if (expr) {
+                /* Try string evaluation first, then numeric */
+                char *str_val = gweval_eval_string(expr);
+                if (str_val) {
+                    printf("%s\n", str_val);
+                } else {
+                    float val = gweval_eval_numeric(expr);
+                    printf("%g\n", val);
+                }
+                gwram_free(expr);
+                result = SUCCESS;
+            }
         }
     }
     /* IF statement (simplified: IF <expr> THEN <stmt>) */
@@ -140,6 +168,121 @@ int gwsts_exec_statement(const char *stmt) {
                 gwram_free(cond_expr);
                 gwram_free(then_stmt);
             }
+        }
+    }
+    /* OPEN statement */
+    else if (starts_with(trimmed, "OPEN ")) {
+        /* Parse: OPEN "filename" FOR INPUT/OUTPUT/APPEND/RANDOM AS #filenum [LEN=reclen] */
+        char *rest = trimmed + 5;
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        /* Extract filename (quoted string) */
+        if (*rest == '"') {
+            rest++;
+            char *filename_end = strchr(rest, '"');
+            if (filename_end) {
+                size_t fn_len = filename_end - rest;
+                char *filename = (char *)gwram_alloc(fn_len + 1);
+                if (filename) {
+                    memcpy(filename, rest, fn_len);
+                    filename[fn_len] = '\0';
+                    
+                    rest = filename_end + 1;
+                    while (*rest && isspace((unsigned char)*rest)) rest++;
+                    
+                    /* Parse FOR mode */
+                    int mode = FM_INPUT;
+                    if (starts_with(rest, "FOR INPUT")) {
+                        mode = FM_INPUT;
+                        rest += 9;
+                    } else if (starts_with(rest, "FOR OUTPUT")) {
+                        mode = FM_OUTPUT;
+                        rest += 10;
+                    } else if (starts_with(rest, "FOR APPEND")) {
+                        mode = FM_APPEND;
+                        rest += 10;
+                    } else if (starts_with(rest, "FOR RANDOM")) {
+                        mode = FM_RANDOM;
+                        rest += 10;
+                    }
+                    
+                    while (*rest && isspace((unsigned char)*rest)) rest++;
+                    
+                    /* Parse AS #filenum */
+                    int filenum = 0;
+                    if (starts_with(rest, "AS #")) {
+                        rest += 4;
+                        filenum = (int)gweval_eval_numeric(rest);
+                    }
+                    
+                    /* Parse optional LEN=reclen */
+                    int reclen = 0;
+                    char *len_pos = strstr(rest, "LEN=");
+                    if (len_pos) {
+                        reclen = (int)gweval_eval_numeric(len_pos + 4);
+                    }
+                    
+                    if (filenum > 0) {
+                        result = dskcom_open(filename, filenum, mode, reclen);
+                    }
+                    gwram_free(filename);
+                }
+            }
+        }
+    }
+    /* CLOSE statement */
+    else if (starts_with(trimmed, "CLOSE")) {
+        char *rest = trimmed + 5;
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        if (*rest == '\0' || *rest == '#') {
+            if (*rest == '#') rest++;
+            int filenum = (int)gweval_eval_numeric(rest);
+            if (filenum > 0) {
+                result = dskcom_close(filenum);
+            } else {
+                /* CLOSE without filenum - close all */
+                /* For simplicity, just return success */
+                result = SUCCESS;
+            }
+        }
+    }
+    /* LINE INPUT statement: LINE INPUT #filenum, var$ or LINE INPUT var$ */
+    else if (starts_with(trimmed, "LINE INPUT ")) {
+        char *rest = trimmed + 11;
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        int filenum = 0;
+        /* Check for #filenum */
+        if (*rest == '#') {
+            rest++;
+            filenum = (int)gweval_eval_numeric(rest);
+            char *comma = strchr(rest, ',');
+            if (comma) rest = comma + 1;
+        }
+        
+        char *var_ref = strdup_trim(rest);
+        if (var_ref) {
+            if (filenum > 0) {
+                /* LINE INPUT #filenum, var$ */
+                char buf[256];
+                int rc = dskcom_line_input(filenum, buf, sizeof(buf));
+                if (rc == SUCCESS) {
+                    /* Assign to variable */
+                    char *expr = (char *)gwram_alloc(strlen(buf) + 3);
+                    if (expr) {
+                        expr[0] = '"';
+                        strcpy(expr + 1, buf);
+                        strcat(expr, "\"");
+                        result = assign_value(var_ref, expr);
+                        gwram_free(expr);
+                    }
+                }
+            } else {
+                /* LINE INPUT var$ - from console (not implemented yet) */
+                result = SUCCESS;
+            }
+            gwram_free(var_ref);
         }
     }
     /* Direct assignment (A = 5 or A(5) = 42) */

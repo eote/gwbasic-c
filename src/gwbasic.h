@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <windows.h>
 
 /* Basic type definitions */
 typedef int8_t    SBYTE;
@@ -164,5 +165,33 @@ float biptrg_get_array_element(const char *name, int index);
 int biptrg_set_array_string(const char *name, int index, const char *str);
 char *biptrg_get_array_string(const char *name, int index);
 void biptrg_free_array(struct variable *v);
+
+/* DSKCOM module - File I/O */
+/* File modes */
+#define FM_INPUT  1
+#define FM_OUTPUT 2
+#define FM_RANDOM 3
+#define FM_APPEND 4
+#define FM_BINARY 5
+
+/* File descriptor structure */
+struct file_desc {
+    int filenum;              /* GW-BASIC file number (1-255) */
+    int mode;                 /* FM_INPUT, FM_OUTPUT, etc. */
+    HANDLE handle;            /* Windows file handle */
+    char *filename;           /* Full path */
+    int record_length;        /* For random files */
+    struct file_desc *next;   /* Linked list */
+};
+
+void dskcom_init(void);
+int dskcom_open(const char *filename, int filenum, int mode, int reclen);
+int dskcom_close(int filenum);
+struct file_desc *dskcom_find_file(int filenum);
+int dskcom_print(int filenum, const char *data);
+int dskcom_write(int filenum, const void *data, int len);
+int dskcom_input(int filenum, char *buffer, int maxlen);
+int dskcom_line_input(int filenum, char *buffer, int maxlen);
+int dskcom_seek(int filenum, long record);
 
 #endif /* GWBASIC_H */
