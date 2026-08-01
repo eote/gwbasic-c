@@ -36,6 +36,7 @@ typedef enum {
 struct variable {
     char name[MAX_VAR_NAME + 1];
     var_type_t type;
+    bool is_array;          /* 标记是否为数组，解决 union 别名问题 */
     union {
         int32_t  i;
         float    f;
@@ -103,6 +104,7 @@ void gwinit_init(void);
 /* GWEVAL module functions */
 void gweval_init(void);
 float gweval_eval_numeric(const char *expr);
+char *gweval_eval_string(const char *expr);
 
 /* GWSTS module functions */
 void gwsts_init(void);

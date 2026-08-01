@@ -6,6 +6,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <stdio.h>
 
 /* Parser state */
 typedef struct {
@@ -83,7 +84,7 @@ static float parse_factor(parser_t *p) {
         }
         name[i] = '\0';
         
-        /* Check for array reference: A(5) */
+        /* Check for array reference: A(5) or A$(5) */
         if (parser_peek(p) == '(') {
             parser_get(p);  /* consume '(' */
             
@@ -95,6 +96,12 @@ static float parse_factor(parser_t *p) {
             if (index < 0) index = 0;
             
             if (parser_match(p, ')')) {
+                /* Check if it's a string array (name ends with $) */
+                size_t name_len = strlen(name);
+                if (name_len > 0 && name[name_len - 1] == '$') {
+                    /* String array - return 0 for numeric evaluation */
+                    return 0.0f;
+                }
                 return biptrg_get_array_element(name, index);
             }
         }
@@ -169,4 +176,63 @@ float gweval_eval_numeric(const char *expr) {
     parser_t parser;
     parser_init(&parser, expr);
     return parse_expression(&parser);
+}
+
+/* String expression evaluation for PRINT etc. */
+char *gweval_eval_string(const char *expr) {
+    if (!expr) return NULL;
+    
+    parser_t parser;
+    parser_init(&parser, expr);
+    
+    /* Skip leading whitespace */
+    char c = parser_peek(&parser);
+    
+    /* String literal in quotes */
+    if (c == '"') {
+        parser_get(&parser);  /* consume opening quote */
+        char buf[256];
+        size_t i = 0;
+        while (parser.pos < parser.len && parser.input[parser.pos] != '"' && i < sizeof(buf) - 1) {
+            buf[i++] = parser.input[parser.pos++];
+        }
+        if (parser.pos < parser.len && parser.input[parser.pos] == '"') {
+            parser.pos++;  /* consume closing quote */
+        }
+        buf[i] = '\0';
+        char *result = gwdata_alloc_string(strlen(buf) + 1);
+        if (result) strcpy(result, buf);
+        return result;
+    }
+    
+    /* Variable or array reference */
+    if (isalpha((unsigned char)c)) {
+        char name[41];
+        size_t i = 0;
+        while (parser.pos < parser.len && (isalnum((unsigned char)parser.input[parser.pos]) || parser.input[parser.pos] == '_' || parser.input[parser.pos] == '$') && i < sizeof(name) - 1) {
+            name[i++] = parser.input[parser.pos++];
+        }
+        name[i] = '\0';
+        
+        /* Check for array reference: A$(5) */
+        if (parser_peek(&parser) == '(') {
+            parser_get(&parser);  /* consume '(' */
+            
+            float index_val = parse_expression(&parser);
+            int index = (int)index_val;
+            if (index < 0) index = 0;
+            
+            if (parser_match(&parser, ')')) {
+                return biptrg_get_array_string(name, index);
+            }
+        }
+        
+        /* Scalar string variable */
+        struct variable *v = gwdata_find_variable(name);
+        if (v && v->type == VT_STRING && v->value.s) {
+            return v->value.s;
+        }
+    }
+    
+    return NULL;
 }

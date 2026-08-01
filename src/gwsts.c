@@ -44,6 +44,7 @@ int gwsts_exec_statement(const char *stmt) {
             /* Find variable name */
             char *var_name = NULL;
             int size = 0;
+            var_type_t type = VT_SINGLE;  /* Moved outside inner block */
             
             char *paren = strchr(token, '(');
             if (paren) {
@@ -52,14 +53,25 @@ int gwsts_exec_statement(const char *stmt) {
                 if (var_name) {
                     memcpy(var_name, token, name_len);
                     var_name[name_len] = '\0';
-                    
+                
+                    /* Trim trailing whitespace from var_name */
+                    char *end = var_name + strlen(var_name) - 1;
+                    while (end > var_name && isspace((unsigned char)*end)) end--;
+                    *(end + 1) = '\0';
+                
+                    /* Determine type from $ suffix */
+                    if (strlen(var_name) > 0 && var_name[strlen(var_name) - 1] == '$') {
+                        type = VT_STRING;
+                    }
+                
                     char *close_paren = strchr(paren + 1, ')');
                     if (close_paren) {
                         char *size_str = (char *)gwram_alloc(close_paren - paren);
                         if (size_str) {
                             memcpy(size_str, paren + 1, close_paren - paren - 1);
                             size_str[close_paren - paren - 1] = '\0';
-                            size = atoi(size_str);
+                            /* Use expression evaluation instead of atoi */
+                            size = (int)gweval_eval_numeric(size_str);
                             gwram_free(size_str);
                         }
                     }
@@ -67,7 +79,7 @@ int gwsts_exec_statement(const char *stmt) {
             }
             
             if (var_name && size > 0) {
-                biptrg_dim_array(var_name, size, VT_SINGLE);
+                biptrg_dim_array(var_name, size, type);
                 result = SUCCESS;
                 gwram_free(var_name);
             }
@@ -99,8 +111,14 @@ int gwsts_exec_statement(const char *stmt) {
     else if (starts_with(trimmed, "PRINT ")) {
         char *expr = strdup_trim(trimmed + 6);
         if (expr) {
-            float val = gweval_eval_numeric(expr);
-            printf("%g\n", val);
+            /* Try string evaluation first, then numeric */
+            char *str_val = gweval_eval_string(expr);
+            if (str_val) {
+                printf("%s\n", str_val);
+            } else {
+                float val = gweval_eval_numeric(expr);
+                printf("%g\n", val);
+            }
             gwram_free(expr);
             result = SUCCESS;
         }
@@ -155,8 +173,23 @@ static int assign_value(const char *var_ref, const char *expr) {
     if (base_name && expr) {
         if (array_index >= 0) {
             /* Array element assignment */
-            float val = gweval_eval_numeric(expr);
-            result = biptrg_set_array_element(base_name, array_index, val);
+            /* Check if this is a string array (name ends with $) */
+            size_t name_len = strlen(base_name);
+            bool is_string_array = (name_len > 0 && base_name[name_len - 1] == '$');
+            
+            if (is_string_array) {
+                /* String array: evaluate string expression and use biptrg_set_array_string */
+                char *str_val = gweval_eval_string(expr);
+                if (str_val) {
+                    result = biptrg_set_array_string(base_name, array_index, str_val);
+                } else {
+                    result = ERROR;
+                }
+            } else {
+                /* Numeric array: use biptrg_set_array_element */
+                float val = gweval_eval_numeric(expr);
+                result = biptrg_set_array_element(base_name, array_index, val);
+            }
         } else {
             /* Simple variable assignment */
             struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
@@ -213,6 +246,11 @@ static bool parse_var_ref(const char *str, char **var_name, int *index) {
     memcpy(*var_name, str, name_len);
     (*var_name)[name_len] = '\0';
     
+    /* Trim trailing whitespace from var_name */
+    char *end = *var_name + strlen(*var_name) - 1;
+    while (end > *var_name && isspace((unsigned char)*end)) end--;
+    *(end + 1) = '\0';
+    
     /* Parse index */
     const char *index_str = paren + 1;
     const char *close_paren = strchr(index_str, ')');
@@ -223,7 +261,15 @@ static bool parse_var_ref(const char *str, char **var_name, int *index) {
     memcpy(index_buf, index_str, close_paren - index_str);
     index_buf[close_paren - index_str] = '\0';
     
-    *index = atoi(index_buf);
+    /* Use strtol with validation instead of atoi */
+    char *endptr = NULL;
+    long idx = strtol(index_buf, &endptr, 10);
+    if (endptr == index_buf || *endptr != '\0') {
+        /* Invalid number */
+        gwram_free(index_buf);
+        return false;
+    }
+    *index = (int)idx;
     /* GW-BASIC: negative index treated as 0 */
     if (*index < 0) *index = 0;
     gwram_free(index_buf);

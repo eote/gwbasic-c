@@ -1,23 +1,29 @@
-# BIPTRU/BIPTRG 模块 Code Review (v2)
+# BIPTRU/BIPTRG 模块 Code Review (v3)
 
 **日期**: 2026-08-01
-**审查范围**: 数组处理 (BIPTRG) 和格式化打印 (BIPRTU) 模块
-**基于提交**: `ebc500e` — fix: address code review issues
-**上一轮 Review**: 已处理 4 个问题 (CRITICAL #2, HIGH #4, HIGH #6, CRITICAL #3)
+**审查范围**: 数组处理 (BIPTRG)、格式化打印 (BIPRTU)、数据管理 (GWDATA)、初始化 (GWINIT)
+**基于提交**: `24c27a6` — fix: resolve CRITICAL memory issues and test crashes
+**上一轮 Review**: v2 (基于 `ebc500e`)
 **测试状态**: 92/92 全部通过
+**编译警告**: 1 个 (`biprtu.c:21` — `has_sign` 未使用)
 
 ---
 
 ## 变更摘要
 
-`ebc500e` 修复了上一轮 review 中的以下问题:
+`24c27a6` 修复了 v2 review 中的以下问题:
 
 | 问题 | 状态 | 说明 |
 |------|------|------|
-| CRITICAL #2: 数组索引越界 | ✅ 已修复 | 改为 GW-BASIC 兼容的 clamp 行为 (负索引→0, 超界→size-1) |
-| HIGH #4: DIM 多数组声明 | ✅ 已修复 | `continue` 替代 `break`, 支持逗号分隔的多个数组 |
-| HIGH #6: 代码重复 | ✅ 已修复 | 提取 `assign_value()` 公共函数消除重复 |
-| CRITICAL #3: parse_var_ref 指针泄漏 | ✅ 已修复 | `assign_value()` 统一管理 `base_name` 生命周期 |
+| CRITICAL #1: `dim_sizes` 永不释放 | ✅ 已修复 | 添加 `biptrg_free_array()` 函数，含 magic 校验 |
+| CRITICAL #2: 覆盖数组变量时泄漏 | ✅ 已修复 | `gwdata_alloc_variable()` 调用 `biptrg_free_array()` |
+
+新增内容:
+- `array_desc_t` 添加 `magic` 字段 (`ARRAY_MAGIC = 0x41525241`) 用于安全识别
+- `biptrg_free_array()` 函数，含 magic 校验防止误释放非数组数据
+- `gwdata_init()` 改为重置状态而非 no-op，实现测试间隔离
+- `gwdata_alloc_variable()` 在复用变量前调用 `biptrg_free_array()`
+- `tests/test_isolate.c` 调试用隔离测试文件
 
 ---
 
@@ -25,66 +31,83 @@
 
 ### CRITICAL
 
-#### 1. 内存泄漏：`biptrg_dim_array` 中 `dim_sizes` 永不释放
+#### 1. Union 别名 bug：`gwdata_alloc_variable` 误判浮点变量为数组
 
-**位置**: `src/biptrg.c:36-40`
+**位置**: `src/gwdata.c:61-66`
 
 ```c
-desc->dim_sizes = (int *)gwram_alloc(sizeof(int));
-if (!desc->dim_sizes) {
-    gwram_free(desc);
-    return ERROR;
+if (strcmp(existing->name, name) == 0) {
+    if (existing->value.s != NULL) {       // ❌ union 别名问题
+        biptrg_free_array(existing);       //    浮点值被误读为指针
+    }
+    existing->type = type;
+    existing->value.s = NULL;
+    return existing;
 }
 ```
 
-**说明**: `dim_sizes` 分配后，整个项目中没有代码释放它。`array_desc_t` 结构体（含 `dim_sizes`、`data`）存储在 `v->value.s` 中，但:
-- 没有 `biptrg_free_array()` 函数
-- 没有 `gwdata_free_variable()` 函数
-- 没有 `gwdata_cleanup()` 函数
+**根因**: `struct variable` 的 `value` 是 union，`value.s`（char*）和 `value.f`（float）共享内存。当变量被赋值为浮点数后（如 `value.f = 42.0`），union 的字节被重新解释为 `value.s`，结果非 NULL。
 
-程序退出时这些内存由操作系统回收，但长期运行的 REPL 会话中会累积泄漏。
+**触发场景**: REPL 中对同一变量二次赋值:
+```
+A = 42    → value.f = 42.0, value.s = 0x0000000042280000 (非 NULL!)
+A = 99    → gwdata_alloc_variable("A", VT_SINGLE) 找到已有 "A"
+            → value.s 非 NULL → biptrg_free_array() 被调用
+            → desc = (array_desc_t*)0x0000000042280000 (无效指针!)
+            → desc->magic 读取无效地址 → ACCESS VIOLATION (段错误)
+```
 
-**影响**: 每个数组声明泄漏 `sizeof(array_desc_t) + sizeof(int) + size * sizeof(float)` ≈ 16 + 4 + 40 = 60 字节 (以 DIM A(10) 为例)
+**为什么测试通过**: `gwdata_init()` 现在重置 `var_table` 为 NULL，每个测试从干净状态开始。测试中没有对同一变量名重复调用 `gwdata_alloc_variable`，所以 `existing` 分支不会被触发。但生产 REPL 中会触发。
 
-**修复建议**:
+**影响**: 用户在 REPL 中对同一变量二次赋值时崩溃
+
+**修复建议**: 不依赖 `value.s` 判断是否为数组。使用独立标记或检查 type:
 ```c
-/* 在 gwbasic.h 中添加声明 */
-void biptrg_free_array(struct variable *v);
+/* 方案 1: 检查变量类型是否为数组类型 */
+/* 需要 array_desc_t 存储标记，或单独的 is_array 标志 */
 
-/* 在 biptrg.c 中实现 */
-void biptrg_free_array(struct variable *v) {
-    if (!v) return;
-    array_desc_t *desc = (array_desc_t *)v->value.s;
-    if (!desc) return;
-    if (desc->data) gwram_free(desc->data);
-    if (desc->dim_sizes) gwram_free(desc->dim_sizes);
-    gwram_free(desc);
-    v->value.s = NULL;
+/* 方案 2: 在 struct variable 中添加 is_array 字段 */
+struct variable {
+    char name[MAX_VAR_NAME + 1];
+    var_type_t type;
+    bool is_array;          /* 新增: 标记是否为数组 */
+    union { ... } value;
+    struct variable *next;
+};
+
+/* 在 gwdata_alloc_variable 中: */
+if (existing->is_array) {
+    biptrg_free_array(existing);
+    existing->is_array = false;
 }
+existing->type = type;
+existing->value.s = NULL;
+return existing;
+
+/* 在 biptrg_dim_array 中: */
+v->is_array = true;
 ```
 
 ---
 
-#### 2. `gwdata_alloc_variable` 覆盖已有数组变量时泄漏旧数组
+#### 2. 生产代码中的 debug printf
 
-**位置**: `src/gwdata.c:47-57`
+**位置**: `src/gwinit.c:10-18`
 
 ```c
-struct variable *existing = g_state->var_table[idx];
-while (existing) {
-    if (strcmp(existing->name, name) == 0) {
-        existing->type = type;  // ❌ 直接覆盖，旧数组描述符泄漏
-        return existing;
-    }
-    existing = existing->next;
-}
+printf("DEBUG: gwinit_init start\n");
+fflush(stdout);
+// ...
+printf("DEBUG: after gwdata_alloc_variable\n");
+fflush(stdout);
+// ...
+printf("DEBUG: gwinit_init end\n");
+fflush(stdout);
 ```
 
-**场景**: 用户先执行 `DIM A(10)`，再执行 `A = 5`（将 A 作为普通变量使用）。`gwdata_alloc_variable("A", VT_SINGLE)` 找到已存在的 A，直接覆盖 type，但 `v->value.s` 中存储的 `array_desc_t`（含 `dim_sizes` 和 `data`）永远不会被释放。
+**影响**: `gwbasic.exe` 运行时每次调用 `gwinit_init` 都会输出 DEBUG 信息，污染用户界面。每个测试也输出这些信息（测试输出中可见）。
 
-**影响**: 每次此操作泄漏 ~60 字节
-
-**修复建议**: 在覆盖前检查旧值是否为数组，若是则调用 `biptrg_free_array`
+**修复**: 删除所有 `printf("DEBUG: ...")` 语句
 
 ---
 
@@ -95,47 +118,43 @@ while (existing) {
 **位置**: `src/gwsts.c:77`
 
 ```c
-biptrg_dim_array(var_name, size, VT_SINGLE);  // ❌ 总是 VT_SINGLE
+biptrg_dim_array(var_name, size, VT_SINGLE);  // 总是 VT_SINGLE
 ```
 
-**说明**: `biptrg_dim_array` 的 `type` 参数被硬编码为 `VT_SINGLE`。虽然 `biptrg.c` 支持 `VT_STRING`、`VT_INTEGER`、`VT_DOUBLE`，但通过 DIM 语句无法使用这些类型。
+**说明**: `biptrg_dim_array` 支持 `VT_STRING`，但 DIM 语句硬编码 `VT_SINGLE`。用户无法通过 `DIM S$(10)` 声明字符串数组。
 
-**影响**: 用户无法通过 `DIM S$(10)` 声明字符串数组（虽然底层 API 支持）
-
-**修复建议**:
+**修复建议**: 检测变量名 `$` 后缀:
 ```c
-/* 检测变量名后缀 */
 var_type_t type = VT_SINGLE;
-size_t name_len = paren - token;
-if (name_len > 1 && token[name_len - 1] == '$') {
+if (name_len > 0 && var_name[name_len - 1] == '$') {
     type = VT_STRING;
-    name_len--;  /* 去掉后缀 */
 }
-/* ... 分配 var_name 时使用 name_len ... */
-biptrg_dim_array(var_name, size, type);
 ```
 
 ---
 
-#### 4. 数组读写缺少类型检查
+#### 4. `biptrg_get_array_element` 缺少 VT_STRING 类型检查
 
-**位置**: `src/biptrg.c:81-100` (`biptrg_get_array_element`)
+**位置**: `src/biptrg.c:93-110`
 
 ```c
 array_desc_t *desc = (array_desc_t *)v->value.s;
 if (!desc) return 0.0f;
 if (!desc->data) return 0.0f;
 
-/* 没有检查 desc->type，直接按 float 读取 */
+/* 没有检查 desc->magic 是否有效 */
+/* 没有检查 desc->type 是否为 VT_STRING */
 float *data = (float *)desc->data;
 return data[index];
 ```
 
-**说明**: 如果数组是 `VT_STRING` 类型，`desc->data` 存储的是 `char**`，但函数将其当作 `float*` 读取，导致未定义行为。
+**影响**: 对字符串数组调用 `biptrg_get_array_element` 会将 `char**` 数据当作 `float*` 读取，导致未定义行为。
 
-**影响**: 对字符串数组调用 `biptrg_get_array_element` 会读取垃圾数据
-
-**修复建议**: 在 `VT_STRING` 分支返回 0.0f 或添加类型检查
+**修复建议**:
+```c
+if (desc->magic != ARRAY_MAGIC) return 0.0f;
+if (desc->type == VT_STRING) return 0.0f;  /* 字符串数组不能作为数值读取 */
+```
 
 ---
 
@@ -146,10 +165,10 @@ return data[index];
 **位置**: `src/gwsts.c:70`
 
 ```c
-size = atoi(size_str);  /* ❌ 只支持字面量，不支持表达式 */
+size = atoi(size_str);  /* atoi("5+3") = 5, 不支持表达式 */
 ```
 
-**说明**: GW-BASIC 支持 `DIM A(5+3)`。当前实现将 `size_str` 传给 `atoi`，`atoi("5+3")` 返回 5。
+**说明**: GW-BASIC 支持 `DIM A(5+3)`。当前 `atoi` 在遇到非数字字符时截断。
 
 **修复建议**: 使用 `gweval_eval_numeric(size_str)` 替代 `atoi`
 
@@ -160,66 +179,90 @@ size = atoi(size_str);  /* ❌ 只支持字面量，不支持表达式 */
 **位置**: `src/gwsts.c:70`, `src/gwsts.c:247`
 
 ```c
-size = atoi(size_str);   /* atoi("abc") = 0, 无法区分错误 */
-*index = atoi(index_buf); /* atoi("abc") = 0, 无法区分错误 */
+size = atoi(size_str);      /* atoi("abc") = 0 */
+*index = atoi(index_buf);   /* atoi("abc") = 0, 无法区分合法的 0 */
 ```
-
-**说明**: `atoi` 对非法输入返回 0，无法区分合法的 "0" 和错误输入。虽然当前 `size > 0` 检查能防御部分情况，但 `index` 为 0 是合法的（`A(0)`）。
 
 **修复建议**: 使用 `strtol` 并检查 `endptr`
 
 ---
 
-#### 7. DIM 变量名前有空格时解析失败
+#### 7. `gwdata_init()` 重置变量表时泄漏变量内存
+
+**位置**: `src/gwdata.c:22-25`
+
+```c
+for (int i = 0; i < MAX_VARIABLES; i++) {
+    g_state->var_table[i] = NULL;  /* 指针直接置 NULL，不释放 */
+}
+```
+
+**说明**: 注释说 "let OS reclaim at exit"。对测试可接受，但生产 REPL 中每次 `gwdata_init` 调用都会泄漏所有变量和数组内存。
+
+**修复建议**: 添加 `gwdata_cleanup()` 函数，遍历变量表释放所有变量和数组
+
+---
+
+#### 8. DIM 变量名前有空格时解析失败
 
 **位置**: `src/gwsts.c:55-56`
 
-```c
-char *paren = strchr(token, '(');
-/* 若 token = " A (10)", var_name = " A " (包含空格) */
-```
+`DIM  A (10)` 会解析出变量名 `" A "`（含空格），导致后续查找失败。
 
-**说明**: `DIM  A (10)` 会解析出变量名 `" A "`，导致后续查找失败。
-
-**修复建议**: 在截取变量名前去除首尾空格
+**修复建议**: 截取变量名前去除首尾空格
 
 ---
 
 ### LOW
 
-#### 8. 测试覆盖不足
+#### 9. 调试产物未清理
 
-**当前测试**: 92 个断言全部通过，但缺少以下场景:
-
-| 缺失场景 | 优先级 |
-|----------|--------|
-| 数组边界测试 (index=0, size-1, size, -1) | HIGH |
-| DIM 多数组声明 (`DIM A(10), B(5), C(3)`) | HIGH |
-| 数组表达式索引 (`A(2+3)`) | MEDIUM |
-| 错误处理 (NULL 指针、无效类型) | MEDIUM |
-| 字符串数组边界测试 | MEDIUM |
-| 内存泄漏检测 (valgrind/ASAN) | LOW |
-| 类型覆盖 (INTEGER, DOUBLE) | LOW |
-
-**建议**: 优先添加边界测试和多数组测试
+| 文件 | 问题 |
+|------|------|
+| `tests/test_isolate.c` | 调试用隔离测试文件，未加入 Makefile，应删除或文档化 |
+| `tests/test_gwinit.c` | 大量 `printf("DEBUG: ...")` 语句 |
+| `src/gwinit.c` | debug printf 已标记为 CRITICAL #2 |
 
 ---
 
-#### 9. PRINT USING 实现不完整
+#### 10. 测试覆盖不足
 
-**当前支持**: `##.##` 格式的数值和 `\\` 格式的字符串
+**当前**: 92 个断言全部通过，但缺少:
 
-**GW-BASIC 完整格式**:
-- `#.##` — 自适应格式
-- `###,###` — 千位分隔符
-- `**##.##` — 前导星号填充
-- `$$##.##` — 浮动美元符号
-- `+##.##` / `-##.##` — 符号位
-- `^^^^` — 科学计数法
-- `&` — 字符串可变宽度
-- `!` — 单字符
+| 缺失场景 | 优先级 |
+|----------|--------|
+| 变量二次赋值（触发 CRITICAL #1） | CRITICAL |
+| 数组边界 (index=0, size-1, size, -1) | HIGH |
+| DIM 多数组声明 | HIGH |
+| 数组表达式索引 `A(2+3)` | MEDIUM |
+| 错误处理 (NULL、无效类型) | MEDIUM |
+| 内存泄漏检测 (valgrind/ASAN) | LOW |
 
-**影响**: 只覆盖了最基础的用例
+---
+
+#### 11. PRINT USING 实现不完整
+
+**当前支持**: `##.##` 数值格式、`\\` 字符串格式
+
+**缺失**: 千位分隔符、前导星号、浮动美元符、科学计数法、`&` 可变宽度字符串、`!` 单字符
+
+---
+
+#### 12. 编译警告未处理
+
+**位置**: `src/biprtu.c:21`
+
+```c
+bool has_sign = false;  // 赋值但从未使用
+```
+
+**修复**: 删除 `has_sign` 变量，或实际使用它
+
+---
+
+#### 13. `biptrg.c` 文件末尾无换行符
+
+文件以 `}` 结束，没有换行符（`git diff` 显示 `\ No newline at end of file`）。
 
 ---
 
@@ -227,39 +270,43 @@ char *paren = strchr(token, '(');
 
 ### 优点
 
-- ✅ **模块化良好**: 公共函数 `assign_value()` 消除了代码重复
-- ✅ **GW-BASIC 行为兼容**: 数组索引 clamp 而非报错，符合原始行为
-- ✅ **防御性编程**: `desc->data` NULL 检查、负索引处理
-- ✅ **内存管理对称**: `gwram_alloc` / `gwram_free` 配对使用
-- ✅ **测试全面**: 92 个断言覆盖核心模块，全部通过
-- ✅ **代码可读性**: 静态函数前置声明，清晰的注释
+- ✅ **Magic number 设计**: `biptrg_free_array` 使用 magic 校验防止误释放，是良好的防御性编程
+- ✅ **测试隔离**: `gwdata_init()` 重置状态实现测试间隔离，解决了测试崩溃问题
+- ✅ **内存清理**: `biptrg_free_array` 正确释放 `data`、`dim_sizes`、`desc` 三层
+- ✅ **GW-BASIC 兼容**: 数组索引 clamp 行为
+- ✅ **公共函数**: `assign_value()` 消除代码重复
 
 ### 需要改进
 
-- ❌ 缺少数组/变量清理函数（CRITICAL #1, #2）
-- ❌ DIM 语句类型支持不完整（HIGH #3）
-- ❌ 类型系统使用与声明不一致（HIGH #4）
-- ❌ 输入验证依赖 `atoi`（MEDIUM #6）
-- ❌ 测试缺少边界和错误场景（LOW #8）
+- ❌ **Union 别名 bug** (CRITICAL #1): `value.s != NULL` 检查无法区分数组和浮点变量
+- ❌ **Debug printf 残留** (CRITICAL #2): 生产代码不应包含调试输出
+- ❌ **缺少 `is_array` 标记**: `struct variable` 没有独立标记区分数组和普通变量
+- ❌ **DIM 类型支持** (HIGH #3): 无法声明字符串数组
+- ❌ **类型检查缺失** (HIGH #4): 数组读写不验证类型
+- ❌ **测试覆盖** (LOW #10): 缺少变量二次赋值和边界测试
 
 ---
 
 ## 优先级修复顺序
 
-1. **立即修复**: 添加 `biptrg_free_array` + 在 `gwdata_alloc_variable` 中调用（CRITICAL #1, #2）
-2. **高优先级**: DIM 字符串数组支持（HIGH #3）
-3. **高优先级**: 数组类型检查（HIGH #4）
-4. **中优先级**: DIM 表达式支持（MEDIUM #5）
-5. **中优先级**: `atoi` → `strtol`（MEDIUM #6）
-6. **低优先级**: 测试覆盖增强（LOW #8）
-7. **低优先级**: PRINT USING 完善（LOW #9）
+1. **立即修复**: Union 别名 bug — 添加 `is_array` 字段或改用 type 判断 (CRITICAL #1)
+2. **立即修复**: 删除 `gwinit.c` 中的 debug printf (CRITICAL #2)
+3. **高优先级**: DIM 字符串数组 `$` 后缀支持 (HIGH #3)
+4. **高优先级**: 数组读写 magic + 类型检查 (HIGH #4)
+5. **中优先级**: 添加 `gwdata_cleanup()` 函数 (MEDIUM #7)
+6. **中优先级**: DIM 表达式 + `strtol` (MEDIUM #5, #6)
+7. **低优先级**: 清理调试产物 (LOW #9)
+8. **低优先级**: 测试覆盖增强 (LOW #10)
+9. **低优先级**: PRINT USING 完善 (LOW #11)
 
 ---
 
 ## 总结
 
-`ebc500e` 提交有效修复了上一轮 review 中的 4 个问题，代码质量明显提升。`assign_value()` 公共函数的提取使代码结构更清晰，GW-BASIC 兼容的 clamp 行为也更接近原始实现。
+`24c27a6` 成功修复了 v2 review 中的两个 CRITICAL 内存泄漏问题，测试崩溃问题也已解决（`gwdata_init` 重置状态）。`biptrg_free_array` 的 magic 校验是良好的设计。
 
-当前最大的风险是内存管理：缺少清理函数导致 REPL 长期运行时累积泄漏（CRITICAL #1, #2）。其次是功能完整性：DIM 语句无法声明字符串数组（HIGH #3），以及类型系统使用不一致（HIGH #4）。
+但新引入了一个严重的 union 别名 bug（CRITICAL #1）：`gwdata_alloc_variable` 用 `value.s != NULL` 判断是否为数组，但 union 的浮点值会被误读为非 NULL 指针。这在测试中不会触发（变量表被重置），但在生产 REPL 中对同一变量二次赋值时会段错误。建议添加 `is_array` 字段从根本解决类型区分问题。
 
-建议优先处理 CRITICAL 问题，然后逐步完善 HIGH 和 MEDIUM 项。测试套件已经覆盖了 happy path，可以在此基础上扩展边界测试。
+同时 `gwinit.c` 中的 debug printf 不应保留在生产代码中，应立即删除。
+
+**测试状态**: 92/92 通过（但缺少变量二次赋值的测试场景，CRITICAL #1 未被测试覆盖）。

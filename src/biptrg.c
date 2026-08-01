@@ -58,6 +58,7 @@ int biptrg_dim_array(const char *name, int size, var_type_t type) {
     /* Store descriptor in variable's string pointer (reuse for array) */
     v->value.s = (char *)desc;
     v->type = type;  /* Keep original type for identification */
+    v->is_array = true;  /* Mark as array to distinguish from scalar */
     
     return SUCCESS;
 }
@@ -71,6 +72,10 @@ int biptrg_set_array_element(const char *name, int index, float val) {
     
     array_desc_t *desc = (array_desc_t *)v->value.s;
     if (!desc) return ERROR;
+    
+    /* Validate magic number and type */
+    if (desc->magic != ARRAY_MAGIC) return ERROR;
+    if (desc->type == VT_STRING) return ERROR;  /* String arrays cannot be written as numeric */
     
     /* GW-BASIC: clamp index to valid range */
     if (index < 0) index = 0;
@@ -101,6 +106,10 @@ float biptrg_get_array_element(const char *name, int index) {
     
     array_desc_t *desc = (array_desc_t *)v->value.s;
     if (!desc) return 0.0f;
+    
+    /* Validate magic number and type */
+    if (desc->magic != ARRAY_MAGIC) return 0.0f;
+    if (desc->type == VT_STRING) return 0.0f;  /* String arrays cannot be read as numeric */
     if (!desc->data) return 0.0f;  /* Defensive check */
     
     /* GW-BASIC: clamp index to valid range */

@@ -18,7 +18,6 @@ void biprtu_print_using(const char *fmt, double val) {
     int int_digits = 0;
     int frac_digits = 0;
     bool in_frac = false;
-    bool has_sign = false;
     
     for (const char *p = fmt; *p; p++) {
         if (*p == '#') {
@@ -26,8 +25,6 @@ void biprtu_print_using(const char *fmt, double val) {
             else int_digits++;
         } else if (*p == '.') {
             in_frac = true;
-        } else if (*p == '+' || *p == '-') {
-            has_sign = true;
         }
     }
     
