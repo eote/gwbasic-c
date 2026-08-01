@@ -156,6 +156,24 @@ double bistrs_val(const char *str);
 char *bistrs_string(int n, char ch);
 char *bistrs_space(int n);
 
+/* MATH1 module functions - Transcendental math */
+void math1_init(void);
+float math1_sin(float x);
+float math1_cos(float x);
+float math1_tan(float x);
+float math1_atn(float x);
+float math1_exp(float x);
+float math1_log(float x);
+
+/* MATH2 module functions - Elementary math */
+void math2_init(void);
+float math2_sqr(float x);
+float math2_abs(float x);
+float math2_sgn(float x);
+float math2_rnd(float x);
+float math2_int(float x);
+float math2_fix(float x);
+
 /* BIPRTU module functions */
 void biprtu_init(void);
 void biprtu_print_using(const char *fmt, double val);

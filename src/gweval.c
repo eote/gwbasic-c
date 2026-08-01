@@ -6,6 +6,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <strings.h>
 #include <stdio.h>
 
 /* Parser state */
@@ -65,7 +66,7 @@ static float parse_factor(parser_t *p) {
         return parse_factor(p);
     }
     
-    /* Number or variable */
+    /* Number or variable or function */
     if (isdigit((unsigned char)c) || c == '.') {
         char buf[64];
         size_t i = 0;
@@ -83,6 +84,30 @@ static float parse_factor(parser_t *p) {
             name[i++] = p->input[p->pos++];
         }
         name[i] = '\0';
+        
+        /* Check for function call: SIN(, COS(, etc. */
+        if (parser_peek(p) == '(') {
+            parser_get(p);  /* consume '(' */
+            
+            /* Parse argument expression */
+            float arg = parse_expression(p);
+            
+            if (parser_match(p, ')')) {
+                /* Math functions */
+                if (strcasecmp(name, "SIN") == 0) return math1_sin(arg);
+                if (strcasecmp(name, "COS") == 0) return math1_cos(arg);
+                if (strcasecmp(name, "TAN") == 0) return math1_tan(arg);
+                if (strcasecmp(name, "ATN") == 0) return math1_atn(arg);
+                if (strcasecmp(name, "EXP") == 0) return math1_exp(arg);
+                if (strcasecmp(name, "LOG") == 0) return math1_log(arg);
+                if (strcasecmp(name, "SQR") == 0) return math2_sqr(arg);
+                if (strcasecmp(name, "ABS") == 0) return math2_abs(arg);
+                if (strcasecmp(name, "SGN") == 0) return math2_sgn(arg);
+                if (strcasecmp(name, "RND") == 0) return math2_rnd(arg);
+                if (strcasecmp(name, "INT") == 0) return math2_int(arg);
+                if (strcasecmp(name, "FIX") == 0) return math2_fix(arg);
+            }
+        }
         
         /* Check for array reference: A(5) or A$(5) */
         if (parser_peek(p) == '(') {

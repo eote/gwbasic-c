@@ -103,6 +103,21 @@ void test_dskcom_input(void);
 void test_dskcom_line_input(void);
 void test_dskcom_write_seek(void);
 void test_dskcom_get_put(void);
+void test_math1_init(void);
+void test_math1_sin(void);
+void test_math1_cos(void);
+void test_math1_tan(void);
+void test_math1_atn(void);
+void test_math1_exp(void);
+void test_math1_log(void);
+void test_math2_init(void);
+void test_math2_sqr(void);
+void test_math2_abs(void);
+void test_math2_sgn(void);
+void test_math2_rnd(void);
+void test_math2_int(void);
+void test_math2_fix(void);
+void test_math_expression_eval(void);
 
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
@@ -162,6 +177,21 @@ int main(void) {
     failed += run_test("dskcom_line_input", test_dskcom_line_input);
     failed += run_test("dskcom_write_seek", test_dskcom_write_seek);
     failed += run_test("dskcom_get_put", test_dskcom_get_put);
+    failed += run_test("math1_init", test_math1_init);
+    failed += run_test("math1_sin", test_math1_sin);
+    failed += run_test("math1_cos", test_math1_cos);
+    failed += run_test("math1_tan", test_math1_tan);
+    failed += run_test("math1_atn", test_math1_atn);
+    failed += run_test("math1_exp", test_math1_exp);
+    failed += run_test("math1_log", test_math1_log);
+    failed += run_test("math2_init", test_math2_init);
+    failed += run_test("math2_sqr", test_math2_sqr);
+    failed += run_test("math2_abs", test_math2_abs);
+    failed += run_test("math2_sgn", test_math2_sgn);
+    failed += run_test("math2_rnd", test_math2_rnd);
+    failed += run_test("math2_int", test_math2_int);
+    failed += run_test("math2_fix", test_math2_fix);
+    failed += run_test("math_expression_eval", test_math_expression_eval);
     
     print_test_summary();
     

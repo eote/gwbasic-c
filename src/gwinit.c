@@ -13,6 +13,10 @@ void gwinit_init(void) {
         pi->value.f = 3.14159265358979323846f;
     }
     
+    /* Initialize math modules */
+    math1_init();
+    math2_init();
+    
     /* Additional initialization would go here:
      * - Function pointer tables
      * - Operator precedence tables
