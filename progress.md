@@ -30,7 +30,7 @@
 | 12 | `scndrv` | SCNDRV.ASM | ✅ Implement | ✅ **DONE** | Text screen driver - cursor, wrapping, scrolling, control chars |
 | 13 | `giolpt` | GIOLPT.ASM | ⚠️ Stub | ✅ **DONE** | Printer output - LPT1/2/3, LPOS, WIDTH, CR/LF translation |
 | 14 | `giocom` | GIOCOM.ASM | ⚠️ Stub | ✅ **DONE** | Serial comms - COM1..4, baud/parity/data/stop, async I/O |
-| 15 | `giodsk` | GIODSK.ASM | ✅ Implement | ❌ **STUB ONLY** | Merged into dskcom |
+| 15 | `giodsk` | GIODSK.ASM | ✅ Implement | ✅ **DONE** | Disk I/O entry points - thin wrappers around DSKCOM |
 
 ---
 
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 20 | 51% |
+| **Fully Implemented** | 21 | 54% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 19 | 49% |
+| **Stub Only (TODO)** | 18 | 46% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -104,8 +104,10 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Module 15: `giodsk` (GIODSK.ASM)** - Merged into dskcom
-
 **Module 16: `gwlist` (GWLIST.ASM)** - Already DONE
 
-This is the next module in Phase 3 that needs implementation. The PLAN lists Module 16 as Order 16 in Phase 3, but gwlist is already done.
+**Module 17: `bistrs` (BISTRS.ASM)** - Already DONE
+
+This is the next module in Phase 3 that needs implementation. The PLAN lists Module 17 as Order 17 in Phase 3, but bistrs is already done.
+
+Actual next: Phase 4 modules (24-39) - 18 modules remaining.
