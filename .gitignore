@@ -8,6 +8,9 @@ test_*.dat
 *.o
 *.exe
 *.obj
+*/*.o
+*/*.exe
+*/*.obj
 
 # IDE/Editor
 .vscode/
@@ -21,3 +24,5 @@ Thumbs.db
 
 # Test output
 test_gwbasic.exe
+CODE_REVIEW.md
+GW-BASIC-READONLY-SOURCE/
