@@ -135,6 +135,18 @@ void gioscn_pset(int x, int y, int color);
 void gioscn_preset(int x, int y);
 int gioscn_point(int x, int y);
 
+/* GENGRP module functions - Generalized Graphics */
+void gengrp_init(void);
+void gengrp_scan_coord(int *x, int *y, bool relative);
+void gengrp_pset(int x, int y, int color);
+void gengrp_preset(int x, int y);
+int gengrp_point(int x, int y);
+void gengrp_line(const char *params);  /* LINE command parser */
+void gengrp_grpini(void);              /* Initialize graphics */
+void gengrp_grprst(void);              /* Reset graphics */
+void gengrp_set_atr(int color);        /* Set current attribute */
+int gengrp_get_atr(void);              /* Get current attribute */
+
 /* GWLIST module functions */
 void gwlist_init(void);
 void gwlist_add_line(int number, const char *text);
@@ -202,5 +214,25 @@ struct file_desc;
 
 /* DSKCOM module functions are declared in dskcom.h */
 void dskcom_init(void);
+
+/* BIMISC module functions */
+void bimisc_init(void);
+void bimisc_new(void);              /* NEW command - clear program and variables */
+void bimisc_clear(void);            /* CLEAR command - clear variables, optionally set memory */
+void bimisc_clear_with_args(int stack_size, int max_mem);  /* CLEAR with parameters */
+void bimisc_run_setup(void);        /* RUN command setup */
+void bimisc_restore(int line_num);  /* RESTORE [line] */
+void bimisc_stop(void);             /* STOP statement */
+void bimisc_end(void);              /* END statement */
+void bimisc_cont(void);             /* CONT command */
+void bimisc_tron(void);             /* TRON command */
+void bimisc_troff(void);            /* TROFF command */
+void bimisc_swap(const char *var1, const char *var2);  /* SWAP var1, var2 */
+void bimisc_erase(const char *var_name);  /* ERASE array */
+int bimisc_is_letter(char c);       /* Test if character is A-Z */
+void bimisc_control_char(int ch);   /* Handle control characters (^C, etc.) */
+int bimisc_is_file_io(void);        /* Check if file I/O active */
+void bimisc_stack_init(void);       /* Stack initialization (STKINI) */
+void bimisc_get_stack(int entries); /* Check stack space (GETSTK) */
 
 #endif /* GWBASIC_H */

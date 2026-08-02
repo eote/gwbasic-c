@@ -4,18 +4,19 @@
 #include "gwbasic.h"
 #include <stdlib.h>
 #include <windows.h>
+#include <string.h>
 
 /* Screen state */
-static int g_screen_mode = 0;  /* 0 = text, 1 = 320x200, 2 = 640x200 */
+int g_screen_mode = 0;  /* 0 = text, 1 = 320x200, 2 = 640x200 */
 static HANDLE g_console_out = NULL;
 static bool g_graphics_initialized = false;
 
 /* Simple framebuffer for graphics modes (simulated) */
 #define MAX_WIDTH  640
 #define MAX_HEIGHT 480
-static unsigned char *g_framebuffer = NULL;
-static int g_fb_width = 0;
-static int g_fb_height = 0;
+unsigned char *g_framebuffer = NULL;
+int g_fb_width = 0;
+int g_fb_height = 0;
 
 static void ensure_graphics_init(void) {
     if (g_graphics_initialized) return;
