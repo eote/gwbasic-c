@@ -22,7 +22,8 @@ typedef struct {
     int rts_suppress;    /* _CMRTS - suppress RTS */
     int user_cod;        /* _CMCOD - user specified ASC/BIN */
     int cts_not_default; /* _CMCTS - CTS parm not defaulted */
-    int send_lf_cr;      /* _CMCLF - send LF after CR */
+    int ascii_eof_mode;  /* _CMCLF - ASCII mode: send CTL-Z on close */
+    int send_lf_after_cr; /* send LF after CR */
     int cr_flag;         /* _CMCRF - last char sent was CR */
     int width;           /* _CMWID - device width (columns per line) */
     int pos;             /* _CMPOS - current column (0-based) */
@@ -58,7 +59,8 @@ void giocom_init(void) {
         g_com_dcb[i].rts_suppress = 0;
         g_com_dcb[i].user_cod = 0;
         g_com_dcb[i].cts_not_default = 0;
-        g_com_dcb[i].send_lf_cr = 0;
+        g_com_dcb[i].ascii_eof_mode = 0;
+        g_com_dcb[i].send_lf_after_cr = 0;
         g_com_dcb[i].cr_flag = 0;
         g_com_dcb[i].width = 255;          /* Default infinite width */
         g_com_dcb[i].pos = 0;
@@ -147,6 +149,7 @@ void giocom_open(int device_id, int baud, int parity, int data_bits, int stop_bi
     com->width = 255;  /* Default infinite width */
     com->pos = 0;
     com->cr_flag = 0;
+    com->send_lf_after_cr = 0;
     
     /* Open COM port */
     char port_name[16];
@@ -179,10 +182,12 @@ void giocom_close(int device_id) {
     HANDLE handle = get_com_handle(device_id);
     if (handle) {
         /* Send CTL-Z if ASCII output mode */
-        if (!com->bin_mode && com->send_lf_cr) {
+        if (!com->bin_mode && com->ascii_eof_mode) {
             char ctlz = 0x1A;  /* CTL-Z */
             DWORD written;
-            WriteFile(handle, &ctlz, 1, &written, NULL);
+            if (!WriteFile(handle, &ctlz, 1, &written, NULL)) {
+                /* Failed to write CTL-Z, but continue closing */
+            }
         }
         
         /* Terminate COM channel */
@@ -217,8 +222,10 @@ int giocom_sin(int device_id) {
     
     char ch;
     DWORD read;
+    DWORD start_time = GetTickCount();
+    DWORD timeout_ms = (com->cts_timeout > 0) ? com->cts_timeout : 1000;
     
-    /* Wait for data */
+    /* Wait for data with timeout */
     while (true) {
         if (ReadFile(handle, &ch, 1, &read, NULL) && read > 0) {
             /* Check for CTL-Z in ASCII mode */
@@ -235,6 +242,11 @@ int giocom_sin(int device_id) {
         
         if (errors) {
             return -1;
+        }
+        
+        /* Check timeout */
+        if (GetTickCount() - start_time >= timeout_ms) {
+            return -1;  /* Timeout - no data available */
         }
         
         /* Small delay to avoid busy waiting */
@@ -274,7 +286,7 @@ void giocom_sot(int device_id, int ch) {
         com->cr_flag = 1;
         
         /* Send LF after CR if LF option set */
-        if (com->send_lf_cr) {
+        if (com->send_lf_after_cr) {
             char lf = '\n';
             WriteFile(handle, &lf, 1, &written, NULL);
         }
