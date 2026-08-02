@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 21 | 54% |
+| **Fully Implemented** | 22 | 56% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 18 | 46% |
+| **Stub Only (TODO)** | 17 | 44% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -104,10 +104,29 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Module 16: `gwlist` (GWLIST.ASM)** - Already DONE
+**Phase 4 modules (24-39) - 18 modules remaining:**
 
-**Module 17: `bistrs` (BISTRS.ASM)** - Already DONE
+| Order | Module | ASM File | PLAN Status | Notes |
+|-------|--------|----------|-------------|-------|
+| 24 | `oem` | OEM.ASM | ❌ **STUB ONLY** | OEM abstraction layer |
+| 25 | `oemcbk` | OEMCBK.ASM | ❌ **STUB ONLY** | OEM callback handlers |
+| 26 | `oemev` | OEMEV.ASM | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
+| 27 | `oemsnd` | OEMSND.ASM | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
+| 28 | `ibmres` | IBMRES.ASM | ❌ **STUB ONLY** | IBM PC resource handling |
+| 29 | `advgrp` | ADVGRP.ASM | ❌ **STUB ONLY** | Advanced statements (DEF FN, ERASE) |
+| 30 | `call86` | CALL86.ASM | ❌ **STUB ONLY** | CALL absolute, USR functions |
+| 31 | `itsa86` | ITSA86.ASM | ❌ **STUB ONLY** | Instruction analysis |
+| 32 | `next86` | NEXT86.ASM | ❌ **STUB ONLY** | NEXT loop handling |
+| 33 | `kanj86` | KANJ86.ASM | ❌ **STUB ONLY** | Kanji/Japanese support |
+| 34 | `maclng` | MACLNG.ASM | ❌ **STUB ONLY** | Machine language interface |
+| 35 | `scnedt` | SCNEDT.ASM | ❌ **STUB ONLY** | Screen editor (line editing) |
+| 36 | `giocas` | GIOCAS.ASM | ❌ **STUB ONLY** | Cassette I/O |
+| 37 | `gio86` | GIO86.ASM | ❌ **STUB ONLY** | 8086-specific I/O |
+| 38 | `giotbl` | GIOTBL.ASM | ❌ **STUB ONLY** | I/O tables |
+| 39 | `biboot` | BIBOOT.ASM | ❌ **STUB ONLY** | Boot/startup |
 
-This is the next module in Phase 3 that needs implementation. The PLAN lists Module 17 as Order 17 in Phase 3, but bistrs is already done.
-
-Actual next: Phase 4 modules (24-39) - 18 modules remaining.
+**Priority recommendation:**
+1. **advgrp** - Advanced statements (DEF FN, ERASE)
+2. **gioscn framebuffer** - Complete graphics support
+3. **scnedt** - Screen editor/line editing
+4. **call86** - CALL absolute, USR functions
