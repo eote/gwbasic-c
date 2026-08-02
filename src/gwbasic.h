@@ -249,4 +249,14 @@ int bimisc_is_file_io(void);        /* Check if file I/O active */
 void bimisc_stack_init(void);       /* Stack initialization (STKINI) */
 void bimisc_get_stack(int entries); /* Check stack space (GETSTK) */
 
+/* GIOLPT module functions - Line Printer */
+void giolpt_init(void);
+void giolpt_open(int device_id, int mode);      /* LPTOPN - open printer */
+void giolpt_close(int device_id);               /* LPTCLS - close printer */
+void giolpt_swd(int device_id, int width);      /* LPTSWD - set device width */
+void giolpt_sot(int device_id, int ch);         /* LPTSOT - sequential output */
+int giolpt_gps(int device_id);                  /* LPTGPS - get position */
+int giolpt_gwd(int device_id);                  /* LPTGWD - get width */
+int giolpt_lpos(int device_id);                 /* LPOS function */
+
 #endif /* GWBASIC_H */

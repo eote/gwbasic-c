@@ -28,7 +28,7 @@
 | 10 | `giokyb` | GIOKYB.ASM | ✅ Implement | ✅ **DONE** | INKEY$, INPUT$ |
 || 11 | `gioscn` | GIOSCN.ASM | ✅ Implement | ✅ **DONE** | SCREEN modes, PSET, PRESET, POINT - framebuffer simulated, exported globals for gengrp |
 | 12 | `scndrv` | SCNDRV.ASM | ✅ Implement | ✅ **DONE** | Text screen driver - cursor, wrapping, scrolling, control chars |
-| 13 | `giolpt` | GIOLPT.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Printer output (LPRINT, LLIST) |
+| 13 | `giolpt` | GIOLPT.ASM | ⚠️ Stub | ✅ **DONE** | Printer output - LPT1/2/3, LPOS, WIDTH, CR/LF translation |
 | 14 | `giocom` | GIOCOM.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Serial communications |
 | 15 | `giodsk` | GIODSK.ASM | ✅ Implement | ❌ **STUB ONLY** | Merged into dskcom |
 
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 18 | 46% |
+| **Fully Implemented** | 19 | 49% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 21 | 54% |
+| **Stub Only (TODO)** | 20 | 51% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -104,10 +104,8 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Module 13: `giolpt` (GIOLPT.ASM)** - Printer output (LPRINT, LLIST) - marked as stub in PLAN
-
 **Module 14: `giocom` (GIOCOM.ASM)** - Serial communications - marked as stub in PLAN
 
 **Module 15: `giodsk` (GIODSK.ASM)** - Merged into dskcom
 
-This is the next module in Phase 2 that needs implementation. The PLAN lists Module 13 as Order 13 in Phase 2.
+This is the next module in Phase 2 that needs implementation. The PLAN lists Module 14 as Order 14 in Phase 2.
