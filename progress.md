@@ -1,6 +1,6 @@
 # GW-BASIC C Port - Implementation Progress Tracking
 
-**Last Updated:** 2026-08-02
+**Last Updated:** 2026-08-03
 **Based on:** PLAN (`.hermes/plans/2025-08-01_GW-BASIC-C-Port-Implementation.md`) vs Actual Implementation
 
 ---
@@ -26,8 +26,8 @@
 |-------|--------|----------|-------------|---------------|-------|
 | 9 | `giocon` | GIOCON.ASM | ✅ Implement | ✅ **DONE** | Console I/O (PRINT, LOCATE, COLOR, CLS) - Windows CONIO |
 | 10 | `giokyb` | GIOKYB.ASM | ✅ Implement | ✅ **DONE** | INKEY$, INPUT$ |
-| 11 | `gioscn` | GIOSCN.ASM | ✅ Implement | ✅ **PARTIAL** | SCREEN modes, PSET, PRESET, POINT - framebuffer simulated |
-| 12 | `scndrv` | SCNDRV.ASM | ✅ Implement | ❌ **STUB ONLY** | Screen driver abstraction |
+|| 11 | `gioscn` | GIOSCN.ASM | ✅ Implement | ✅ **DONE** | SCREEN modes, PSET, PRESET, POINT - framebuffer simulated, exported globals for gengrp |
+| 12 | `scndrv` | SCNDRV.ASM | ✅ Implement | ✅ **DONE** | Text screen driver - cursor, wrapping, scrolling, control chars |
 | 13 | `giolpt` | GIOLPT.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Printer output (LPRINT, LLIST) |
 | 14 | `giocom` | GIOCOM.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Serial communications |
 | 15 | `giodsk` | GIODSK.ASM | ✅ Implement | ❌ **STUB ONLY** | Merged into dskcom |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 16 | 41% |
-| **Partially Implemented** | 1 | 3% |
-| **Stub Only (TODO)** | 22 | 56% |
+| **Fully Implemented** | 18 | 46% |
+| **Partially Implemented** | 0 | 0% |
+| **Stub Only (TODO)** | 21 | 54% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -104,12 +104,10 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Module 9: `giocon` (GIOCON.ASM)** - Console I/O (already DONE)
+**Module 13: `giolpt` (GIOLPT.ASM)** - Printer output (LPRINT, LLIST) - marked as stub in PLAN
 
-**Module 10: `giokyb` (GIOKYB.ASM)** - Keyboard input (already DONE)
+**Module 14: `giocom` (GIOCOM.ASM)** - Serial communications - marked as stub in PLAN
 
-**Module 11: `gioscn` (GIOSCN.ASM)** - Screen handling (already PARTIAL)
+**Module 15: `giodsk` (GIODSK.ASM)** - Merged into dskcom
 
-**Module 12: `scndrv` (SCNDRV.ASM)** - Screen driver abstraction
-
-This is the next module in Phase 2 that needs implementation. The PLAN lists it as Order 12 in Phase 2.
+This is the next module in Phase 2 that needs implementation. The PLAN lists Module 13 as Order 13 in Phase 2.
