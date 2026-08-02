@@ -147,6 +147,20 @@ void gengrp_grprst(void);              /* Reset graphics */
 void gengrp_set_atr(int color);        /* Set current attribute */
 int gengrp_get_atr(void);              /* Get current attribute */
 
+/* SCNDRV module functions - Screen Driver (text mode) */
+void scndrv_init(void);
+void scndrv_swi(int width, int height);      /* SCNSWI - set screen width/height */
+void scndrv_loc(int col, int row);           /* SCNLOC - locate cursor */
+void scndrv_clr(void);                       /* SCNCLR - clear screen */
+void scndrv_out(int ch);                     /* SCNOUT - output character */
+int scndrv_pos(int *col, int *row);          /* SCNPOS - get cursor position */
+int scndrv_wdo(int col, int row, int width, int height);  /* SCNWDO - set text window */
+void scndrv_ipi(void);                       /* SCNIPL - initialize */
+void scndrv_brk(void);                       /* SCNBRK - break handler */
+int scndrv_gwi(void);                        /* SCNGWI - get logical width */
+int scndrv_rdl(int line, char *buf, int maxlen);  /* SCNRDL - read logical line */
+void scndrv_mrk(bool is_input);              /* SCNMRK - mark position */
+
 /* GWLIST module functions */
 void gwlist_init(void);
 void gwlist_add_line(int number, const char *text);
