@@ -259,4 +259,16 @@ int giolpt_gps(int device_id);                  /* LPTGPS - get position */
 int giolpt_gwd(int device_id);                  /* LPTGWD - get width */
 int giolpt_lpos(int device_id);                 /* LPOS function */
 
+/* GIOCOM module functions - Serial Communications */
+void giocom_init(void);
+void giocom_open(int device_id, int baud, int parity, int data_bits, int stop_bits);  /* COMOPN */
+void giocom_close(int device_id);               /* COMCLS */
+void giocom_swd(int device_id, int width);      /* COMSWD - set width */
+int giocom_sin(int device_id);                  /* COMSIN - sequential input */
+void giocom_sot(int device_id, int ch);         /* COMSOT - sequential output */
+int giocom_loc(int device_id);                  /* COMLOC - bytes in input queue */
+int giocom_lof(int device_id);                  /* COMLOF - free space in input buffer */
+int giocom_gps(int device_id);                  /* COMGPS - get position */
+int giocom_gwd(int device_id);                  /* COMGWD - get width */
+
 #endif /* GWBASIC_H */

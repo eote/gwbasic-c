@@ -29,7 +29,7 @@
 || 11 | `gioscn` | GIOSCN.ASM | ✅ Implement | ✅ **DONE** | SCREEN modes, PSET, PRESET, POINT - framebuffer simulated, exported globals for gengrp |
 | 12 | `scndrv` | SCNDRV.ASM | ✅ Implement | ✅ **DONE** | Text screen driver - cursor, wrapping, scrolling, control chars |
 | 13 | `giolpt` | GIOLPT.ASM | ⚠️ Stub | ✅ **DONE** | Printer output - LPT1/2/3, LPOS, WIDTH, CR/LF translation |
-| 14 | `giocom` | GIOCOM.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Serial communications |
+| 14 | `giocom` | GIOCOM.ASM | ⚠️ Stub | ✅ **DONE** | Serial comms - COM1..4, baud/parity/data/stop, async I/O |
 | 15 | `giodsk` | GIODSK.ASM | ✅ Implement | ❌ **STUB ONLY** | Merged into dskcom |
 
 ---
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 19 | 49% |
+| **Fully Implemented** | 20 | 51% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 20 | 51% |
+| **Stub Only (TODO)** | 19 | 49% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -104,8 +104,8 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Module 14: `giocom` (GIOCOM.ASM)** - Serial communications - marked as stub in PLAN
-
 **Module 15: `giodsk` (GIODSK.ASM)** - Merged into dskcom
 
-This is the next module in Phase 2 that needs implementation. The PLAN lists Module 14 as Order 14 in Phase 2.
+**Module 16: `gwlist` (GWLIST.ASM)** - Already DONE
+
+This is the next module in Phase 3 that needs implementation. The PLAN lists Module 16 as Order 16 in Phase 3, but gwlist is already done.
