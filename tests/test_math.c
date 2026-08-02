@@ -196,10 +196,12 @@ void test_math2_rnd(void) {
     TEST_ASSERT(fabsf(r1 - r2) < 0.0001f, "RND with same negative seed returns same value");
     
     /* RND with positive argument returns random in [0, 1) */
+    int passed = 0;
     for (int i = 0; i < 10; i++) {
         float r = math2_rnd(1.0f);
-        TEST_ASSERT(r >= 0.0f && r < 1.0f, "RND positive returns value in [0, 1)");
+        if (r >= 0.0f && r < 1.0f) passed++;
     }
+    TEST_ASSERT_EQ_INT(passed, 10, "All 10 random values in range");
     
     /* RND(0) returns last value */
     float last = math2_rnd(1.0f);

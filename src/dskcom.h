@@ -14,10 +14,11 @@
 #define FM_BINARY 5
 
 /* File descriptor structure - opaque handle for cross-platform compatibility */
+/* Windows stores HANDLE, POSIX would store int fd. This preserves the interface. */
 struct file_desc {
     int filenum;              /* GW-BASIC file number (1-255) */
     int mode;                 /* FM_INPUT, FM_OUTPUT, etc. */
-    void *handle;             /* Opaque file handle (HANDLE on Windows, FILE* on POSIX) */
+    void *handle;             /* Opaque file handle (HANDLE on Windows, int fd on POSIX) */
     char *filename;           /* Full path */
     int record_length;        /* For random files */
     struct file_desc *next;   /* Linked list */

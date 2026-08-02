@@ -228,3 +228,164 @@ void test_dskcom_get_put(void) {
     
     TEST_PASS("get/put");
 }
+
+void test_dskcom_close_all(void) {
+    gwdata_init(); gwram_init(); gwinit_init();
+    dskcom_init();
+    
+    /* Open multiple files */
+    int rc = dskcom_open("test_close1.txt", 1, FM_OUTPUT, 0);
+    TEST_ASSERT_EQ_INT(rc, 0, "OPEN #1");
+    
+    rc = dskcom_open("test_close2.txt", 2, FM_OUTPUT, 0);
+    TEST_ASSERT_EQ_INT(rc, 0, "OPEN #2");
+    
+    rc = dskcom_open("test_close3.txt", 3, FM_OUTPUT, 0);
+    TEST_ASSERT_EQ_INT(rc, 0, "OPEN #3");
+    
+    /* Verify all three are open */
+    TEST_ASSERT(dskcom_find_file(1) != NULL, "File #1 open");
+    TEST_ASSERT(dskcom_find_file(2) != NULL, "File #2 open");
+    TEST_ASSERT(dskcom_find_file(3) != NULL, "File #3 open");
+    
+    /* Close all */
+    rc = dskcom_close_all();
+    TEST_ASSERT_EQ_INT(rc, 0, "CLOSE ALL");
+    
+    /* Verify all closed */
+    TEST_ASSERT(dskcom_find_file(1) == NULL, "File #1 closed");
+    TEST_ASSERT(dskcom_find_file(2) == NULL, "File #2 closed");
+    TEST_ASSERT(dskcom_find_file(3) == NULL, "File #3 closed");
+    
+    remove("test_close1.txt");
+    remove("test_close2.txt");
+    remove("test_close3.txt");
+    
+    TEST_PASS("close_all");
+}
+
+void test_dskcom_seek_negative(void) {
+    gwdata_init(); gwram_init(); gwinit_init();
+    dskcom_init();
+    
+    int rc = dskcom_open("test_seek_neg.dat", 1, FM_RANDOM, 32);
+    TEST_ASSERT_EQ_INT(rc, SUCCESS, "OPEN FOR RANDOM");
+    
+    /* SEEK with negative record should fail */
+    rc = dskcom_seek(1, -1);
+    TEST_ASSERT_EQ_INT(rc, ERROR, "SEEK negative record fails");
+    
+    rc = dskcom_seek(1, 0);
+    TEST_ASSERT_EQ_INT(rc, ERROR, "SEEK zero record fails");
+    
+    rc = dskcom_close(1);
+    TEST_ASSERT_EQ_INT(rc, SUCCESS, "CLOSE");
+    
+    remove("test_seek_neg.dat");
+    
+    TEST_PASS("seek_negative");
+}
+
+void test_dskcom_line_input_empty(void) {
+    gwdata_init(); gwram_init(); gwinit_init();
+    dskcom_init();
+    
+    /* Create empty file */
+    FILE *f = fopen("test_empty.txt", "w");
+    if (f) fclose(f);
+    
+    int rc = dskcom_open("test_empty.txt", 1, FM_INPUT, 0);
+    TEST_ASSERT_EQ_INT(rc, SUCCESS, "OPEN empty file");
+    
+    char buf[256];
+    rc = dskcom_line_input(1, buf, sizeof(buf));
+    TEST_ASSERT_EQ_INT(rc, ERROR, "LINE INPUT empty file returns ERROR");
+    
+    rc = dskcom_close(1);
+    TEST_ASSERT_EQ_INT(rc, SUCCESS, "CLOSE");
+    
+    remove("test_empty.txt");
+    
+    TEST_PASS("line_input_empty");
+}
+
+void test_dskcom_open_append(void) {
+    gwdata_init(); gwram_init(); gwinit_init();
+    dskcom_init();
+    
+    /* Create initial file */
+    FILE *f = fopen("test_append.txt", "w");
+    if (f) {
+        fprintf(f, "Line 1\n");
+        fclose(f);
+    }
+    
+    /* OPEN FOR APPEND */
+    int rc = dskcom_open("test_append.txt", 1, FM_APPEND, 0);
+    TEST_ASSERT_EQ_INT(rc, 0, "OPEN FOR APPEND");
+    
+    struct file_desc *fd = dskcom_find_file(1);
+    TEST_ASSERT(fd != NULL, "File descriptor exists");
+    TEST_ASSERT_EQ_INT(fd->mode, FM_APPEND, "Mode is APPEND");
+    
+    /* Write appended data */
+    rc = dskcom_print(1, "Appended line");
+    TEST_ASSERT_EQ_INT(rc, 0, "PRINT# appended");
+    
+    rc = dskcom_close(1);
+    TEST_ASSERT_EQ_INT(rc, 0, "CLOSE");
+    
+    /* Verify content */
+    f = fopen("test_append.txt", "r");
+    TEST_ASSERT(f != NULL, "File exists");
+    if (f) {
+        char buf[256];
+        fgets(buf, sizeof(buf), f);  /* Line 1 */
+        fgets(buf, sizeof(buf), f);  /* Appended line */
+        /* fgets in text mode on Windows converts CRLF to LF */
+        TEST_ASSERT_EQ_STR(buf, "Appended line\n", "Appended line present");
+        fclose(f);
+    }
+    
+    remove("test_append.txt");
+    
+    TEST_PASS("open_append");
+}
+
+void test_dskcom_open_binary(void) {
+    gwdata_init(); gwram_init(); gwinit_init();
+    dskcom_init();
+    
+    /* OPEN FOR BINARY */
+    int rc = dskcom_open("test_binary.dat", 1, FM_BINARY, 0);
+    TEST_ASSERT_EQ_INT(rc, 0, "OPEN FOR BINARY");
+    
+    struct file_desc *fd = dskcom_find_file(1);
+    TEST_ASSERT(fd != NULL, "File descriptor exists");
+    TEST_ASSERT_EQ_INT(fd->mode, FM_BINARY, "Mode is BINARY");
+    
+    /* WRITE# raw bytes */
+    char data[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    rc = dskcom_write(1, data, 10);
+    TEST_ASSERT_EQ_INT(rc, 0, "WRITE# binary");
+    
+    rc = dskcom_close(1);
+    TEST_ASSERT_EQ_INT(rc, 0, "CLOSE");
+    
+    /* Verify raw bytes written */
+    FILE *f = fopen("test_binary.dat", "rb");
+    TEST_ASSERT(f != NULL, "File exists");
+    if (f) {
+        char buf[10];
+        size_t read = fread(buf, 1, 10, f);
+        TEST_ASSERT_EQ_INT(read, 10, "Read 10 bytes");
+        for (int i = 0; i < 10; i++) {
+            TEST_ASSERT_EQ_INT(buf[i], i, "Byte value correct");
+        }
+        fclose(f);
+    }
+    
+    remove("test_binary.dat");
+    
+    TEST_PASS("open_binary");
+}

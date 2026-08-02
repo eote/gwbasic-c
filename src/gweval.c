@@ -6,8 +6,18 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
-#include <strings.h>
 #include <stdio.h>
+
+/* Case-insensitive string comparison - portable implementation */
+static int strcasecmp_ascii(const char *a, const char *b) {
+    while (*a && *b) {
+        int c = tolower((unsigned char)*a);
+        int d = tolower((unsigned char)*b);
+        if (c != d) return c - d;
+        a++; b++;
+    }
+    return tolower((unsigned char)*a) - tolower((unsigned char)*b);
+}
 
 /* Parser state */
 typedef struct {
@@ -93,20 +103,20 @@ static float parse_factor(parser_t *p) {
             float arg = parse_expression(p);
             
             if (parser_match(p, ')')) {
-                /* Math functions */
-                if (strcasecmp(name, "SIN") == 0) return math1_sin(arg);
-                if (strcasecmp(name, "COS") == 0) return math1_cos(arg);
-                if (strcasecmp(name, "TAN") == 0) return math1_tan(arg);
-                if (strcasecmp(name, "ATN") == 0) return math1_atn(arg);
-                if (strcasecmp(name, "EXP") == 0) return math1_exp(arg);
-                if (strcasecmp(name, "LOG") == 0) return math1_log(arg);
-                if (strcasecmp(name, "SQR") == 0) return math2_sqr(arg);
-                if (strcasecmp(name, "ABS") == 0) return math2_abs(arg);
-                if (strcasecmp(name, "SGN") == 0) return math2_sgn(arg);
-                if (strcasecmp(name, "RND") == 0) return math2_rnd(arg);
-                if (strcasecmp(name, "INT") == 0) return math2_int(arg);
-                if (strcasecmp(name, "FIX") == 0) return math2_fix(arg);
-            }
+                        /* Math functions */
+                        if (strcasecmp_ascii(name, "SIN") == 0) return math1_sin(arg);
+                        if (strcasecmp_ascii(name, "COS") == 0) return math1_cos(arg);
+                        if (strcasecmp_ascii(name, "TAN") == 0) return math1_tan(arg);
+                        if (strcasecmp_ascii(name, "ATN") == 0) return math1_atn(arg);
+                        if (strcasecmp_ascii(name, "EXP") == 0) return math1_exp(arg);
+                        if (strcasecmp_ascii(name, "LOG") == 0) return math1_log(arg);
+                        if (strcasecmp_ascii(name, "SQR") == 0) return math2_sqr(arg);
+                        if (strcasecmp_ascii(name, "ABS") == 0) return math2_abs(arg);
+                        if (strcasecmp_ascii(name, "SGN") == 0) return math2_sgn(arg);
+                        if (strcasecmp_ascii(name, "RND") == 0) return math2_rnd(arg);
+                        if (strcasecmp_ascii(name, "INT") == 0) return math2_int(arg);
+                        if (strcasecmp_ascii(name, "FIX") == 0) return math2_fix(arg);
+                    }
         }
         
         /* Check for array reference: A(5) or A$(5) */

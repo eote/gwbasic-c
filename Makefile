@@ -61,7 +61,7 @@ $(TARGET): $(OBJS)
 test:
 	$(MAKE) -C tests test
 
-%.o: %.c
+%.o: %.c src/gwbasic.h src/dskcom.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
