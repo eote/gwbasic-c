@@ -249,6 +249,14 @@ int bimisc_is_file_io(void);        /* Check if file I/O active */
 void bimisc_stack_init(void);       /* Stack initialization (STKINI) */
 void bimisc_get_stack(int entries); /* Check stack space (GETSTK) */
 
+/* ADVGRP module functions - Advanced Graphics */
+void advgrp_init(void);
+void advgrp_paint(int x, int y, int fill_color, int border_color);
+void advgrp_circle(int x, int y, int radius, int color, float start_angle, float end_angle, float aspect);
+int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name);
+int advgrp_put(int x, int y, const char *array_name, int action);
+int advgrp_line(int x1, int y1, int x2, int y2, int color);
+
 /* GIOLPT module functions - Line Printer */
 void giolpt_init(void);
 void giolpt_open(int device_id, int mode);      /* LPTOPN - open printer */

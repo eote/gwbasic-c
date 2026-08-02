@@ -58,7 +58,7 @@
 | 26 | `oemev` | OEMEV.ASM | ✅ Implement | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ⚠️ Stub | ❌ **STUB ONLY** | IBM PC resource handling |
-| 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ❌ **STUB ONLY** | Advanced statements (DEF FN, ERASE) |
+| 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O |
 | 30 | `call86` | CALL86.ASM | ✅ Implement | ❌ **STUB ONLY** | CALL absolute, USR functions |
 | 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 22 | 56% |
+| **Fully Implemented** | 23 | 59% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 17 | 44% |
+| **Stub Only (TODO)** | 16 | 41% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -126,7 +126,7 @@
 | 39 | `biboot` | BIBOOT.ASM | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **advgrp** - Advanced statements (DEF FN, ERASE)
-2. **gioscn framebuffer** - Complete graphics support
-3. **scnedt** - Screen editor/line editing
-4. **call86** - CALL absolute, USR functions
+1. **gioscn framebuffer** - Complete graphics support
+2. **scnedt** - Screen editor/line editing
+3. **call86** - CALL absolute, USR functions
+4. **oemev** - Event handling (ON KEY, ON STRIG)
