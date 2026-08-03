@@ -56,11 +56,6 @@ static int psnlen = 0;
 
 /* Forward declarations */
 static int scale_coord(int *x, int *y);
-static void map_xyc(int *x, int *y);
-static int cplot8(int x, int y);
-static int gtplot(int x, int y);
-static int circle_algorithm(int radius);
-static int cplot4(int x, int y);
 
 /* Module initialization */
 void advgrp_init(void) {
@@ -102,11 +97,6 @@ static int scale_coord(int *x, int *y) {
         return -1;  /* Out of bounds */
     }
     return 0;
-}
-
-/* Map logical coordinates to framebuffer */
-static void map_xyc(int *x, int *y) {
-    /* Direct mapping for now */
 }
 
 /* PAINT - Flood fill algorithm */
@@ -173,15 +163,7 @@ void advgrp_circle(int x, int y, int radius, int color, float start_angle, float
     
     if (color < 0) color = g_atrbyt;
     
-    /* Default aspect ratio */
-    if (aspect <= 0) aspect = 1.0f;
-    g_aspect = (int)(aspect * 256);
-    
-    /* Handle angles */
-    if (start_angle < 0) start_angle = 0;
-    if (end_angle < 0) end_angle = 360;
-    
-    /* Simple circle drawing using midpoint algorithm with aspect ratio */
+    /* Simple circle drawing using midpoint algorithm */
     int x0 = x;
     int y0 = y;
     int r = radius;
@@ -191,7 +173,7 @@ void advgrp_circle(int x, int y, int radius, int color, float start_angle, float
     int err = 1 - r;
     
     while (draw_x >= draw_y) {
-        /* 8-way symmetry */
+        /* 8-way symmetry - draw all 8 points */
         int points[8][2] = {
             {x0 + draw_x, y0 + draw_y},
             {x0 + draw_y, y0 + draw_x},
@@ -204,7 +186,8 @@ void advgrp_circle(int x, int y, int radius, int color, float start_angle, float
         };
         
         for (int i = 0; i < 8; i++) {
-            if (draw_x >= 0 && draw_x < g_fb_width && draw_y >= 0 && draw_y < g_fb_height) {
+            if (points[i][0] >= 0 && points[i][0] < g_fb_width && 
+                points[i][1] >= 0 && points[i][1] < g_fb_height) {
                 gengrp_pset(points[i][0], points[i][1], color);
             }
         }
@@ -223,7 +206,7 @@ void advgrp_circle(int x, int y, int radius, int color, float start_angle, float
 /* Syntax: GET (x1,y1)-(x2,y2), array_name */
 int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     if (g_screen_mode == 0) return ERROR;
-    if (!array_name) return ERROR;
+    if (!array_name || array_name[0] == 0) return ERROR;
     
     /* Ensure x1 <= x2, y1 <= y2 */
     if (x1 > x2) { int t = x1; x1 = x2; x2 = t; }
@@ -266,13 +249,14 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     
     /* Read pixel data */
     int pos = 4;
+    int bit = 7;
+    unsigned char byte = 0;
+    
     for (int y = y1; y <= y2 && pos < total_bytes; y++) {
         for (int x = x1; x <= x2 && pos < total_bytes; x++) {
             int pixel = gengrp_point(x, y);
             if (g_screen_mode == 2) {
                 /* 1 bit per pixel */
-                static int bit = 7;
-                static unsigned char byte = 0;
                 if (pixel) byte |= (1 << bit);
                 bit--;
                 if (bit < 0) {
@@ -282,14 +266,14 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
                 }
             } else {
                 /* 2 bits per pixel */
-                static int bit = 6;
-                static unsigned char byte = 0;
-                byte |= ((pixel & 3) << bit);
-                bit -= 2;
-                if (bit < 0) {
-                    if (pos < total_bytes) buf[pos++] = byte;
-                    byte = 0;
-                    bit = 6;
+                static int bit2 = 6;
+                static unsigned char byte2 = 0;
+                byte2 |= ((pixel & 3) << bit2);
+                bit2 -= 2;
+                if (bit2 < 0) {
+                    if (pos < total_bytes) buf[pos++] = byte2;
+                    byte2 = 0;
+                    bit2 = 6;
                 }
             }
         }
@@ -305,7 +289,7 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
 /* action: PSET, PRESET, AND, OR, XOR */
 int advgrp_put(int x, int y, const char *array_name, int action) {
     if (g_screen_mode == 0) return ERROR;
-    if (!array_name) return ERROR;
+    if (!array_name || array_name[0] == 0) return ERROR;
     
     /* Default action is XOR */
     if (action < 0) action = 5;  /* XOR */
@@ -323,14 +307,14 @@ int advgrp_put(int x, int y, const char *array_name, int action) {
     
     int bits_per_pixel = (g_screen_mode == 2) ? 1 : 2;
     int pos = 4;
+    int bit = 7;
+    unsigned char byte = 0;
     
     for (int dy = 0; dy < height; dy++) {
         for (int dx = 0; dx < width; dx++) {
             int pixel = 0;
             if (g_screen_mode == 2) {
                 /* 1 bit per pixel */
-                static int bit = 7;
-                static unsigned char byte = 0;
                 if (bit == 7) {
                     if (pos < (int)strlen(buf)) byte = buf[pos++];
                     else byte = 0;
@@ -339,14 +323,14 @@ int advgrp_put(int x, int y, const char *array_name, int action) {
                 bit--;
             } else {
                 /* 2 bits per pixel */
-                static int bit = 6;
-                static unsigned char byte = 0;
-                if (bit == 6) {
-                    if (pos < (int)strlen(buf)) byte = buf[pos++];
-                    else byte = 0;
+                static int bit2 = 6;
+                static unsigned char byte2 = 0;
+                if (bit2 == 6) {
+                    if (pos < (int)strlen(buf)) byte2 = buf[pos++];
+                    else byte2 = 0;
                 }
-                pixel = (byte >> bit) & 3;
-                bit -= 2;
+                pixel = (byte2 >> bit2) & 3;
+                bit2 -= 2;
             }
             
             /* Apply action */

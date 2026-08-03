@@ -119,6 +119,18 @@ void test_math2_int(void);
 void test_math2_fix(void);
 void test_math_expression_eval(void);
 
+/* ADVGRP test functions */
+void test_advgrp_paint_basic(void);
+void test_advgrp_paint_border_color(void);
+void test_advgrp_paint_out_of_bounds(void);
+void test_advgrp_circle_basic(void);
+void test_advgrp_circle_zero_radius(void);
+void test_advgrp_get_basic(void);
+void test_advgrp_get_null_array(void);
+void test_advgrp_put_basic(void);
+void test_advgrp_put_xor(void);
+void test_advgrp_paint_after_circle(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -178,22 +190,34 @@ int main(void) {
     failed += run_test("dskcom_write_seek", test_dskcom_write_seek);
     failed += run_test("dskcom_get_put", test_dskcom_get_put);
     failed += run_test("math1_init", test_math1_init);
-    failed += run_test("math1_sin", test_math1_sin);
-    failed += run_test("math1_cos", test_math1_cos);
-    failed += run_test("math1_tan", test_math1_tan);
-    failed += run_test("math1_atn", test_math1_atn);
-    failed += run_test("math1_exp", test_math1_exp);
-    failed += run_test("math1_log", test_math1_log);
-    failed += run_test("math2_init", test_math2_init);
-    failed += run_test("math2_sqr", test_math2_sqr);
-    failed += run_test("math2_abs", test_math2_abs);
-    failed += run_test("math2_sgn", test_math2_sgn);
-    failed += run_test("math2_rnd", test_math2_rnd);
-    failed += run_test("math2_int", test_math2_int);
-    failed += run_test("math2_fix", test_math2_fix);
-    failed += run_test("math_expression_eval", test_math_expression_eval);
+        failed += run_test("math1_sin", test_math1_sin);
+        failed += run_test("math1_cos", test_math1_cos);
+        failed += run_test("math1_tan", test_math1_tan);
+        failed += run_test("math1_atn", test_math1_atn);
+        failed += run_test("math1_exp", test_math1_exp);
+        failed += run_test("math1_log", test_math1_log);
+        failed += run_test("math2_init", test_math2_init);
+        failed += run_test("math2_sqr", test_math2_sqr);
+        failed += run_test("math2_abs", test_math2_abs);
+        failed += run_test("math2_sgn", test_math2_sgn);
+        failed += run_test("math2_rnd", test_math2_rnd);
+        failed += run_test("math2_int", test_math2_int);
+        failed += run_test("math2_fix", test_math2_fix);
+        failed += run_test("math_expression_eval", test_math_expression_eval);
     
-    print_test_summary();
+        /* ADVGRP tests */
+            failed += run_test("advgrp_paint_basic", test_advgrp_paint_basic);
+            failed += run_test("advgrp_paint_border_color", test_advgrp_paint_border_color);
+            failed += run_test("advgrp_paint_out_of_bounds", test_advgrp_paint_out_of_bounds);
+            failed += run_test("advgrp_circle_basic", test_advgrp_circle_basic);
+            failed += run_test("advgrp_circle_zero_radius", test_advgrp_circle_zero_radius);
+            failed += run_test("advgrp_get_basic", test_advgrp_get_basic);
+            failed += run_test("advgrp_get_null_array", test_advgrp_get_null_array);
+            failed += run_test("advgrp_put_basic", test_advgrp_put_basic);
+            failed += run_test("advgrp_put_xor", test_advgrp_put_xor);
+            failed += run_test("advgrp_paint_after_circle", test_advgrp_paint_after_circle);
+
+            print_test_summary();
     
     return failed ? 1 : 0;
 }

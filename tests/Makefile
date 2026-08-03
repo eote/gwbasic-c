@@ -54,7 +54,8 @@ TEST_SRCS = \
 	../tests/test_gwlist_bistrs.c \
 	../tests/test_biprtu_biptrg.c \
 	../tests/test_dskcom.c \
-	../tests/test_math.c
+	../tests/test_math.c \
+	../tests/test_advgrp.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o

@@ -58,7 +58,7 @@
 | 26 | `oemev` | OEMEV.ASM | ✅ Implement | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ⚠️ Stub | ❌ **STUB ONLY** | IBM PC resource handling |
-| 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O |
+| 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 | 30 | `call86` | CALL86.ASM | ✅ Implement | ❌ **STUB ONLY** | CALL absolute, USR functions |
 | 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
