@@ -1,6 +1,6 @@
 # GW-BASIC C Port - Implementation Progress Tracking
 
-**Last Updated:** 2026-08-03
+**Last Updated:** 2026-08-04
 **Based on:** PLAN (`.hermes/plans/2025-08-01_GW-BASIC-C-Port-Implementation.md`) vs Actual Implementation
 
 ---
@@ -53,7 +53,7 @@
 
 | Order | Module | ASM File | PLAN Status | Actual Status | Notes |
 |-------|--------|----------|-------------|---------------|-------|
-| 24 | `oem` | OEM.ASM | ✅ Implement | ❌ **STUB ONLY** | OEM abstraction layer |
+| 24 | `oem` | OEM.ASM | ✅ Implement | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
 | 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ❌ **STUB ONLY** | OEM callback handlers |
 | 26 | `oemev` | OEMEV.ASM | ✅ Implement | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 24 | 62% |
+| **Fully Implemented** | 25 | 64% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 15 | 38% |
+| **Stub Only (TODO)** | 14 | 36% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -105,11 +105,11 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 17 modules remaining:**
+**Phase 4 modules (24-39) - 16 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
-| 24 | `oem` | OEM.ASM | ❌ **STUB ONLY** | OEM abstraction layer |
+| 24 | `oem` | OEM.ASM | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
 | 25 | `oemcbk` | OEMCBK.ASM | ❌ **STUB ONLY** | OEM callback handlers |
 | 26 | `oemev` | OEMEV.ASM | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
 | 27 | `oemsnd` | OEMSND.ASM | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
@@ -127,7 +127,7 @@
 | 39 | `biboot` | BIBOOT.ASM | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **gioscn framebuffer** - Complete graphics support
-2. **scnedt** - Screen editor/line editing
-3. **call86** - CALL absolute, USR functions
-4. **oemev** - Event handling (ON KEY, ON STRIG)
+1. **oemcbk** - OEM callback handlers
+2. **oemev** - Event handling (ON KEY, ON STRIG)
+3. **scnedt** - Screen editor/line editing
+4. **call86** - CALL absolute, USR functions
