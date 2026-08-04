@@ -59,7 +59,7 @@
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ⚠️ Stub | ❌ **STUB ONLY** | IBM PC resource handling |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
-| 30 | `call86` | CALL86.ASM | ✅ Implement | ❌ **STUB ONLY** | CALL absolute, USR functions |
+|| 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
 | 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
 | 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 28 | 72% |
+| **Fully Implemented** | 29 | 74% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 11 | 28% |
+| **Stub Only (TODO)** | 10 | 26% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -97,7 +97,8 @@
 | test_biprtu_biptrg.c | biprtu, biptrg | ✅ Passing |
 | test_dskcom.c | dskcom | ✅ Passing |
 | test_math.c | math1, math2 | ✅ Passing |
-| test_advgrp.c | advgrp | ✅ Passing |
+| test_call86.c | call86 | ✅ Passing |
+| test_gweval_helpers.c | gweval helpers | ✅ Passing |
 
 **Total Tests:** 272 passing, 0 failing
 
@@ -105,7 +106,7 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 13 modules remaining:**
+**Phase 4 modules (24-39) - 12 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -115,7 +116,7 @@
 | 27 | `oemsnd` | OEMSND.ASM | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ❌ **STUB ONLY** | IBM PC resource handling |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
-| 30 | `call86` | CALL86.ASM | ✅ Implement | ❌ **STUB ONLY** | CALL absolute, USR functions |
+| 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
 | 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
 | 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
@@ -127,6 +128,6 @@
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **call86** - CALL absolute, USR functions
-2. **oemsnd** - Sound (SOUND, PLAY)
-3. **oemev** - Event handling enhancements (ON TIMER, etc.)
+1. **oemsnd** - Sound (SOUND, PLAY)
+2. **oemev** - Event handling enhancements (ON TIMER, etc.)
+3. **itsa86** - Instruction analysis
