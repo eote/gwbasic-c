@@ -285,7 +285,7 @@ int gweval_frqint(void) {
 
 /* Skip to next character */
 void gweval_chrgt2(const char **text) {
-    if (text && *text) (*text)++;
+    if (text && *text && **text) (*text)++;
 }
 
 /* Check for expected character */

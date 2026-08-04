@@ -133,6 +133,34 @@ void test_advgrp_put_basic(void);
 void test_advgrp_put_xor(void);
 void test_advgrp_paint_after_circle(void);
 
+/* CALL86 test functions */
+void test_call86_init(void);
+void test_call86_call_basic(void);
+void test_call86_call_with_params(void);
+void test_call86_calls_basic(void);
+void test_call86_calls_with_params(void);
+void test_call86_call_no_params(void);
+void test_call86_usr_basic(void);
+void test_call86_usr_all_indices(void);
+void test_call86_usr_invalid(void);
+void test_call86_defusr_basic(void);
+void test_call86_defusr_invalid(void);
+void test_call86_call_variable(void);
+void test_call86_call_array_params(void);
+void test_call86_call_empty_parens(void);
+
+/* GWEVAL HELPER test functions */
+void test_gweval_scan_var_basic(void);
+void test_gweval_scan_var_array(void);
+void test_gweval_scan_var_empty(void);
+void test_gweval_frqint_basic(void);
+void test_gweval_chrgt2_basic(void);
+void test_gweval_chrgt2_empty(void);
+void test_gweval_synchr_match(void);
+void test_gweval_synchr_no_match(void);
+void test_gweval_synchr_eos(void);
+void test_gweval_synchr_null(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -208,18 +236,46 @@ int main(void) {
         failed += run_test("math_expression_eval", test_math_expression_eval);
     
         /* ADVGRP tests */
-            failed += run_test("advgrp_paint_basic", test_advgrp_paint_basic);
-            failed += run_test("advgrp_paint_border_color", test_advgrp_paint_border_color);
-            failed += run_test("advgrp_paint_out_of_bounds", test_advgrp_paint_out_of_bounds);
-            failed += run_test("advgrp_circle_basic", test_advgrp_circle_basic);
-            failed += run_test("advgrp_circle_zero_radius", test_advgrp_circle_zero_radius);
-            failed += run_test("advgrp_get_basic", test_advgrp_get_basic);
-            failed += run_test("advgrp_get_null_array", test_advgrp_get_null_array);
-            failed += run_test("advgrp_get_data_correctness", test_advgrp_get_data_correctness);
-            failed += run_test("advgrp_get_put_roundtrip", test_advgrp_get_put_roundtrip);
-            failed += run_test("advgrp_put_basic", test_advgrp_put_basic);
-            failed += run_test("advgrp_put_xor", test_advgrp_put_xor);
-            failed += run_test("advgrp_paint_after_circle", test_advgrp_paint_after_circle);
+        failed += run_test("advgrp_paint_basic", test_advgrp_paint_basic);
+        failed += run_test("advgrp_paint_border_color", test_advgrp_paint_border_color);
+        failed += run_test("advgrp_paint_out_of_bounds", test_advgrp_paint_out_of_bounds);
+        failed += run_test("advgrp_circle_basic", test_advgrp_circle_basic);
+        failed += run_test("advgrp_circle_zero_radius", test_advgrp_circle_zero_radius);
+        failed += run_test("advgrp_get_basic", test_advgrp_get_basic);
+        failed += run_test("advgrp_get_null_array", test_advgrp_get_null_array);
+        failed += run_test("advgrp_get_data_correctness", test_advgrp_get_data_correctness);
+        failed += run_test("advgrp_get_put_roundtrip", test_advgrp_get_put_roundtrip);
+        failed += run_test("advgrp_put_basic", test_advgrp_put_basic);
+        failed += run_test("advgrp_put_xor", test_advgrp_put_xor);
+        failed += run_test("advgrp_paint_after_circle", test_advgrp_paint_after_circle);
+
+        /* CALL86 tests */
+        failed += run_test("call86_init", test_call86_init);
+        failed += run_test("call86_call_basic", test_call86_call_basic);
+        failed += run_test("call86_call_with_params", test_call86_call_with_params);
+        failed += run_test("call86_calls_basic", test_call86_calls_basic);
+        failed += run_test("call86_calls_with_params", test_call86_calls_with_params);
+        failed += run_test("call86_call_no_params", test_call86_call_no_params);
+        failed += run_test("call86_usr_basic", test_call86_usr_basic);
+        failed += run_test("call86_usr_all_indices", test_call86_usr_all_indices);
+        failed += run_test("call86_usr_invalid", test_call86_usr_invalid);
+        failed += run_test("call86_defusr_basic", test_call86_defusr_basic);
+        failed += run_test("call86_defusr_invalid", test_call86_defusr_invalid);
+        failed += run_test("call86_call_variable", test_call86_call_variable);
+        failed += run_test("call86_call_array_params", test_call86_call_array_params);
+        failed += run_test("call86_call_empty_parens", test_call86_call_empty_parens);
+
+        /* GWEVAL HELPER tests */
+        failed += run_test("gweval_scan_var_basic", test_gweval_scan_var_basic);
+        failed += run_test("gweval_scan_var_array", test_gweval_scan_var_array);
+        failed += run_test("gweval_scan_var_empty", test_gweval_scan_var_empty);
+        failed += run_test("gweval_frqint_basic", test_gweval_frqint_basic);
+        failed += run_test("gweval_chrgt2_basic", test_gweval_chrgt2_basic);
+        failed += run_test("gweval_chrgt2_empty", test_gweval_chrgt2_empty);
+        failed += run_test("gweval_synchr_match", test_gweval_synchr_match);
+        failed += run_test("gweval_synchr_no_match", test_gweval_synchr_no_match);
+        failed += run_test("gweval_synchr_eos", test_gweval_synchr_eos);
+        failed += run_test("gweval_synchr_null", test_gweval_synchr_null);
 
             print_test_summary();
     

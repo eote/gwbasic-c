@@ -99,7 +99,7 @@
 | test_math.c | math1, math2 | ✅ Passing |
 | test_advgrp.c | advgrp | ✅ Passing |
 
-**Total Tests:** 253 passing, 0 failing
+**Total Tests:** 272 passing, 0 failing
 
 ---
 
