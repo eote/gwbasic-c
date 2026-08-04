@@ -64,7 +64,7 @@
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
 | 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
 | 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
-| 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ❌ **STUB ONLY** | Screen editor (line editing) |
+|| 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
 | 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Cassette I/O |
 | 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | 8086-specific I/O |
 | 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ❌ **STUB ONLY** | I/O tables |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 27 | 69% |
+| **Fully Implemented** | 28 | 72% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 12 | 31% |
+| **Stub Only (TODO)** | 11 | 28% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -105,7 +105,7 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 14 modules remaining:**
+**Phase 4 modules (24-39) - 13 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -115,19 +115,18 @@
 | 27 | `oemsnd` | OEMSND.ASM | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ❌ **STUB ONLY** | IBM PC resource handling |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
-| 30 | `call86` | CALL86.ASM | ❌ **STUB ONLY** | CALL absolute, USR functions |
-| 31 | `itsa86` | ITSA86.ASM | ❌ **STUB ONLY** | Instruction analysis |
-| 32 | `next86` | NEXT86.ASM | ❌ **STUB ONLY** | NEXT loop handling |
-| 33 | `kanj86` | KANJ86.ASM | ❌ **STUB ONLY** | Kanji/Japanese support |
-| 34 | `maclng` | MACLNG.ASM | ❌ **STUB ONLY** | Machine language interface |
-| 35 | `scnedt` | SCNEDT.ASM | ❌ **STUB ONLY** | Screen editor (line editing) |
-| 36 | `giocas` | GIOCAS.ASM | ❌ **STUB ONLY** | Cassette I/O |
-| 37 | `gio86` | GIO86.ASM | ❌ **STUB ONLY** | 8086-specific I/O |
-| 38 | `giotbl` | GIOTBL.ASM | ❌ **STUB ONLY** | I/O tables |
-| 39 | `biboot` | BIBOOT.ASM | ❌ **STUB ONLY** | Boot/startup |
+| 30 | `call86` | CALL86.ASM | ✅ Implement | ❌ **STUB ONLY** | CALL absolute, USR functions |
+| 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
+| 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
+| 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
+| 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
+| 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
+| 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Cassette I/O |
+| 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | 8086-specific I/O |
+| 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ❌ **STUB ONLY** | I/O tables |
+| 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **scnedt** - Screen editor/line editing
-2. **call86** - CALL absolute, USR functions
-3. **oemsnd** - Sound (SOUND, PLAY)
-4. **oemev** - Event handling enhancements (ON TIMER, etc.)
+1. **call86** - CALL absolute, USR functions
+2. **oemsnd** - Sound (SOUND, PLAY)
+3. **oemev** - Event handling enhancements (ON TIMER, etc.)

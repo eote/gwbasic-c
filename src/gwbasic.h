@@ -351,6 +351,20 @@ int oemev_rdpen(int func, int *result);
 int oemev_rdtrig(int button, int mode, int *result);
 int oemev_rdstik(int coord, int *result);
 
+/* SCNEDT module functions - Screen Editor */
+void scnedt_init(void);
+void scnedt_pinlin(void);
+void scnedt_qinlin(void);
+void scnedt_inlin(void);
+void scnedt_sinlin(void);
+void scnedt_edtbrk(void);
+void scnedt_clrflg(void);
+void scnedt_erredt(int errlin);
+void scnedt_edit(int line_num);
+const char* scnedt_get_buf(void);
+int scnedt_get_buf_len(void);
+void scnedt_set_buf(const char *buf);
+
 /* GIOLPT module functions - Line Printer */
 void giolpt_init(void);
 void giolpt_open(int device_id, int mode);
