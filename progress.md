@@ -60,7 +60,7 @@
 || 28 | `ibmres` | IBMRES.ASM | ✅ Implement | ✅ **DONE** | IBM PC resource handling - reserved word tables, token dispatch, extended tokens (FE/FD), CRUNCH/LIST/EVAL hooks |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 || 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
-| 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
+|| 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ✅ **DONE** | Resident initialization - memory map, MAPINI/MAPCLC, BASVAR, SEGOFF, command line options |
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
 | 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
 | 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 31 | 79% |
+| **Fully Implemented** | 32 | 82% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 8 | 21% |
+| **Stub Only (TODO)** | 7 | 18% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -106,7 +106,7 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 11 modules remaining:**
+**Phase 4 modules (24-39) - 9 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -114,10 +114,10 @@
 | 25 | `oemcbk` | OEMCBK.ASM | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
 | 26 | `oemev` | OEMEV.ASM | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background |
-|| 28 | `ibmres` | IBMRES.ASM | ✅ Implement | ✅ **DONE** | IBM PC resource handling - reserved word tables, token dispatch, extended tokens (FE/FD), CRUNCH/LIST/EVAL hooks |
-| 29 | `advgrp` | ADVGRP.ASM | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
+| 28 | `ibmres` | IBMRES.ASM | ✅ Implement | ✅ **DONE** | IBM PC resource handling - reserved word tables, token dispatch, extended tokens (FE/FD), CRUNCH/LIST/EVAL hooks |
+| 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 | 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
-| 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
+| 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ✅ **DONE** | Resident initialization - memory map, MAPINI/MAPCLC, BASVAR, SEGOFF, command line options |
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
 | 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
 | 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
@@ -128,6 +128,6 @@
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **ibmres** - IBM PC resource handling
-2. **itsa86** - Instruction analysis
-3. **oemev** - Event handling enhancements (ON TIMER, etc.)
+1. **next86** - NEXT loop handling
+2. **ibmres** - Extended token integration (CRUNCH/LIST/EVAL)
+3. **itsa86** - Enhanced memory map features

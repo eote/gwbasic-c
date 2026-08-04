@@ -377,6 +377,18 @@ const char* ibmres_list_token(WORD token);
 int ibmres_eval_extended(const char **text, float *result);
 int ibmres_list_extended(WORD token, char *buffer, int buflen);
 
+/* ITSA86 module functions - Resident Initialization for 8086 */
+void itsa86_init(void);
+WORD itsa86_basvar(WORD bx, WORD ax, int carry);
+void itsa86_mapini(void);
+void itsa86_mapclc(void);
+int itsa86_seg_off(WORD *bx);
+void itsa86_get_memory_info(WORD *maxmem, WORD *freemem, WORD *txttab, WORD *vartab);
+void itsa86_set_c_option(WORD size);
+void itsa86_set_m_option(WORD size);
+void itsa86_dump_memory_map(void);
+void itsa86_csend(void);
+
 /* SCNEDT module functions - Screen Editor */
 void scnedt_init(void);
 void scnedt_pinlin(void);
