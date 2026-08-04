@@ -342,6 +342,15 @@ void oem_simulate_ctrl_break(void);
 void oem_simulate_pause(void);
 void oem_process_keyboard_input(INPUT_RECORD *ir);
 
+/* OEMEV module functions - Event Handling */
+void oemev_init(void);
+void oemev_evsta(void);
+void oemev_evtrm(void);
+BOOL oemev_pollev(void);
+int oemev_rdpen(int func, int *result);
+int oemev_rdtrig(int button, int mode, int *result);
+int oemev_rdstik(int coord, int *result);
+
 /* GIOLPT module functions - Line Printer */
 void giolpt_init(void);
 void giolpt_open(int device_id, int mode);

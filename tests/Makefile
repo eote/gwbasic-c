@@ -3,7 +3,7 @@
 
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -O2 -I../src -I.
-LDFLAGS = -mconsole
+LDFLAGS = -mconsole -lwinmm
 
 # Source files (matching original GW-BASIC ASM modules, excluding gwmain.c)
 TEST_SRCS = \

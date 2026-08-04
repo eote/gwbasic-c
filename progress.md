@@ -55,7 +55,7 @@
 |-------|--------|----------|-------------|---------------|-------|
 | 24 | `oem` | OEM.ASM | ✅ Implement | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
 || 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
-| 26 | `oemev` | OEMEV.ASM | ✅ Implement | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
+|| 26 | `oemev` | OEMEV.ASM | ✅ Implement | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ⚠️ Stub | ❌ **STUB ONLY** | IBM PC resource handling |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 26 | 67% |
+| **Fully Implemented** | 27 | 69% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 13 | 33% |
+| **Stub Only (TODO)** | 12 | 31% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -105,13 +105,13 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 15 modules remaining:**
+**Phase 4 modules (24-39) - 14 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
 | 24 | `oem` | OEM.ASM | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
 | 25 | `oemcbk` | OEMCBK.ASM | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
-| 26 | `oemev` | OEMEV.ASM | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
+| 26 | `oemev` | OEMEV.ASM | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
 | 27 | `oemsnd` | OEMSND.ASM | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ❌ **STUB ONLY** | IBM PC resource handling |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
@@ -127,7 +127,7 @@
 | 39 | `biboot` | BIBOOT.ASM | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **oemev** - Event handling (ON KEY, ON STRIG)
-2. **scnedt** - Screen editor/line editing
-3. **call86** - CALL absolute, USR functions
-4. **oemsnd** - Sound (SOUND, PLAY)
+1. **scnedt** - Screen editor/line editing
+2. **call86** - CALL absolute, USR functions
+3. **oemsnd** - Sound (SOUND, PLAY)
+4. **oemev** - Event handling enhancements (ON TIMER, etc.)
