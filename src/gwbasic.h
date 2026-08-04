@@ -365,6 +365,18 @@ void oemsnd_sndtrm(void);
 void oemsnd_play(const char *music_string);
 void oemsnd_sound(WORD frequency, WORD duration);
 
+/* IBMRES module functions - IBM Reserved Words / Extended Tokens */
+void ibmres_init(void);
+void ibmres_term(void);
+int ibmres_is_reserved_word(const char *text, WORD *out_token);
+WORD ibmres_get_token(const char *name);
+const char* ibmres_get_token_name(WORD token);
+BYTE ibmres_get_keyword_type(const char *name);
+int ibmres_crunch_extended(const char **text, WORD *out_token);
+const char* ibmres_list_token(WORD token);
+int ibmres_eval_extended(const char **text, float *result);
+int ibmres_list_extended(WORD token, char *buffer, int buflen);
+
 /* SCNEDT module functions - Screen Editor */
 void scnedt_init(void);
 void scnedt_pinlin(void);

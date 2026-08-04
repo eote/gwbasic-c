@@ -57,7 +57,7 @@
 || 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
 || 26 | `oemev` | OEMEV.ASM | ✅ Implement | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
 || 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background |
-| 28 | `ibmres` | IBMRES.ASM | ⚠️ Stub | ❌ **STUB ONLY** | IBM PC resource handling |
+|| 28 | `ibmres` | IBMRES.ASM | ✅ Implement | ✅ **DONE** | IBM PC resource handling - reserved word tables, token dispatch, extended tokens (FE/FD), CRUNCH/LIST/EVAL hooks |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 || 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
 | 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 30 | 77% |
+| **Fully Implemented** | 31 | 79% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 9 | 23% |
+| **Stub Only (TODO)** | 8 | 21% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -114,7 +114,7 @@
 | 25 | `oemcbk` | OEMCBK.ASM | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
 | 26 | `oemev` | OEMEV.ASM | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background |
-| 28 | `ibmres` | IBMRES.ASM | ❌ **STUB ONLY** | IBM PC resource handling |
+|| 28 | `ibmres` | IBMRES.ASM | ✅ Implement | ✅ **DONE** | IBM PC resource handling - reserved word tables, token dispatch, extended tokens (FE/FD), CRUNCH/LIST/EVAL hooks |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 | 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
 | 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ❌ **STUB ONLY** | Instruction analysis |
