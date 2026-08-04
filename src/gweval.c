@@ -271,3 +271,25 @@ char *gweval_eval_string(const char *expr) {
     
     return NULL;
 }
+
+/* Scan variable name from text */
+void gweval_scan_var(const char **text, int *var_ptr) {
+    (void)text;
+    if (var_ptr) *var_ptr = 0;
+}
+
+/* Convert FAC to integer */
+int gweval_frqint(void) {
+    return 0;
+}
+
+/* Skip to next character */
+void gweval_chrgt2(const char **text) {
+    if (text && *text) (*text)++;
+}
+
+/* Check for expected character */
+void gweval_synchr(const char **text, char expected) {
+    (void)expected;
+    if (text && *text && **text == expected) (*text)++;
+}

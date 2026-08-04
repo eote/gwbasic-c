@@ -132,6 +132,10 @@ void gwinit_init(void);
 void gweval_init(void);
 float gweval_eval_numeric(const char *expr);
 char *gweval_eval_string(const char *expr);
+void gweval_scan_var(const char **text, int *var_ptr);
+int gweval_frqint(void);
+void gweval_chrgt2(const char **text);
+void gweval_synchr(const char **text, char expected);
 
 /* GWSTS module functions */
 void gwsts_init(void);
@@ -364,6 +368,13 @@ void scnedt_edit(int line_num);
 const char* scnedt_get_buf(void);
 int scnedt_get_buf_len(void);
 void scnedt_set_buf(const char *buf);
+
+/* CALL86 module functions - CALL absolute, USR functions */
+void call86_init(void);
+void call86_call(const char **text);
+void call86_calls(const char **text);
+float call86_usr(int usr_num, float arg);
+void call86_defusr(int usr_num, int address);
 
 /* GIOLPT module functions - Line Printer */
 void giolpt_init(void);
