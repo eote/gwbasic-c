@@ -54,7 +54,7 @@
 | Order | Module | ASM File | PLAN Status | Actual Status | Notes |
 |-------|--------|----------|-------------|---------------|-------|
 | 24 | `oem` | OEM.ASM | ✅ Implement | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
-| 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ❌ **STUB ONLY** | OEM callback handlers |
+|| 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
 | 26 | `oemev` | OEMEV.ASM | ✅ Implement | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ⚠️ Stub | ❌ **STUB ONLY** | IBM PC resource handling |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 25 | 64% |
+| **Fully Implemented** | 26 | 67% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 14 | 36% |
+| **Stub Only (TODO)** | 13 | 33% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -105,12 +105,12 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 16 modules remaining:**
+**Phase 4 modules (24-39) - 15 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
 | 24 | `oem` | OEM.ASM | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
-| 25 | `oemcbk` | OEMCBK.ASM | ❌ **STUB ONLY** | OEM callback handlers |
+| 25 | `oemcbk` | OEMCBK.ASM | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
 | 26 | `oemev` | OEMEV.ASM | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
 | 27 | `oemsnd` | OEMSND.ASM | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ❌ **STUB ONLY** | IBM PC resource handling |
@@ -127,7 +127,7 @@
 | 39 | `biboot` | BIBOOT.ASM | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **oemcbk** - OEM callback handlers
-2. **oemev** - Event handling (ON KEY, ON STRIG)
-3. **scnedt** - Screen editor/line editing
-4. **call86** - CALL absolute, USR functions
+1. **oemev** - Event handling (ON KEY, ON STRIG)
+2. **scnedt** - Screen editor/line editing
+3. **call86** - CALL absolute, USR functions
+4. **oemsnd** - Sound (SOUND, PLAY)

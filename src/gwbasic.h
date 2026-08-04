@@ -332,6 +332,16 @@ void oem_grpsiz(int *width, int *height);
 void oem_csrdsp(int type);
 bool oem_setatr(int color);
 
+/* OEMCBK module functions - Ctrl-Break & Pause Handling */
+void oemcbk_init(void);
+void oem_cbksta(void);
+void oem_cbktrm(void);
+BOOL oem_check_ctrl_break(void);
+BOOL oem_check_pause(void);
+void oem_simulate_ctrl_break(void);
+void oem_simulate_pause(void);
+void oem_process_keyboard_input(INPUT_RECORD *ir);
+
 /* GIOLPT module functions - Line Printer */
 void giolpt_init(void);
 void giolpt_open(int device_id, int mode);
