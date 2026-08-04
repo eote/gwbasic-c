@@ -118,7 +118,7 @@ void gengrp_pset(int x, int y, int color) {
     
     /* Actually set the pixel */
     if (g_framebuffer && px >= 0 && px < g_fb_width && py >= 0 && py < g_fb_height) {
-        g_framebuffer[py * 640 + px] = (unsigned char)g_atrbyt;
+        g_framebuffer[py * MAX_WIDTH + px] = (unsigned char)g_atrbyt;
     }
 }
 
@@ -144,7 +144,7 @@ int gengrp_point(int x, int y) {
     
     /* Read attribute */
     if (g_framebuffer && px >= 0 && px < g_fb_width && py >= 0 && py < g_fb_height) {
-        return (int)g_framebuffer[py * 640 + px];
+        return (int)g_framebuffer[py * MAX_WIDTH + px];
     }
     
     return -1;
@@ -158,6 +158,22 @@ void gengrp_set_atr(int color) {
         color = (color != 0) ? 1 : 0;
     }
     g_atrbyt = color;
+}
+
+/* Direct pixel write - bypasses coordinate scanning for PUT */
+void gengrp_direct_pset(int x, int y, int color) {
+    if (g_screen_mode == 0) return;  /* Text mode - no graphics */
+    
+    /* Scale into bounds */
+    if (x < 0 || x >= g_fb_width || y < 0 || y >= g_fb_height) return;
+    
+    /* Set attribute */
+    gengrp_set_atr(color);
+    
+    /* Actually set the pixel */
+    if (g_framebuffer) {
+        g_framebuffer[y * MAX_WIDTH + x] = (unsigned char)g_atrbyt;
+    }
 }
 
 /* Get current attribute */

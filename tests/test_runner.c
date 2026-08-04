@@ -127,6 +127,8 @@ void test_advgrp_circle_basic(void);
 void test_advgrp_circle_zero_radius(void);
 void test_advgrp_get_basic(void);
 void test_advgrp_get_null_array(void);
+void test_advgrp_get_data_correctness(void);
+void test_advgrp_get_put_roundtrip(void);
 void test_advgrp_put_basic(void);
 void test_advgrp_put_xor(void);
 void test_advgrp_paint_after_circle(void);
@@ -213,6 +215,8 @@ int main(void) {
             failed += run_test("advgrp_circle_zero_radius", test_advgrp_circle_zero_radius);
             failed += run_test("advgrp_get_basic", test_advgrp_get_basic);
             failed += run_test("advgrp_get_null_array", test_advgrp_get_null_array);
+            failed += run_test("advgrp_get_data_correctness", test_advgrp_get_data_correctness);
+            failed += run_test("advgrp_get_put_roundtrip", test_advgrp_get_put_roundtrip);
             failed += run_test("advgrp_put_basic", test_advgrp_put_basic);
             failed += run_test("advgrp_put_xor", test_advgrp_put_xor);
             failed += run_test("advgrp_paint_after_circle", test_advgrp_paint_after_circle);

@@ -1,18 +1,19 @@
 /* ADVGRP - Advanced Generalized Graphics */
 /* Based on ADVGRP.ASM */
 
+#include <windows.h>
 #include "gwbasic.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-#include <windows.h>
 
 /* External references from gengrp/gioscn */
 extern void gengrp_init(void);
 extern void gengrp_pset(int x, int y, int color);
 extern void gengrp_preset(int x, int y);
 extern int gengrp_point(int x, int y);
+extern void gengrp_direct_pset(int x, int y, int color);
 extern int g_fb_width;
 extern int g_fb_height;
 extern int g_screen_mode;
@@ -48,14 +49,13 @@ static int g_maxy = 0;     /* MAXDEL - max Y delta */
 
 /* Paint queue (simplified) */
 #define MAX_QUEUE 1000
-static int paint_queue[MAX_QUEUE * 6];
 static int queue_len = 0;
 static int queue_in = 0;
 static int queue_out = 0;
 static int psnlen = 0;
 
 /* Forward declarations */
-static int scale_coord(int *x, int *y);
+static void map_xyc(void);
 
 /* Module initialization */
 void advgrp_init(void) {
@@ -91,14 +91,6 @@ void advgrp_init(void) {
     queue_out = 0;
 }
 
-/* Scale coordinate into screen bounds */
-static int scale_coord(int *x, int *y) {
-    if (*x < 0 || *x >= g_fb_width || *y < 0 || *y >= g_fb_height) {
-        return -1;  /* Out of bounds */
-    }
-    return 0;
-}
-
 /* PAINT - Flood fill algorithm */
 /* Syntax: PAINT (x,y)[,fill_color[,border_color]] */
 void advgrp_paint(int x, int y, int fill_color, int border_color) {
@@ -117,7 +109,7 @@ void advgrp_paint(int x, int y, int fill_color, int border_color) {
     if (x < 0 || x >= g_fb_width || y < 0 || y >= g_fb_height) return;
     
     /* Check if starting point is already border color */
-    if (g_framebuffer && g_framebuffer[y * 640 + x] == (unsigned char)border_color) return;
+    if (g_framebuffer && g_framebuffer[y * MAX_WIDTH + x] == (unsigned char)border_color) return;
     
     /* Simple flood fill using stack */
     typedef struct { int x, y; } Point;
@@ -127,7 +119,7 @@ void advgrp_paint(int x, int y, int fill_color, int border_color) {
     int stack_top = 0;
     stack[stack_top++] = (Point){x, y};
     
-    unsigned char target_color = g_framebuffer[y * 640 + x];
+    unsigned char target_color = g_framebuffer[y * MAX_WIDTH + x];
     
     while (stack_top > 0) {
         Point p = stack[--stack_top];
@@ -135,11 +127,11 @@ void advgrp_paint(int x, int y, int fill_color, int border_color) {
         /* Check bounds */
         if (p.x < 0 || p.x >= g_fb_width || p.y < 0 || p.y >= g_fb_height) continue;
         
-        unsigned char current = g_framebuffer[p.y * 640 + p.x];
+        unsigned char current = g_framebuffer[p.y * MAX_WIDTH + p.x];
         if (current != target_color || current == (unsigned char)border_color) continue;
         
         /* Fill */
-        g_framebuffer[p.y * 640 + p.x] = (unsigned char)fill_color;
+        g_framebuffer[p.y * MAX_WIDTH + p.x] = (unsigned char)fill_color;
         
         /* Add neighbors */
         if (stack_top < g_fb_width * g_fb_height - 4) {
@@ -206,7 +198,9 @@ void advgrp_circle(int x, int y, int radius, int color, float start_angle, float
 /* Syntax: GET (x1,y1)-(x2,y2), array_name */
 int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     if (g_screen_mode == 0) return ERROR;
-    if (!array_name || array_name[0] == 0) return ERROR;
+    if (!array_name || array_name[0] == 0) {
+        return ERROR;
+    }
     
     /* Ensure x1 <= x2, y1 <= y2 */
     if (x1 > x2) { int t = x1; x1 = x2; x2 = t; }
@@ -219,8 +213,10 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     
     /* Calculate array size */
     int bits_per_pixel = (g_screen_mode == 2) ? 1 : 2;
-    int bytes_per_row = ((width * bits_per_pixel + 7) / 8);
-    int total_bytes = bytes_per_row * height + 4;  /* +4 for header */
+    int total_pixels = width * height;
+    int data_bits = total_pixels * bits_per_pixel;
+    int data_bytes = (data_bits + 7) / 8;
+    int total_bytes = data_bytes + 4;  /* +4 for header */
     
     /* Find or create array variable */
     struct variable *v = gwdata_find_variable(array_name);
@@ -234,13 +230,13 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
         if (v->type == VT_STRING && v->value.s) {
             gwram_free(v->value.s);
         }
-        v->value.s = (char *)gwram_alloc(total_bytes + 1);
+        v->value.s = (char *)gwram_alloc(total_bytes + 2);  /* +2 for safety + null */
         if (!v->value.s) return ERROR;
         v->type = VT_STRING;
         v->is_array = false;  /* Using string for binary data */
     }
     
-    /* Store header: width, height, bits per pixel */
+    /* Store header: width, height, data_bytes */
     char *buf = v->value.s;
     buf[0] = (width >> 8) & 0xFF;
     buf[1] = width & 0xFF;
@@ -251,7 +247,9 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     int pos = 4;
     int bit = 7;
     unsigned char byte = 0;
-    
+    int bit2 = 6;
+    unsigned char byte2 = 0;
+
     for (int y = y1; y <= y2 && pos < total_bytes; y++) {
         for (int x = x1; x <= x2 && pos < total_bytes; x++) {
             int pixel = gengrp_point(x, y);
@@ -265,9 +263,7 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
                     bit = 7;
                 }
             } else {
-                /* 2 bits per pixel */
-                static int bit2 = 6;
-                static unsigned char byte2 = 0;
+                /* 2 bits per pixel - pack continuously across rows */
                 byte2 |= ((pixel & 3) << bit2);
                 bit2 -= 2;
                 if (bit2 < 0) {
@@ -277,8 +273,12 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
                 }
             }
         }
-        /* Flush remaining bits */
-        if (pos < total_bytes) buf[pos++] = 0;
+    }
+    /* Flush remaining bits at the very end */
+    if (g_screen_mode == 2) {
+        if (bit != 7 && pos < total_bytes) buf[pos++] = byte;
+    } else {
+        if (bit2 != 6 && pos < total_bytes) buf[pos++] = byte2;
     }
     
     return SUCCESS;
@@ -305,10 +305,21 @@ int advgrp_put(int x, int y, const char *array_name, int action) {
     
     if (width <= 0 || height <= 0) return ERROR;
     
+    /* Calculate proper buffer length from header info */
     int bits_per_pixel = (g_screen_mode == 2) ? 1 : 2;
+    int total_pixels = width * height;
+    int data_bits = total_pixels * bits_per_pixel;
+    int data_bytes = (data_bits + 7) / 8;
+    int max_data_len = 4 + data_bytes;
+    
+    /* Use the calculated data length instead of strlen (binary data may contain null bytes) */
+    int buf_len = max_data_len;
+    
     int pos = 4;
     int bit = 7;
     unsigned char byte = 0;
+    int bit2 = 6;
+    unsigned char byte2 = 0;
     
     for (int dy = 0; dy < height; dy++) {
         for (int dx = 0; dx < width; dx++) {
@@ -316,21 +327,22 @@ int advgrp_put(int x, int y, const char *array_name, int action) {
             if (g_screen_mode == 2) {
                 /* 1 bit per pixel */
                 if (bit == 7) {
-                    if (pos < (int)strlen(buf)) byte = buf[pos++];
+                    if (pos < buf_len) byte = buf[pos++];
                     else byte = 0;
                 }
                 pixel = (byte >> bit) & 1;
                 bit--;
             } else {
-                /* 2 bits per pixel */
-                static int bit2 = 6;
-                static unsigned char byte2 = 0;
+                /* 2 bits per pixel - continuous packing */
                 if (bit2 == 6) {
-                    if (pos < (int)strlen(buf)) byte2 = buf[pos++];
+                    if (pos < buf_len) byte2 = buf[pos++];
                     else byte2 = 0;
                 }
                 pixel = (byte2 >> bit2) & 3;
                 bit2 -= 2;
+                if (bit2 < 0) {
+                    bit2 = 6;
+                }
             }
             
             /* Apply action */
@@ -339,7 +351,7 @@ int advgrp_put(int x, int y, const char *array_name, int action) {
             
             switch (action) {
                 case 1:  /* PSET */
-                    gengrp_pset(sx, sy, pixel);
+                    gengrp_direct_pset(sx, sy, pixel);
                     break;
                 case 2:  /* PRESET */
                     gengrp_preset(sx, sy);
@@ -347,33 +359,27 @@ int advgrp_put(int x, int y, const char *array_name, int action) {
                 case 3:  /* AND */
                     {
                         int cur = gengrp_point(sx, sy);
-                        gengrp_pset(sx, sy, cur & pixel);
+                        gengrp_direct_pset(sx, sy, cur & pixel);
                     }
                     break;
                 case 4:  /* OR */
                     {
                         int cur = gengrp_point(sx, sy);
-                        gengrp_pset(sx, sy, cur | pixel);
+                        gengrp_direct_pset(sx, sy, cur | pixel);
                     }
                     break;
                 case 5:  /* XOR */
                     {
                         int cur = gengrp_point(sx, sy);
-                        gengrp_pset(sx, sy, cur ^ pixel);
+                        gengrp_direct_pset(sx, sy, cur ^ pixel);
                     }
                     break;
                 default:
-                    gengrp_pset(sx, sy, pixel);  /* Default to PSET */
+                    gengrp_direct_pset(sx, sy, pixel);  /* Default to PSET */
                     break;
             }
         }
     }
     
-    return SUCCESS;
-}
-
-/* Line drawing (used by CIRCLE) */
-int advgrp_line(int x1, int y1, int x2, int y2, int color) {
-    gengrp_line("");  /* Use gengrp's line implementation */
     return SUCCESS;
 }

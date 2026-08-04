@@ -57,7 +57,7 @@ void gioscn_screen(int mode) {
     
     /* Clear framebuffer */
     if (g_framebuffer) {
-        memset(g_framebuffer, 0, MAX_WIDTH * MAX_HEIGHT);
+        memset(g_framebuffer, 0, g_fb_width * g_fb_height);
     }
 }
 

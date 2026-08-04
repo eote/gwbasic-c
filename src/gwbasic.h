@@ -4,26 +4,49 @@
 #ifndef GWBASIC_H
 #define GWBASIC_H
 
+/* Standard headers FIRST */
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 
-/* Windows.h defines ERROR as 0, but we need it as -1 */
+/* Include windows.h on Windows to control ERROR macro */
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+/* Undefine ERROR from windows.h (it's 0) and define our own (-1) */
 #ifdef ERROR
 #undef ERROR
 #endif
+#define ERROR -1
 
-/* Basic type definitions */
-typedef int8_t    SBYTE;
-typedef uint8_t   BYTE;
-typedef int16_t   SWORD;
-typedef uint16_t  WORD;
-typedef int32_t   SDWORD;
-typedef uint32_t  UDWORD;
+/* Framebuffer max dimensions */
+#define MAX_WIDTH  640
+#define MAX_HEIGHT 480
 
 /* Function result codes */
 #define SUCCESS     0
-#define ERROR       -1
+
+/* Basic type definitions - use standard types to avoid conflicts with windows.h */
+/* Note: windows.h already defines SBYTE, BYTE, SWORD, WORD, SDWORD, UDWORD on Windows */
+#ifndef SBYTE
+typedef int8_t    SBYTE;
+#endif
+#ifndef BYTE
+typedef uint8_t   BYTE;
+#endif
+#ifndef SWORD
+typedef int16_t   SWORD;
+#endif
+#ifndef WORD
+typedef uint16_t  WORD;
+#endif
+#ifndef SDWORD
+typedef int32_t   SDWORD;
+#endif
+#ifndef UDWORD
+typedef uint32_t  UDWORD;
+#endif
 
 /* Memory limits */
 #define MAX_LINE_LEN    255
@@ -41,7 +64,7 @@ typedef enum {
 struct variable {
     char name[MAX_VAR_NAME + 1];
     var_type_t type;
-    bool is_array;          /* 标记是否为数组，解决 union 别名问题 */
+    bool is_array;
     union {
         int32_t  i;
         float    f;
@@ -78,10 +101,9 @@ struct program_buffer {
 struct _runtime_state {
     bool running;
     int exit_code;
-    struct variable *var_table[256];  /* hash table for variables */
+    struct variable *var_table[256];
     struct string_heap str_heap;
     struct program_buffer prog_buf;
-    /* interpreter state */
     uint16_t current_line;
     bool in_direct_mode;
 };
@@ -141,25 +163,26 @@ void gengrp_scan_coord(int *x, int *y, bool relative);
 void gengrp_pset(int x, int y, int color);
 void gengrp_preset(int x, int y);
 int gengrp_point(int x, int y);
-void gengrp_line(const char *params);  /* LINE command parser */
-void gengrp_grpini(void);              /* Initialize graphics */
-void gengrp_grprst(void);              /* Reset graphics */
-void gengrp_set_atr(int color);        /* Set current attribute */
-int gengrp_get_atr(void);              /* Get current attribute */
+void gengrp_line(const char *params);
+void gengrp_grpini(void);
+void gengrp_grprst(void);
+void gengrp_set_atr(int color);
+int gengrp_get_atr(void);
+void gengrp_direct_pset(int x, int y, int color);
 
 /* SCNDRV module functions - Screen Driver (text mode) */
 void scndrv_init(void);
-void scndrv_swi(int width, int height);      /* SCNSWI - set screen width/height */
-void scndrv_loc(int col, int row);           /* SCNLOC - locate cursor */
-void scndrv_clr(void);                       /* SCNCLR - clear screen */
-void scndrv_out(int ch);                     /* SCNOUT - output character */
-int scndrv_pos(int *col, int *row);          /* SCNPOS - get cursor position */
-int scndrv_wdo(int col, int row, int width, int height);  /* SCNWDO - set text window */
-void scndrv_ipi(void);                       /* SCNIPL - initialize */
-void scndrv_brk(void);                       /* SCNBRK - break handler */
-int scndrv_gwi(void);                        /* SCNGWI - get logical width */
-int scndrv_rdl(int line, char *buf, int maxlen);  /* SCNRDL - read logical line */
-void scndrv_mrk(bool is_input);              /* SCNMRK - mark position */
+void scndrv_swi(int width, int height);
+void scndrv_loc(int col, int row);
+void scndrv_clr(void);
+void scndrv_out(int ch);
+int scndrv_pos(int *col, int *row);
+int scndrv_wdo(int col, int row, int width, int height);
+void scndrv_ipi(void);
+void scndrv_brk(void);
+int scndrv_gwi(void);
+int scndrv_rdl(int line, char *buf, int maxlen);
+void scndrv_mrk(bool is_input);
 
 /* GWLIST module functions */
 void gwlist_init(void);
@@ -215,39 +238,35 @@ char *biptrg_get_array_string(const char *name, int index);
 void biptrg_free_array(struct variable *v);
 
 /* DSKCOM module - File I/O */
-/* File modes */
 #define FM_INPUT  1
 #define FM_OUTPUT 2
 #define FM_RANDOM 3
 #define FM_APPEND 4
 #define FM_BINARY 5
 
-/* File descriptor structure - opaque handle for cross-platform compatibility */
-/* Defined in dskcom.h */
 struct file_desc;
 
-/* DSKCOM module functions are declared in dskcom.h */
 void dskcom_init(void);
 
 /* BIMISC module functions */
 void bimisc_init(void);
-void bimisc_new(void);              /* NEW command - clear program and variables */
-void bimisc_clear(void);            /* CLEAR command - clear variables, optionally set memory */
-void bimisc_clear_with_args(int stack_size, int max_mem);  /* CLEAR with parameters */
-void bimisc_run_setup(void);        /* RUN command setup */
-void bimisc_restore(int line_num);  /* RESTORE [line] */
-void bimisc_stop(void);             /* STOP statement */
-void bimisc_end(void);              /* END statement */
-void bimisc_cont(void);             /* CONT command */
-void bimisc_tron(void);             /* TRON command */
-void bimisc_troff(void);            /* TROFF command */
-void bimisc_swap(const char *var1, const char *var2);  /* SWAP var1, var2 */
-void bimisc_erase(const char *var_name);  /* ERASE array */
-int bimisc_is_letter(char c);       /* Test if character is A-Z */
-void bimisc_control_char(int ch);   /* Handle control characters (^C, etc.) */
-int bimisc_is_file_io(void);        /* Check if file I/O active */
-void bimisc_stack_init(void);       /* Stack initialization (STKINI) */
-void bimisc_get_stack(int entries); /* Check stack space (GETSTK) */
+void bimisc_new(void);
+void bimisc_clear(void);
+void bimisc_clear_with_args(int stack_size, int max_mem);
+void bimisc_run_setup(void);
+void bimisc_restore(int line_num);
+void bimisc_stop(void);
+void bimisc_end(void);
+void bimisc_cont(void);
+void bimisc_tron(void);
+void bimisc_troff(void);
+void bimisc_swap(const char *var1, const char *var2);
+void bimisc_erase(const char *var_name);
+int bimisc_is_letter(char c);
+void bimisc_control_char(int ch);
+int bimisc_is_file_io(void);
+void bimisc_stack_init(void);
+void bimisc_get_stack(int entries);
 
 /* ADVGRP module functions - Advanced Graphics */
 void advgrp_init(void);
@@ -259,25 +278,25 @@ int advgrp_line(int x1, int y1, int x2, int y2, int color);
 
 /* GIOLPT module functions - Line Printer */
 void giolpt_init(void);
-void giolpt_open(int device_id, int mode);      /* LPTOPN - open printer */
-void giolpt_close(int device_id);               /* LPTCLS - close printer */
-void giolpt_swd(int device_id, int width);      /* LPTSWD - set device width */
-void giolpt_sot(int device_id, int ch);         /* LPTSOT - sequential output */
-int giolpt_gps(int device_id);                  /* LPTGPS - get position */
-int giolpt_gwd(int device_id);                  /* LPTGWD - get width */
-int giolpt_lpos(int device_id);                 /* LPOS function */
+void giolpt_open(int device_id, int mode);
+void giolpt_close(int device_id);
+void giolpt_swd(int device_id, int width);
+void giolpt_sot(int device_id, int ch);
+int giolpt_gps(int device_id);
+int giolpt_gwd(int device_id);
+int giolpt_lpos(int device_id);
 
 /* GIOCOM module functions - Serial Communications */
 void giocom_init(void);
-void giocom_open(int device_id, int baud, int parity, int data_bits, int stop_bits);  /* COMOPN */
-void giocom_close(int device_id);               /* COMCLS */
-void giocom_swd(int device_id, int width);      /* COMSWD - set width */
-int giocom_sin(int device_id);                  /* COMSIN - sequential input */
-void giocom_sot(int device_id, int ch);         /* COMSOT - sequential output */
-int giocom_loc(int device_id);                  /* COMLOC - bytes in input queue */
-int giocom_lof(int device_id);                  /* COMLOF - free space in input buffer */
-int giocom_gps(int device_id);                  /* COMGPS - get position */
-int giocom_gwd(int device_id);                  /* COMGWD - get width */
+void giocom_open(int device_id, int baud, int parity, int data_bits, int stop_bits);
+void giocom_close(int device_id);
+void giocom_swd(int device_id, int width);
+int giocom_sin(int device_id);
+void giocom_sot(int device_id, int ch);
+int giocom_loc(int device_id);
+int giocom_lof(int device_id);
+int giocom_gps(int device_id);
+int giocom_gwd(int device_id);
 
 /* GIODSK module functions - Disk I/O (merged with DSKCOM) */
 void giodsk_init(void);

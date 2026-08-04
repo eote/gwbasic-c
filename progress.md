@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 23 | 59% |
+| **Fully Implemented** | 24 | 62% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 16 | 41% |
+| **Stub Only (TODO)** | 15 | 38% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -97,14 +97,15 @@
 | test_biprtu_biptrg.c | biprtu, biptrg | ✅ Passing |
 | test_dskcom.c | dskcom | ✅ Passing |
 | test_math.c | math1, math2 | ✅ Passing |
+| test_advgrp.c | advgrp | ✅ Passing |
 
-**Total Tests:** 206 passing, 0 failing
+**Total Tests:** 253 passing, 0 failing
 
 ---
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 18 modules remaining:**
+**Phase 4 modules (24-39) - 17 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -113,7 +114,7 @@
 | 26 | `oemev` | OEMEV.ASM | ❌ **STUB ONLY** | Event handling (ON KEY, ON STRIG) |
 | 27 | `oemsnd` | OEMSND.ASM | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
 | 28 | `ibmres` | IBMRES.ASM | ❌ **STUB ONLY** | IBM PC resource handling |
-| 29 | `advgrp` | ADVGRP.ASM | ❌ **STUB ONLY** | Advanced statements (DEF FN, ERASE) |
+| 29 | `advgrp` | ADVGRP.ASM | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 | 30 | `call86` | CALL86.ASM | ❌ **STUB ONLY** | CALL absolute, USR functions |
 | 31 | `itsa86` | ITSA86.ASM | ❌ **STUB ONLY** | Instruction analysis |
 | 32 | `next86` | NEXT86.ASM | ❌ **STUB ONLY** | NEXT loop handling |
