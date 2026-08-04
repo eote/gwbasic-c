@@ -56,7 +56,7 @@
 | 24 | `oem` | OEM.ASM | ✅ Implement | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
 || 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
 || 26 | `oemev` | OEMEV.ASM | ✅ Implement | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
-| 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
+|| 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background |
 | 28 | `ibmres` | IBMRES.ASM | ⚠️ Stub | ❌ **STUB ONLY** | IBM PC resource handling |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 || 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 29 | 74% |
+| **Fully Implemented** | 30 | 77% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 10 | 26% |
+| **Stub Only (TODO)** | 9 | 23% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -106,14 +106,14 @@
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 12 modules remaining:**
+**Phase 4 modules (24-39) - 11 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
 | 24 | `oem` | OEM.ASM | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
 | 25 | `oemcbk` | OEMCBK.ASM | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
 | 26 | `oemev` | OEMEV.ASM | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
-| 27 | `oemsnd` | OEMSND.ASM | ❌ **STUB ONLY** | Sound (SOUND, PLAY) |
+| 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background |
 | 28 | `ibmres` | IBMRES.ASM | ❌ **STUB ONLY** | IBM PC resource handling |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 | 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
@@ -128,6 +128,6 @@
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **oemsnd** - Sound (SOUND, PLAY)
-2. **oemev** - Event handling enhancements (ON TIMER, etc.)
-3. **itsa86** - Instruction analysis
+1. **ibmres** - IBM PC resource handling
+2. **itsa86** - Instruction analysis
+3. **oemev** - Event handling enhancements (ON TIMER, etc.)

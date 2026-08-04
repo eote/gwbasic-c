@@ -355,6 +355,16 @@ int oemev_rdpen(int func, int *result);
 int oemev_rdtrig(int button, int mode, int *result);
 int oemev_rdstik(int coord, int *result);
 
+/* OEMSND module functions - Sound (SOUND, PLAY) */
+void oemsnd_init(void);
+void oemsnd_term(void);
+void oemsnd_start(void);
+int oemsnd_donote(int mode, WORD frequency, WORD duration);
+void oemsnd_sndsta(void);
+void oemsnd_sndtrm(void);
+void oemsnd_play(const char *music_string);
+void oemsnd_sound(WORD frequency, WORD duration);
+
 /* SCNEDT module functions - Screen Editor */
 void scnedt_init(void);
 void scnedt_pinlin(void);
