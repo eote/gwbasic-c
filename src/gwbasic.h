@@ -497,4 +497,21 @@ int giocas_read(const char **text, char *buffer, int maxlen);
 int giocas_write(const char **text, const char *buffer, int len);
 int giocas_ioctl(const char **text, int cmd, void *arg);
 
+/* GIO86 module functions - 8086-specific I/O */
+void gio86_init(void);
+void gio86_term(void);
+int gio86_open(const char **text);
+int gio86_close(const char **text);
+int gio86_width(const char **text);
+int gio86_bsave(const char **text);
+int gio86_bload(const char **text);
+int gio86_lprint(const char **text);
+int gio86_print(const char **text);
+int gio86_bparms(const char **text);
+int gio86_opnfil(void);
+int gio86_pofnum(const char **text);
+int gio86_porlen(const char **text);
+int gio86_pnrlen(const char **text);
+int gio86_getwdt(const char **text);
+
 #endif /* GWBASIC_H */

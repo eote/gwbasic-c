@@ -230,6 +230,23 @@ void test_giocas_read(void);
 void test_giocas_write(void);
 void test_giocas_ioctl(void);
 
+/* GIO86 test functions */
+void test_gio86_init(void);
+void test_gio86_term(void);
+void test_gio86_open(void);
+void test_gio86_close(void);
+void test_gio86_width(void);
+void test_gio86_bsave(void);
+void test_gio86_bload(void);
+void test_gio86_lprint(void);
+void test_gio86_print(void);
+void test_gio86_bparms(void);
+void test_gio86_opnfil(void);
+void test_gio86_pofnum(void);
+void test_gio86_porlen(void);
+void test_gio86_pnrlen(void);
+void test_gio86_getwdt(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -414,6 +431,23 @@ int main(void) {
                                 failed += run_test("giocas_read", test_giocas_read);
                                 failed += run_test("giocas_write", test_giocas_write);
                                 failed += run_test("giocas_ioctl", test_giocas_ioctl);
+
+                                /* GIO86 tests */
+                                failed += run_test("gio86_init", test_gio86_init);
+                                failed += run_test("gio86_term", test_gio86_term);
+                                failed += run_test("gio86_open", test_gio86_open);
+                                failed += run_test("gio86_close", test_gio86_close);
+                                failed += run_test("gio86_width", test_gio86_width);
+                                failed += run_test("gio86_bsave", test_gio86_bsave);
+                                failed += run_test("gio86_bload", test_gio86_bload);
+                                failed += run_test("gio86_lprint", test_gio86_lprint);
+                                failed += run_test("gio86_print", test_gio86_print);
+                                failed += run_test("gio86_bparms", test_gio86_bparms);
+                                failed += run_test("gio86_opnfil", test_gio86_opnfil);
+                                failed += run_test("gio86_pofnum", test_gio86_pofnum);
+                                failed += run_test("gio86_porlen", test_gio86_porlen);
+                                failed += run_test("gio86_pnrlen", test_gio86_pnrlen);
+                                failed += run_test("gio86_getwdt", test_gio86_getwdt);
 
                                 print_test_summary();
     

@@ -66,7 +66,7 @@
 || 34 | `maclng` | MACLNG.ASM | ✅ Implement | ✅ **DONE** | Macro language driver - command parsing, value scanning, variable handling, MCLXEQ/MACLNG/MCLNEW/MCLSCN (15 tests added) |
 || 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
 || 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ✅ **DONE** | Cassette I/O - motor control, read/write/ioctl (stubs returning device unavailable) |
-| 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | 8086-specific I/O |
+| 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ✅ **DONE** | 8086-specific I/O - OPEN/CLOSE/WIDTH/BSAVE/BLOAD/LPRINT/PRINT (stubs returning device unavailable) |
 | 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ❌ **STUB ONLY** | I/O tables |
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 36 | 92% |
+| **Fully Implemented** | 37 | 95% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 3 | 8% |
+| **Stub Only (TODO)** | 2 | 5% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -104,14 +104,15 @@
 | test_kanj86.c | kanj86 | ✅ Passing |
 | test_maclng.c | maclng | ✅ Passing |
 | test_giocas.c | giocas | ✅ Passing |
+| test_gio86.c | gio86 | ✅ Passing |
 
-**Total Tests:** 344 passing, 0 failing
+**Total Tests:** 357 passing, 0 failing
 
 ---
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 5 modules remaining:**
+**Phase 4 modules (24-39) - 4 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -128,11 +129,10 @@
 | 34 | `maclng` | MACLNG.ASM | ✅ Implement | ✅ **DONE** | Macro language driver - command parsing, value scanning, variable handling, MCLXEQ/MACLNG/MCLNEW/MCLSCN (15 tests added) |
 | 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
 || 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ✅ **DONE** | Cassette I/O - motor control, read/write/ioctl (stubs returning device unavailable) |
-| 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | 8086-specific I/O |
+| 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ✅ **DONE** | 8086-specific I/O - OPEN/CLOSE/WIDTH/BSAVE/BLOAD/LPRINT/PRINT (stubs returning device unavailable) |
 | 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ❌ **STUB ONLY** | I/O tables |
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **gio86** - 8086-specific I/O
-2. **giotbl** - I/O tables
-3. **biboot** - Boot/startup
+1. **giotbl** - I/O tables
+2. **biboot** - Boot/startup

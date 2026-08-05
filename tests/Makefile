@@ -62,7 +62,8 @@ TEST_SRCS = \
 	../tests/test_next86.c \
 	../tests/test_kanj86.c \
 	../tests/test_maclng.c \
-	../tests/test_giocas.c
+	../tests/test_giocas.c \
+	../tests/test_gio86.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o
