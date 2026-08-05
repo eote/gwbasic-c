@@ -489,4 +489,12 @@ void maclng_scvar(const char **text);
 void maclng_mclnew(const char **text);
 void maclng_mclscn(const char **text);
 
+/* GIOCAS module functions - Cassette I/O */
+void giocas_init(void);
+void giocas_term(void);
+int giocas_motor(const char **text);
+int giocas_read(const char **text, char *buffer, int maxlen);
+int giocas_write(const char **text, const char *buffer, int len);
+int giocas_ioctl(const char **text, int cmd, void *arg);
+
 #endif /* GWBASIC_H */

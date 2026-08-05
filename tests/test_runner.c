@@ -222,6 +222,14 @@ void test_maclng_mclnew(void);
 void test_maclng_mclscn(void);
 void test_maclng_maclng_main(void);
 
+/* GIOCAS test functions */
+void test_giocas_init(void);
+void test_giocas_term(void);
+void test_giocas_motor(void);
+void test_giocas_read(void);
+void test_giocas_write(void);
+void test_giocas_ioctl(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -398,6 +406,14 @@ int main(void) {
                                 failed += run_test("maclng_mclnew", test_maclng_mclnew);
                                 failed += run_test("maclng_mclscn", test_maclng_mclscn);
                                 failed += run_test("maclng_maclng_main", test_maclng_maclng_main);
+
+                                /* GIOCAS tests */
+                                failed += run_test("giocas_init", test_giocas_init);
+                                failed += run_test("giocas_term", test_giocas_term);
+                                failed += run_test("giocas_motor", test_giocas_motor);
+                                failed += run_test("giocas_read", test_giocas_read);
+                                failed += run_test("giocas_write", test_giocas_write);
+                                failed += run_test("giocas_ioctl", test_giocas_ioctl);
 
                                 print_test_summary();
     

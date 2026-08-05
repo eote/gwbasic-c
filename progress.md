@@ -65,7 +65,7 @@
 || 33 | `kanj86` | KANJ86.ASM | ✅ Implement | ✅ **DONE** | Kanji/Japanese support - KTN, JIS, KLEN, KPOS functions (stubs returning syntax error) |
 || 34 | `maclng` | MACLNG.ASM | ✅ Implement | ✅ **DONE** | Macro language driver - command parsing, value scanning, variable handling, MCLXEQ/MACLNG/MCLNEW/MCLSCN (15 tests added) |
 || 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
-| 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Cassette I/O |
+|| 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ✅ **DONE** | Cassette I/O - motor control, read/write/ioctl (stubs returning device unavailable) |
 | 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | 8086-specific I/O |
 | 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ❌ **STUB ONLY** | I/O tables |
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 35 | 90% |
+| **Fully Implemented** | 36 | 92% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 4 | 10% |
+| **Stub Only (TODO)** | 3 | 8% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -103,14 +103,15 @@
 | test_next86.c | next86 | ✅ Passing |
 | test_kanj86.c | kanj86 | ✅ Passing |
 | test_maclng.c | maclng | ✅ Passing |
+| test_giocas.c | giocas | ✅ Passing |
 
-**Total Tests:** 340 passing, 0 failing
+**Total Tests:** 344 passing, 0 failing
 
 ---
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 6 modules remaining:**
+**Phase 4 modules (24-39) - 5 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -126,12 +127,12 @@
 | 33 | `kanj86` | KANJ86.ASM | ✅ Implement | ✅ **DONE** | Kanji/Japanese support - KTN, JIS, KLEN, KPOS functions (stubs returning syntax error) |
 | 34 | `maclng` | MACLNG.ASM | ✅ Implement | ✅ **DONE** | Macro language driver - command parsing, value scanning, variable handling, MCLXEQ/MACLNG/MCLNEW/MCLSCN (15 tests added) |
 | 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
-| 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Cassette I/O |
+|| 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ✅ **DONE** | Cassette I/O - motor control, read/write/ioctl (stubs returning device unavailable) |
 | 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | 8086-specific I/O |
 | 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ❌ **STUB ONLY** | I/O tables |
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **giocas** - Cassette I/O
-2. **gio86** - 8086-specific I/O
-3. **giotbl** - I/O tables
+1. **gio86** - 8086-specific I/O
+2. **giotbl** - I/O tables
+3. **biboot** - Boot/startup
