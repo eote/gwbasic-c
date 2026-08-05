@@ -309,6 +309,10 @@ void test_oem_grpsiz(void);
 void test_oem_csrdsp(void);
 void test_oem_setatr(void);
 
+/* BIBOOT test functions */
+void test_biboot_init(void);
+void test_biboot_lstvar(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -572,6 +576,10 @@ int main(void) {
                                 failed += run_test("oem_grpsiz", test_oem_grpsiz);
                                 failed += run_test("oem_csrdsp", test_oem_csrdsp);
                                 failed += run_test("oem_setatr", test_oem_setatr);
+
+                                /* BIBOOT tests */
+                                failed += run_test("biboot_init", test_biboot_init);
+                                failed += run_test("biboot_lstvar", test_biboot_lstvar);
 
                                 print_test_summary();
     

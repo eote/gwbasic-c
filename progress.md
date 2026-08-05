@@ -107,8 +107,9 @@
 | test_gio86.c | gio86 | ✅ Passing |
 | test_giotbl.c | giotbl | ✅ Passing |
 | test_oem.c | oem | ✅ Passing |
+| test_biboot.c | biboot | ✅ Passing |
 
-**Total Tests:** 448 passing, 0 failing
+**Total Tests:** 449 passing, 0 failing
 
 ---
 

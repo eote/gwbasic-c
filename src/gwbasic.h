@@ -577,4 +577,8 @@ void oem_set_pgtshf(WORD val);
 WORD oem_get_pgtact(void);
 void oem_set_pgtact(WORD val);
 
+/* BIBOOT module functions */
+void biboot_init(void);
+void *biboot_lstvar(void);
+
 #endif /* GWBASIC_H */

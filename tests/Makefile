@@ -65,7 +65,8 @@ TEST_SRCS = \
 	../tests/test_giocas.c \
 	../tests/test_gio86.c \
 	../tests/test_giotbl.c \
-	../tests/test_oem.c
+	../tests/test_oem.c \
+	../tests/test_biboot.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o
