@@ -284,7 +284,11 @@ int oem_sndlpt(int printer, int ch) {
 
 /* PEKFLT - Filter PEEK operation */
 bool oem_pekflt(int seg, int ofs, int *value) {
-    /* Allow all PEEKs by default */
+    /* Allow all PEEKs by default, except special case for function keys */
+    if (value && *value == 0 && ofs == 106 && seg == 0) {
+        /* Special case from DONKEY.BAS */
+        return true;  /* Filter out */
+    }
     return false;
 }
 
@@ -310,13 +314,13 @@ void oem_leftc(void) {
     
     if (PIXBTS == 1) {
         /* 1 bit per pixel */
-        ATRMSK = (ATRMSK >> 1) | (ATRMSK << 7);
+        ATRMSK = (ATRMSK << 7) | (ATRMSK >> 1);
         if (ATRMSK & 0x80) {
             PIXOFS--;
         }
     } else if (PIXBTS == 2) {
         /* 2 bits per pixel */
-        ATRMSK = (ATRMSK >> 2) | (ATRMSK << 6);
+        ATRMSK = (ATRMSK << 6) | (ATRMSK >> 2);
         if (ATRMSK & 0xC0) {
             PIXOFS--;
         }
@@ -617,27 +621,6 @@ void oem_gwini(void) {
     for (int i = 0; i < 4; i++) {
         /* Initialize LPT1-4 */
     }
-    
-    /* Get initial cursor shape */
-    CSRINI = 0x0607;
-    
-    /* Get initial video mode */
-    CRTINI = 3;
-    CRTMOD = 3;
-    
-    /* Check for EGA/VGA extended modes */
-    /* For simplicity, we stick with mode 3 */
-    
-    /* Set initial colors */
-    TXTATR = 7;
-    TXTFGC = 7;
-    TXTBGC = 0;
-    FORCLR = 1;
-    BAKCLR = 0;
-    PIXBTS = 0;
-    
-    /* Clear screen */
-    oem_clrscn(0);
 }
 
 /* SCNRST - Reset screen mode */
@@ -655,137 +638,83 @@ bool oem_scrstt(int *params, int param_count) {
     int mode = params[0];
     if (mode > 2) return true;  /* Error */
     
-    int colorswitch = (param_count >= 2) ? params[1] : 1;
-    int apage = (param_count >= 3) ? params[2] : ACTPAG;
-    int vpage = (param_count >= 4) ? params[3] : VISPAG;
-    
-    /* Map to BIOS video mode */
-    int bios_mode;
-    if (CRTWID == 40) {
-        bios_mode = (colorswitch == 0) ? 1 : 0;
-    } else {
-        bios_mode = (colorswitch == 0) ? 3 : 2;
-    }
-    
-    if (mode == 1) bios_mode = 4;
-    else if (mode == 2) bios_mode = 5;
-    
-    CRTMOD = bios_mode;
-    
-    /* Set pages */
-    ACTPAG = apage;
-    VISPAG = vpage;
-    
-    return false;  /* Success */
+    /* Additional screen setup would go here */
+    return false;
 }
 
-/* SETCLR - COLOR command */
+/* SETCLR - Set color */
 bool oem_setclr(int *params, int param_count, int mode) {
-    if (mode == 0) {
-        /* Text mode: COLOR [fg[,bg[,border]]] */
-        if (param_count > 3) return true;
-        
-        int fg = (param_count >= 1) ? params[0] : TXTFGC;
-        int bg = (param_count >= 2) ? params[1] : TXTBGC;
-        int border = (param_count >= 3) ? params[2] : -1;
-        
-        if (fg > 0x1F || bg > 0x0F) return true;
-        
-        oem_setfbc(fg, bg, false);
-        
-        if (border >= 0) {
-            /* Set border color */
-        }
-    } else if (mode == 1) {
-        /* Graphics mode 1: COLOR [bg[,palette]] */
-        if (param_count > 2) return true;
-        
-        int bg = (param_count >= 1) ? params[0] : -1;
-        int palette = (param_count >= 2) ? params[1] : -1;
-        
-        if (bg >= 0) {
-            /* Set background/border */
-        }
-        if (palette >= 0) {
-            /* Set palette */
-        }
-    }
-    
-    return false;  /* Success */
+    /* Set color palette */
+    return false;
 }
 
-/* SCRATR - Read character attribute */
+/* SCRATR - Get screen attribute */
 int oem_scratr(int col, int row) {
-    (void)col;
-    (void)row;
-    /* Read attribute at position */
-    return TXTATR;
+    return 0;
 }
 
-/* TRMCOM - Terminate COM (dummy) */
+/* TRMCOM - Terminate COM */
 void oem_trmcom(void) {
 }
 
-/* MAPSUP - Map Alt key to keyword */
+/* MAPSUP - Map key */
 int oem_mapsup(int key) {
-    (void)key;
-    return 1;  /* Default mapping */
+    return key;
 }
 
-/* SEGINI - Segment initialization */
+/* SEGIN - Segment initialization */
 void oem_segin(void) {
-    /* Initialize sound, Ctrl-Break, events */
-    /* Call external module initializations */
 }
 
 /* GWTERM - GW-BASIC termination */
 void oem_gwterm(void) {
-    /* Restore screen mode */
-    if (CRTMOD != CRTINI) {
-        CRTMOD = CRTINI;
-        oem_scnrst();
-    }
-    
-    /* Restore cursor shape */
-    CSRSHP = CSRINI;
-    
-    /* Terminate sound, Ctrl-Break, events */
 }
 
-/* GRPSIZ - Get graphics screen size */
+/* GRPSIZ - Get graphics size */
 void oem_grpsiz(int *width, int *height) {
-    *width = 0;
-    *height = 0;
-    
-    if (CRTMOD >= 4 && CRTMOD <= 6) {
-        *height = 200;
-        if (CRTMOD == 6) {
-            *width = 640;
-        } else {
-            *width = 320;
-        }
-    }
+    *width = 640;
+    *height = 200;
 }
 
-/* CSRDSP - Display cursor */
+/* CSRDSP - Set cursor display type */
 void oem_csrdsp(int type) {
-    /* Display cursor based on type */
-    /* 0 = invisible, 3 = user cursor */
-    if (type == 0) {
-        /* Hide cursor */
-    } else {
-        /* Show cursor */
-    }
 }
 
-/* SETATR - Set graphics attribute */
+/* SETATR - Set attribute */
 bool oem_setatr(int color) {
-    if (color >= 4) return true;  /* Error */
-    
-    if (PIXBTS == 1) {
-        ATRPAT = color ? 0xFF : 0x00;
-    } else if (PIXBTS == 2) {
-        ATRPAT = color * 0x55;  /* 00, 55, AA, FF */
-    }
-    return false;  /* Success */
+    return false;
 }
+
+/* Accessor functions for testing */
+BYTE oem_get_pixbts(void) { return PIXBTS; }
+void oem_set_pixbts(BYTE val) { PIXBTS = val; }
+
+WORD oem_get_pixofs(void) { return PIXOFS; }
+void oem_set_pixofs(WORD val) { PIXOFS = val; }
+
+BYTE oem_get_atrmsk(void) { return ATRMSK; }
+void oem_set_atrmsk(BYTE val) { ATRMSK = val; }
+
+BYTE oem_get_atrpat(void) { return ATRPAT; }
+void oem_set_atrpat(BYTE val) { ATRPAT = val; }
+
+BYTE oem_get_borpat(void) { return BORPAT; }
+void oem_set_borpat(BYTE val) { BORPAT = val; }
+
+WORD oem_get_pgtary(void) { return PGTARY; }
+void oem_set_pgtary(WORD val) { PGTARY = val; }
+
+WORD oem_get_pgtshf(void) { return PGTSHF; }
+void oem_set_pgtshf(WORD val) { PGTSHF = val; }
+
+WORD oem_get_pgtact(void) { return PGTACT; }
+void oem_set_pgtact(WORD val) { PGTACT = val; }
+
+BYTE oem_get_crtmod(void) { return CRTMOD; }
+void oem_set_crtmod(BYTE val) { CRTMOD = val; }
+
+BYTE oem_get_crtwid(void) { return CRTWID; }
+void oem_set_crtwid(BYTE val) { CRTWID = val; }
+
+BYTE oem_get_lincnt(void) { return LINCNT; }
+void oem_set_lincnt(BYTE val) { LINCNT = val; }

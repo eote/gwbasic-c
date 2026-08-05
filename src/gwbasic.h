@@ -541,4 +541,40 @@ const device_dispatch_t* giotbl_get_dispatch_table(void);
 int giotbl_find_device(const char *name);
 void giotbl_init_all(void);
 
+/* OEM module accessor functions for testing */
+BYTE oem_get_pixbts(void);
+void oem_set_pixbts(BYTE val);
+WORD oem_get_pixofs(void);
+void oem_set_pixofs(WORD val);
+BYTE oem_get_atrmsk(void);
+void oem_set_atrmsk(BYTE val);
+BYTE oem_get_atrpat(void);
+void oem_set_atrpat(BYTE val);
+BYTE oem_get_borpat(void);
+void oem_set_borpat(BYTE val);
+WORD oem_get_pgtary(void);
+void oem_set_pgtary(WORD val);
+WORD oem_get_pgtshf(void);
+void oem_set_pgtshf(WORD val);
+WORD oem_get_pgtact(void);
+void oem_set_pgtact(WORD val);
+BYTE oem_get_crtmod(void);
+void oem_set_crtmod(BYTE val);
+BYTE oem_get_crtwid(void);
+void oem_set_crtwid(BYTE val);
+BYTE oem_get_lincnt(void);
+void oem_set_lincnt(BYTE val);
+BYTE oem_get_atrmsk(void);
+void oem_set_atrmsk(BYTE val);
+BYTE oem_get_atrpat(void);
+void oem_set_atrpat(BYTE val);
+BYTE oem_get_borpat(void);
+void oem_set_borpat(BYTE val);
+WORD oem_get_pgtary(void);
+void oem_set_pgtary(WORD val);
+WORD oem_get_pgtshf(void);
+void oem_set_pgtshf(WORD val);
+WORD oem_get_pgtact(void);
+void oem_set_pgtact(WORD val);
+
 #endif /* GWBASIC_H */
