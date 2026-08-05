@@ -58,7 +58,8 @@ TEST_SRCS = \
 	../tests/test_advgrp.c \
 	../tests/test_call86.c \
 	../tests/test_gweval_helpers.c \
-	../tests/test_itsa86.c
+	../tests/test_itsa86.c \
+	../tests/test_next86.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o

@@ -420,6 +420,14 @@ void call86_calls(const char **text);
 float call86_usr(int usr_num, float arg);
 void call86_defusr(int usr_num, int address);
 
+/* NEXT86 module functions - NEXT Loop Handling */
+void next86_init(void);
+int next86_next(const char **text);
+int next86_for(const char **text);
+int next86_get_for_depth(void);
+int next86_inside_for(void);
+void next86_clear_for_stack(void);
+
 /* GIOLPT module functions - Line Printer */
 void giolpt_init(void);
 void giolpt_open(int device_id, int mode);

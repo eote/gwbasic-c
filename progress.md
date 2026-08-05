@@ -61,7 +61,7 @@
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 || 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
 || 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ✅ **DONE** | Resident initialization - memory map, MAPINI/MAPCLC, BASVAR, SEGOFF, command line options (19 tests added) |
-| 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
+|| 32 | `next86` | NEXT86.ASM | ✅ Implement | ✅ **DONE** | NEXT loop handling - FOR/NEXT stack management, 16-level nesting, integer/float loops, STEP support |
 | 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
 | 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
 || 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 32 | 82% |
+| **Fully Implemented** | 33 | 85% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 7 | 18% |
+| **Stub Only (TODO)** | 6 | 15% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -100,14 +100,15 @@
 | test_call86.c | call86 | ✅ Passing |
 | test_gweval_helpers.c | gweval helpers | ✅ Passing |
 | test_itsa86.c | itsa86 | ✅ Passing |
+| test_next86.c | next86 | ✅ Passing |
 
-**Total Tests:** 291 passing, 0 failing
+**Total Tests:** 334 passing, 0 failing
 
 ---
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 9 modules remaining:**
+**Phase 4 modules (24-39) - 8 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -119,7 +120,7 @@
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 | 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
 | 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ✅ **DONE** | Resident initialization - memory map, MAPINI/MAPCLC, BASVAR, SEGOFF, command line options |
-| 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
+| 32 | `next86` | NEXT86.ASM | ✅ Implement | ✅ **DONE** | NEXT loop handling - FOR/NEXT stack management, 16-level nesting, integer/float loops, STEP support |
 | 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
 | 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
 | 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
@@ -129,6 +130,6 @@
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **next86** - NEXT loop handling
-2. **ibmres** - Extended token integration (CRUNCH/LIST/EVAL)
-3. **itsa86** - Enhanced memory map features
+1. **kanj86** - Kanji/Japanese support
+2. **maclng** - Machine language interface
+3. **giocas** - Cassette I/O
