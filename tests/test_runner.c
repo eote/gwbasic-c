@@ -204,6 +204,24 @@ void test_kanj86_klenfn(void);
 void test_kanj86_kposfn(void);
 void test_kanj86_term(void);
 
+/* MACLNG test functions */
+void test_maclng_init(void);
+void test_maclng_term(void);
+void test_maclng_maclng_basic(void);
+void test_maclng_mclxeq_basic(void);
+void test_maclng_fetchr(void);
+void test_maclng_fetchz(void);
+void test_maclng_decfet(void);
+void test_maclng_valscn(void);
+void test_maclng_valsc2(void);
+void test_maclng_varget(void);
+void test_maclng_negd(void);
+void test_maclng_islet2(void);
+void test_maclng_scvar(void);
+void test_maclng_mclnew(void);
+void test_maclng_mclscn(void);
+void test_maclng_maclng_main(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -362,6 +380,24 @@ int main(void) {
                                 failed += run_test("kanj86_klenfn", test_kanj86_klenfn);
                                 failed += run_test("kanj86_kposfn", test_kanj86_kposfn);
                                 failed += run_test("kanj86_term", test_kanj86_term);
+
+                                /* MACLNG tests */
+                                failed += run_test("maclng_init", test_maclng_init);
+                                failed += run_test("maclng_term", test_maclng_term);
+                                failed += run_test("maclng_maclng_basic", test_maclng_maclng_basic);
+                                failed += run_test("maclng_mclxeq_basic", test_maclng_mclxeq_basic);
+                                failed += run_test("maclng_fetchr", test_maclng_fetchr);
+                                failed += run_test("maclng_fetchz", test_maclng_fetchz);
+                                failed += run_test("maclng_decfet", test_maclng_decfet);
+                                failed += run_test("maclng_valscn", test_maclng_valscn);
+                                failed += run_test("maclng_valsc2", test_maclng_valsc2);
+                                failed += run_test("maclng_varget", test_maclng_varget);
+                                failed += run_test("maclng_negd", test_maclng_negd);
+                                failed += run_test("maclng_islet2", test_maclng_islet2);
+                                failed += run_test("maclng_scvar", test_maclng_scvar);
+                                failed += run_test("maclng_mclnew", test_maclng_mclnew);
+                                failed += run_test("maclng_mclscn", test_maclng_mclscn);
+                                failed += run_test("maclng_maclng_main", test_maclng_maclng_main);
 
                                 print_test_summary();
     

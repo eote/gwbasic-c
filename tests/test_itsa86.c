@@ -127,7 +127,11 @@ void test_itsa86_seg_off_valid(void) {
 void test_itsa86_seg_off_below_ds(void) {
     itsa86_init();
     WORD data_seg = itsa86_get_data_seg();
-    WORD segment = data_seg - 1;  /* Below current DS */
+    
+    /* Use a segment value that's guaranteed to be below DS.
+     * Since WORD is unsigned, data_seg - 1 wraps around if data_seg == 0.
+     * Use 0 if data_seg > 0, otherwise use a value known to be below. */
+    WORD segment = (data_seg > 0) ? 0 : 0x1000;
     
     int result = itsa86_seg_off(&segment);
     
@@ -211,7 +215,8 @@ void test_itsa86_mapini(void) {
     itsa86_mapini();
     
     WORD savseg = itsa86_get_savseg();
-    TEST_ASSERT(savseg > 0, "mapini should set savseg");
+    WORD data_seg = itsa86_get_data_seg();
+    TEST_ASSERT(savseg == data_seg, "mapini should set savseg to data_seg");
     TEST_PASS("itsa86_mapini");
 }
 

@@ -471,4 +471,22 @@ int kanj86_jisfn(const char **text);
 int kanj86_klenfn(const char **text);
 int kanj86_kposfn(const char **text);
 
+/* MACLNG module functions - Macro Language Driver */
+void maclng_init(void);
+void maclng_term(void);
+void maclng_maclng(const char **text);
+void maclng_mclxeq(const char **text);
+void maclng_maclng_main(const char **text);
+void maclng_fetchr(const char **text);
+void maclng_fetchz(const char **text);
+void maclng_decfet(const char **text);
+void maclng_valscn(const char **text);
+void maclng_valsc2(const char **text);
+void maclng_varget(const char **text);
+void maclng_negd(const char **text);
+void maclng_islet2(const char **text);
+void maclng_scvar(const char **text);
+void maclng_mclnew(const char **text);
+void maclng_mclscn(const char **text);
+
 #endif /* GWBASIC_H */

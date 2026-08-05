@@ -63,7 +63,7 @@
 || 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ✅ **DONE** | Resident initialization - memory map, MAPINI/MAPCLC, BASVAR, SEGOFF, command line options (19 tests added) |
 || 32 | `next86` | NEXT86.ASM | ✅ Implement | ✅ **DONE** | NEXT loop handling - FOR/NEXT stack management, 16-level nesting, integer/float loops, STEP support |
 || 33 | `kanj86` | KANJ86.ASM | ✅ Implement | ✅ **DONE** | Kanji/Japanese support - KTN, JIS, KLEN, KPOS functions (stubs returning syntax error) |
-| 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
+|| 34 | `maclng` | MACLNG.ASM | ✅ Implement | ✅ **DONE** | Macro language driver - command parsing, value scanning, variable handling, MCLXEQ/MACLNG/MCLNEW/MCLSCN (15 tests added) |
 || 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
 | 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Cassette I/O |
 | 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | 8086-specific I/O |
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 34 | 87% |
+| **Fully Implemented** | 35 | 90% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 5 | 13% |
+| **Stub Only (TODO)** | 4 | 10% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -102,14 +102,15 @@
 | test_itsa86.c | itsa86 | ✅ Passing |
 | test_next86.c | next86 | ✅ Passing |
 | test_kanj86.c | kanj86 | ✅ Passing |
+| test_maclng.c | maclng | ✅ Passing |
 
-**Total Tests:** 338 passing, 0 failing
+**Total Tests:** 340 passing, 0 failing
 
 ---
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 7 modules remaining:**
+**Phase 4 modules (24-39) - 6 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -123,7 +124,7 @@
 | 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ✅ **DONE** | Resident initialization - memory map, MAPINI/MAPCLC, BASVAR, SEGOFF, command line options |
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ✅ **DONE** | NEXT loop handling - FOR/NEXT stack management, 16-level nesting, integer/float loops, STEP support |
 | 33 | `kanj86` | KANJ86.ASM | ✅ Implement | ✅ **DONE** | Kanji/Japanese support - KTN, JIS, KLEN, KPOS functions (stubs returning syntax error) |
-| 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
+| 34 | `maclng` | MACLNG.ASM | ✅ Implement | ✅ **DONE** | Macro language driver - command parsing, value scanning, variable handling, MCLXEQ/MACLNG/MCLNEW/MCLSCN (15 tests added) |
 | 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
 | 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Cassette I/O |
 | 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | 8086-specific I/O |
@@ -131,6 +132,6 @@
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **maclng** - Machine language interface
-2. **giocas** - Cassette I/O
-3. **gio86** - 8086-specific I/O
+1. **giocas** - Cassette I/O
+2. **gio86** - 8086-specific I/O
+3. **giotbl** - I/O tables
