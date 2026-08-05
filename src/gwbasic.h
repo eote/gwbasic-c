@@ -463,4 +463,12 @@ int giodsk_seek(int filenum, long record);
 int giodsk_get(int filenum, long record, void *buffer, int buflen);
 int giodsk_put(int filenum, long record, const void *buffer, int buflen);
 
+/* KANJ86 module functions - Kanji String Functions */
+void kanj86_init(void);
+void kanj86_term(void);
+int kanj86_ktnfn(const char **text);
+int kanj86_jisfn(const char **text);
+int kanj86_klenfn(const char **text);
+int kanj86_kposfn(const char **text);
+
 #endif /* GWBASIC_H */

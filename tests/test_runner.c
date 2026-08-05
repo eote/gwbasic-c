@@ -196,6 +196,14 @@ void test_next86_for_max_depth(void);
 void test_next86_variable_types(void);
 void test_next86_step_negative(void);
 
+/* KANJ86 test functions */
+void test_kanj86_init(void);
+void test_kanj86_ktnfn(void);
+void test_kanj86_jisfn(void);
+void test_kanj86_klenfn(void);
+void test_kanj86_kposfn(void);
+void test_kanj86_term(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -333,21 +341,29 @@ int main(void) {
                         failed += run_test("itsa86_csend", test_itsa86_csend);
 
                         /* NEXT86 tests */
-                        failed += run_test("next86_init", test_next86_init);
-                        failed += run_test("next86_for_basic", test_next86_for_basic);
-                        failed += run_test("next86_for_with_step", test_next86_for_with_step);
-                        failed += run_test("next86_for_nested", test_next86_for_nested);
-                        failed += run_test("next86_next_basic", test_next86_next_basic);
-                        failed += run_test("next86_next_termination", test_next86_next_termination);
-                        failed += run_test("next86_next_no_for", test_next86_next_no_for);
-                        failed += run_test("next86_clear_for_stack", test_next86_clear_for_stack);
-                        failed += run_test("next86_get_for_depth", test_next86_get_for_depth);
-                        failed += run_test("next86_inside_for", test_next86_inside_for);
-                        failed += run_test("next86_for_max_depth", test_next86_for_max_depth);
-                        failed += run_test("next86_variable_types", test_next86_variable_types);
-                        failed += run_test("next86_step_negative", test_next86_step_negative);
+                                failed += run_test("next86_init", test_next86_init);
+                                failed += run_test("next86_for_basic", test_next86_for_basic);
+                                failed += run_test("next86_for_with_step", test_next86_for_with_step);
+                                failed += run_test("next86_for_nested", test_next86_for_nested);
+                                failed += run_test("next86_next_basic", test_next86_next_basic);
+                                failed += run_test("next86_next_termination", test_next86_next_termination);
+                                failed += run_test("next86_next_no_for", test_next86_next_no_for);
+                                failed += run_test("next86_clear_for_stack", test_next86_clear_for_stack);
+                                failed += run_test("next86_get_for_depth", test_next86_get_for_depth);
+                                failed += run_test("next86_inside_for", test_next86_inside_for);
+                                failed += run_test("next86_for_max_depth", test_next86_for_max_depth);
+                                failed += run_test("next86_variable_types", test_next86_variable_types);
+                                failed += run_test("next86_step_negative", test_next86_step_negative);
 
-                        print_test_summary();
+                                /* KANJ86 tests */
+                                failed += run_test("kanj86_init", test_kanj86_init);
+                                failed += run_test("kanj86_ktnfn", test_kanj86_ktnfn);
+                                failed += run_test("kanj86_jisfn", test_kanj86_jisfn);
+                                failed += run_test("kanj86_klenfn", test_kanj86_klenfn);
+                                failed += run_test("kanj86_kposfn", test_kanj86_kposfn);
+                                failed += run_test("kanj86_term", test_kanj86_term);
+
+                                print_test_summary();
     
     return failed ? 1 : 0;
 }
