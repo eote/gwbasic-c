@@ -247,6 +247,19 @@ void test_gio86_porlen(void);
 void test_gio86_pnrlen(void);
 void test_gio86_getwdt(void);
 
+/* GIOTBL test functions */
+void test_giotbl_init(void);
+void test_giotbl_term(void);
+void test_giotbl_get_ndev(void);
+void test_giotbl_get_device_id(void);
+void test_giotbl_get_device_name(void);
+void test_giotbl_lookup_device(void);
+void test_giotbl_get_dispatch(void);
+void test_giotbl_get_name_table(void);
+void test_giotbl_get_dispatch_table(void);
+void test_giotbl_find_device(void);
+void test_giotbl_init_all(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -448,6 +461,19 @@ int main(void) {
                                 failed += run_test("gio86_porlen", test_gio86_porlen);
                                 failed += run_test("gio86_pnrlen", test_gio86_pnrlen);
                                 failed += run_test("gio86_getwdt", test_gio86_getwdt);
+
+                                /* GIOTBL tests */
+                                failed += run_test("giotbl_init", test_giotbl_init);
+                                failed += run_test("giotbl_term", test_giotbl_term);
+                                failed += run_test("giotbl_get_ndev", test_giotbl_get_ndev);
+                                failed += run_test("giotbl_get_device_id", test_giotbl_get_device_id);
+                                failed += run_test("giotbl_get_device_name", test_giotbl_get_device_name);
+                                failed += run_test("giotbl_lookup_device", test_giotbl_lookup_device);
+                                failed += run_test("giotbl_get_dispatch", test_giotbl_get_dispatch);
+                                failed += run_test("giotbl_get_name_table", test_giotbl_get_name_table);
+                                failed += run_test("giotbl_get_dispatch_table", test_giotbl_get_dispatch_table);
+                                failed += run_test("giotbl_find_device", test_giotbl_find_device);
+                                failed += run_test("giotbl_init_all", test_giotbl_init_all);
 
                                 print_test_summary();
     

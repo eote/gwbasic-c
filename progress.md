@@ -67,7 +67,7 @@
 || 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
 || 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ✅ **DONE** | Cassette I/O - motor control, read/write/ioctl (stubs returning device unavailable) |
 | 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ✅ **DONE** | 8086-specific I/O - OPEN/CLOSE/WIDTH/BSAVE/BLOAD/LPRINT/PRINT (stubs returning device unavailable) |
-| 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ❌ **STUB ONLY** | I/O tables |
+| 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ✅ **DONE** | I/O tables - device name table, dispatch tables, initialization/termination tables (8 tests added) |
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 ---
@@ -76,9 +76,9 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| **Fully Implemented** | 37 | 95% |
+| **Fully Implemented** | 38 | 97% |
 | **Partially Implemented** | 0 | 0% |
-| **Stub Only (TODO)** | 2 | 5% |
+| **Stub Only (TODO)** | 1 | 3% |
 | **Total Modules** | 39 | 100% |
 
 ---
@@ -105,14 +105,15 @@
 | test_maclng.c | maclng | ✅ Passing |
 | test_giocas.c | giocas | ✅ Passing |
 | test_gio86.c | gio86 | ✅ Passing |
+| test_giotbl.c | giotbl | ✅ Passing |
 
-**Total Tests:** 357 passing, 0 failing
+**Total Tests:** 395 passing, 0 failing
 
 ---
 
 ## Next Module to Implement (per PLAN order)
 
-**Phase 4 modules (24-39) - 4 modules remaining:**
+**Phase 4 modules (24-39) - 3 modules remaining:**
 
 | Order | Module | ASM File | PLAN Status | Notes |
 |-------|--------|----------|-------------|-------|
@@ -130,9 +131,8 @@
 | 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
 || 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ✅ **DONE** | Cassette I/O - motor control, read/write/ioctl (stubs returning device unavailable) |
 | 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ✅ **DONE** | 8086-specific I/O - OPEN/CLOSE/WIDTH/BSAVE/BLOAD/LPRINT/PRINT (stubs returning device unavailable) |
-| 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ❌ **STUB ONLY** | I/O tables |
+| 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ✅ **DONE** | I/O tables - device name table, dispatch tables, initialization/termination tables (8 tests added) |
 | 39 | `biboot` | BIBOOT.ASM | ✅ Implement | ❌ **STUB ONLY** | Boot/startup |
 
 **Priority recommendation:**
-1. **giotbl** - I/O tables
-2. **biboot** - Boot/startup
+1. **biboot** - Boot/startup

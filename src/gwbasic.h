@@ -27,6 +27,20 @@
 /* Function result codes */
 #define SUCCESS     0
 
+/* Device name table entry */
+typedef struct {
+    const char *name;
+    int device_id;
+} device_name_t;
+
+/* Device dispatch table */
+typedef struct {
+    const char *name;
+    void *dsp_addr;
+    void *ini_addr;
+    void *trm_addr;
+} device_dispatch_t;
+
 /* Basic type definitions - use standard types to avoid conflicts with windows.h */
 /* Note: windows.h already defines SBYTE, BYTE, SWORD, WORD, SDWORD, UDWORD on Windows */
 #ifndef SBYTE
@@ -513,5 +527,18 @@ int gio86_pofnum(const char **text);
 int gio86_porlen(const char **text);
 int gio86_pnrlen(const char **text);
 int gio86_getwdt(const char **text);
+
+/* GIOTBL module functions - I/O Tables */
+void giotbl_init(void);
+void giotbl_term(void);
+int giotbl_get_device_id(const char *name);
+const char* giotbl_get_device_name(int device_id);
+int giotbl_get_dispatch(int device_id, void **dsp, void **ini, void **trm);
+int giotbl_get_ndev(void);
+int giotbl_lookup_device(const char *name, int *device_id);
+const device_name_t* giotbl_get_name_table(void);
+const device_dispatch_t* giotbl_get_dispatch_table(void);
+int giotbl_find_device(const char *name);
+void giotbl_init_all(void);
 
 #endif /* GWBASIC_H */
