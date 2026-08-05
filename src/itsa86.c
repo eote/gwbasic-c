@@ -92,6 +92,10 @@ void itsa86_init(void) {
     
     /* Initialize BASVAR table - will be set up during GW-DATA init */
     /* These will be filled in by gwdata_init */
+    g_bvtab[0] = NULL;
+    g_bvtab[1] = NULL;
+    g_bvtab[2] = NULL;
+    g_bvtab[3] = NULL;
 }
 
 /* BASVAR - Retrieve or modify BASIC internal data locations
@@ -100,22 +104,24 @@ void itsa86_init(void) {
  *   carry set = write, carry clear = read
  *   ax = value to write (if carry set)
  * Returns:
- *   ax = value of variable
+ *   ax = value of variable (0 on error)
+ *   carry set = error, carry clear = success
  *   bx modified */
 WORD itsa86_basvar(WORD bx, WORD ax, int carry) {
-    static WORD *bvtab[4] = {NULL, NULL, NULL, NULL};
-    
-    /* Initialize BVTAB pointers if not done */
-    if (!bvtab[0]) {
-        /* These would be set by GW-DATA module */
-        /* For now, return 0 */
-        return 0;
+    /* Use global BVTAB instead of local static */
+    if (!g_bvtab[0]) {
+        /* Not initialized - return error */
+        return 0xFFFF;  /* Error code for uninitialized */
     }
     
-    if (bx >= 4) return 0;
+    if (bx >= 4) {
+        return 0xFFFE;  /* Error code for invalid index */
+    }
     
-    WORD *addr = bvtab[bx];
-    if (!addr) return 0;
+    WORD *addr = g_bvtab[bx];
+    if (!addr) {
+        return 0xFFFD;  /* Error code for null pointer */
+    }
     
     if (carry) {
         /* Write */
@@ -172,14 +178,16 @@ void itsa86_mapclc(void) {
         /* /M: option specified */
         WORD requested = g_mswsiz;
         if (requested > max_paragraphs * 16) {
-            /* Not enough memory */
-            return; /* Error */
+            /* Not enough memory - set error flag and use max available */
+            g_maxmem = avail * 16;
+            g_maxmem_seg = dx + avail;
+        } else {
+            if (requested > avail * 16) {
+                requested = avail * 16;
+            }
+            g_maxmem = requested;
+            g_maxmem_seg = dx + (requested + 15) / 16;
         }
-        if (requested > avail * 16) {
-            requested = avail * 16;
-        }
-        g_maxmem = requested;
-        g_maxmem_seg = dx + (requested + 15) / 16;
     } else {
         /* Use maximum available */
         g_maxmem = avail * 16;
@@ -235,6 +243,14 @@ void itsa86_set_m_option(WORD size) {
     g_mswflg = 1;
     g_mswsiz = size;
 }
+
+/* Accessor functions for testing */
+WORD itsa86_get_maxmem(void) { return g_maxmem; }
+WORD itsa86_get_newds(void) { return g_newds; }
+WORD itsa86_get_data_seg(void) { return g_data_seg; }
+WORD itsa86_get_savseg(void) { return g_savseg; }
+WORD itsa86_get_txttab(void) { return g_txttab; }
+WORD** itsa86_get_bvtab(void) { return g_bvtab; }
 
 /* Get memory map for debugging */
 void itsa86_dump_memory_map(void) {

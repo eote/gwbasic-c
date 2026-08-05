@@ -161,6 +161,26 @@ void test_gweval_synchr_no_match(void);
 void test_gweval_synchr_eos(void);
 void test_gweval_synchr_null(void);
 
+/* ITSA86 test functions */
+void test_itsa86_init(void);
+void test_itsa86_basvar_read_uninitialized(void);
+void test_itsa86_basvar_write_uninitialized(void);
+void test_itsa86_basvar_invalid_index(void);
+void test_itsa86_basvar_all_indices_uninitialized(void);
+void test_itsa86_mapclc_no_options(void);
+void test_itsa86_mapclc_m_option_valid(void);
+void test_itsa86_mapclc_m_option_too_large(void);
+void test_itsa86_mapclc_c_option(void);
+void test_itsa86_seg_off_valid(void);
+void test_itsa86_seg_off_below_ds(void);
+void test_itsa86_seg_off_at_ds(void);
+void test_itsa86_seg_off_64k_limit(void);
+void test_itsa86_get_memory_info(void);
+void test_itsa86_set_c_option(void);
+void test_itsa86_set_m_option(void);
+void test_itsa86_mapini(void);
+void test_itsa86_csend(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -266,18 +286,38 @@ int main(void) {
         failed += run_test("call86_call_empty_parens", test_call86_call_empty_parens);
 
         /* GWEVAL HELPER tests */
-        failed += run_test("gweval_scan_var_basic", test_gweval_scan_var_basic);
-        failed += run_test("gweval_scan_var_array", test_gweval_scan_var_array);
-        failed += run_test("gweval_scan_var_empty", test_gweval_scan_var_empty);
-        failed += run_test("gweval_frqint_basic", test_gweval_frqint_basic);
-        failed += run_test("gweval_chrgt2_basic", test_gweval_chrgt2_basic);
-        failed += run_test("gweval_chrgt2_empty", test_gweval_chrgt2_empty);
-        failed += run_test("gweval_synchr_match", test_gweval_synchr_match);
-        failed += run_test("gweval_synchr_no_match", test_gweval_synchr_no_match);
-        failed += run_test("gweval_synchr_eos", test_gweval_synchr_eos);
-        failed += run_test("gweval_synchr_null", test_gweval_synchr_null);
+                failed += run_test("gweval_scan_var_basic", test_gweval_scan_var_basic);
+                failed += run_test("gweval_scan_var_array", test_gweval_scan_var_array);
+                failed += run_test("gweval_scan_var_empty", test_gweval_scan_var_empty);
+                failed += run_test("gweval_frqint_basic", test_gweval_frqint_basic);
+                failed += run_test("gweval_chrgt2_basic", test_gweval_chrgt2_basic);
+                failed += run_test("gweval_chrgt2_empty", test_gweval_chrgt2_empty);
+                failed += run_test("gweval_synchr_match", test_gweval_synchr_match);
+                failed += run_test("gweval_synchr_no_match", test_gweval_synchr_no_match);
+                failed += run_test("gweval_synchr_eos", test_gweval_synchr_eos);
+                failed += run_test("gweval_synchr_null", test_gweval_synchr_null);
 
-            print_test_summary();
+                /* ITSA86 tests */
+                failed += run_test("itsa86_init", test_itsa86_init);
+                failed += run_test("itsa86_basvar_read_uninitialized", test_itsa86_basvar_read_uninitialized);
+                failed += run_test("itsa86_basvar_write_uninitialized", test_itsa86_basvar_write_uninitialized);
+                failed += run_test("itsa86_basvar_invalid_index", test_itsa86_basvar_invalid_index);
+                failed += run_test("itsa86_basvar_all_indices_uninitialized", test_itsa86_basvar_all_indices_uninitialized);
+                failed += run_test("itsa86_mapclc_no_options", test_itsa86_mapclc_no_options);
+                failed += run_test("itsa86_mapclc_m_option_valid", test_itsa86_mapclc_m_option_valid);
+                failed += run_test("itsa86_mapclc_m_option_too_large", test_itsa86_mapclc_m_option_too_large);
+                failed += run_test("itsa86_mapclc_c_option", test_itsa86_mapclc_c_option);
+                failed += run_test("itsa86_seg_off_valid", test_itsa86_seg_off_valid);
+                failed += run_test("itsa86_seg_off_below_ds", test_itsa86_seg_off_below_ds);
+                failed += run_test("itsa86_seg_off_at_ds", test_itsa86_seg_off_at_ds);
+                failed += run_test("itsa86_seg_off_64k_limit", test_itsa86_seg_off_64k_limit);
+                failed += run_test("itsa86_get_memory_info", test_itsa86_get_memory_info);
+                failed += run_test("itsa86_set_c_option", test_itsa86_set_c_option);
+                failed += run_test("itsa86_set_m_option", test_itsa86_set_m_option);
+                failed += run_test("itsa86_mapini", test_itsa86_mapini);
+                failed += run_test("itsa86_csend", test_itsa86_csend);
+
+                print_test_summary();
     
     return failed ? 1 : 0;
 }

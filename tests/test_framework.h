@@ -64,6 +64,19 @@ extern int g_tests_failed;
         } \
     } while (0)
 
+#define TEST_ASSERT_EQ_WORD(actual, expected, msg) \
+    do { \
+        g_tests_run++; \
+        if ((actual) != (expected)) { \
+            g_tests_failed++; \
+            fprintf(stderr, "  FAIL [%s:%d] %s: got %u, expected %u\n", \
+                    __FILE__, __LINE__, msg, (actual), (expected)); \
+        } else { \
+            g_tests_passed++; \
+            printf("  PASS: %s\n", msg); \
+        } \
+    } while (0)
+
 #define TEST_PASS(msg) \
     do { \
         printf("  PASS: %s\n", msg); \

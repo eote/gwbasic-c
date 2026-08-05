@@ -389,7 +389,17 @@ void itsa86_set_m_option(WORD size);
 void itsa86_dump_memory_map(void);
 void itsa86_csend(void);
 
-/* SCNEDT module functions - Screen Editor */
+/* Accessor functions for testing */
+WORD itsa86_get_maxmem(void);
+WORD itsa86_get_newds(void);
+WORD itsa86_get_data_seg(void);
+WORD itsa86_get_savseg(void);
+WORD itsa86_get_txttab(void);
+
+/* BASVAR table access for testing */
+WORD** itsa86_get_bvtab(void);
+
+/* IBMRES module functions - IBM Reserved Words / Extended Tokens */
 void scnedt_init(void);
 void scnedt_pinlin(void);
 void scnedt_qinlin(void);

@@ -60,7 +60,7 @@
 || 28 | `ibmres` | IBMRES.ASM | ✅ Implement | ✅ **DONE** | IBM PC resource handling - reserved word tables, token dispatch, extended tokens (FE/FD), CRUNCH/LIST/EVAL hooks |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 || 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
-|| 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ✅ **DONE** | Resident initialization - memory map, MAPINI/MAPCLC, BASVAR, SEGOFF, command line options |
+|| 31 | `itsa86` | ITSA86.ASM | ✅ Implement | ✅ **DONE** | Resident initialization - memory map, MAPINI/MAPCLC, BASVAR, SEGOFF, command line options (19 tests added) |
 | 32 | `next86` | NEXT86.ASM | ✅ Implement | ❌ **STUB ONLY** | NEXT loop handling |
 | 33 | `kanj86` | KANJ86.ASM | ⚠️ Stub | ❌ **STUB ONLY** | Kanji/Japanese support |
 | 34 | `maclng` | MACLNG.ASM | ✅ Implement | ❌ **STUB ONLY** | Machine language interface |
@@ -99,8 +99,9 @@
 | test_math.c | math1, math2 | ✅ Passing |
 | test_call86.c | call86 | ✅ Passing |
 | test_gweval_helpers.c | gweval helpers | ✅ Passing |
+| test_itsa86.c | itsa86 | ✅ Passing |
 
-**Total Tests:** 272 passing, 0 failing
+**Total Tests:** 291 passing, 0 failing
 
 ---
 
