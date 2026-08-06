@@ -64,7 +64,7 @@
 || 32 | `next86` | NEXT86.ASM | ✅ Implement | ✅ **DONE** | NEXT loop handling - FOR/NEXT stack management, 16-level nesting, integer/float loops, STEP support |
 || 33 | `kanj86` | KANJ86.ASM | ✅ Implement | ✅ **DONE** | Kanji/Japanese support - KTN, JIS, KLEN, KPOS functions (stubs returning syntax error) |
 || 34 | `maclng` | MACLNG.ASM | ✅ Implement | ✅ **DONE** | Macro language driver - command parsing, value scanning, variable handling, MCLXEQ/MACLNG/MCLNEW/MCLSCN (15 tests added) |
-|| 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK |
+|| 35 | `scnedt` | SCNEDT.ASM | ✅ Implement | ✅ **DONE** | Screen editor - line input (PINLIN, INLIN, QINLIN, SINLIN), cursor control, edit keys, EDIT statement, ERREDT, CLRFLG, EDTBRK (11 tests added) |
 || 36 | `giocas` | GIOCAS.ASM | ⚠️ Stub | ✅ **DONE** | Cassette I/O - motor control, read/write/ioctl (stubs returning device unavailable) |
 | 37 | `gio86` | GIO86.ASM | ⚠️ Stub | ✅ **DONE** | 8086-specific I/O - OPEN/CLOSE/WIDTH/BSAVE/BLOAD/LPRINT/PRINT (stubs returning device unavailable) |
 | 38 | `giotbl` | GIOTBL.ASM | ⚠️ Stub | ✅ **DONE** | I/O tables - device name table, dispatch tables, initialization/termination tables (8 tests added) |
@@ -111,8 +111,9 @@
 | test_ibmres.c | ibmres | ✅ Passing |
 | test_oemev.c | oemev | ✅ Passing |
 | test_oemsnd.c | oemsnd | ✅ Passing |
+| test_scnedt.c | scnedt | ✅ Passing |
 
-**Total Tests:** 585 passing, 0 failing
+**Total Tests:** 589 passing, 0 failing
 
 ---
 

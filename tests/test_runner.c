@@ -368,6 +368,20 @@ void test_oemsnd_play_command(void);
 void test_oemsnd_edge_cases(void);
 void test_oemsnd_term_cleanup(void);
 
+/* SCNEDT test functions */
+void test_scnedt_init(void);
+void test_scnedt_clrflg(void);
+void test_scnedt_edtbrk(void);
+void test_scnedt_pinlin(void);
+void test_scnedt_qinlin(void);
+void test_scnedt_inlin(void);
+void test_scnedt_sinlin(void);
+void test_scnedt_set_get_buf(void);
+void test_scnedt_erredt(void);
+void test_scnedt_edit(void);
+void test_scnedt_scnsem(void);
+void test_scnedt_get_buf_len(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -690,6 +704,20 @@ int main(void) {
                                 failed += run_test("oemsnd_play_command", test_oemsnd_play_command);
                                 failed += run_test("oemsnd_edge_cases", test_oemsnd_edge_cases);
                                 failed += run_test("oemsnd_term_cleanup", test_oemsnd_term_cleanup);
+
+                                /* SCNEDT tests */
+                                failed += run_test("scnedt_init", test_scnedt_init);
+                                failed += run_test("scnedt_clrflg", test_scnedt_clrflg);
+                                failed += run_test("scnedt_edtbrk", test_scnedt_edtbrk);
+                                failed += run_test("scnedt_pinlin", test_scnedt_pinlin);
+                                failed += run_test("scnedt_qinlin", test_scnedt_qinlin);
+                                failed += run_test("scnedt_inlin", test_scnedt_inlin);
+                                failed += run_test("scnedt_sinlin", test_scnedt_sinlin);
+                                failed += run_test("scnedt_set_get_buf", test_scnedt_set_get_buf);
+                                failed += run_test("scnedt_erredt", test_scnedt_erredt);
+                                failed += run_test("scnedt_edit", test_scnedt_edit);
+                                failed += run_test("scnedt_scnsem", test_scnedt_scnsem);
+                                failed += run_test("scnedt_get_buf_len", test_scnedt_get_buf_len);
 
                                 print_test_summary();
     
