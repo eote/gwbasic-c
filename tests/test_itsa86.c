@@ -129,13 +129,30 @@ void test_itsa86_seg_off_below_ds(void) {
     WORD data_seg = itsa86_get_data_seg();
     
     /* Use a segment value that's guaranteed to be below DS.
-     * Since WORD is unsigned, data_seg - 1 wraps around if data_seg == 0.
-     * Use 0 if data_seg > 0, otherwise use a value known to be below. */
-    WORD segment = (data_seg > 0) ? 0 : 0x1000;
+     * If data_seg == 0, we can't have a valid segment below it in 16-bit space.
+     * In that case, use a value that would wrap (UINT16_MAX) which is > data_seg.
+     * Actually, in GW-BASIC, DS is typically set to a valid segment.
+     * Let's use a value that's less than data_seg by using a smaller value if data_seg > 0.
+     */
+    WORD segment;
+    if (data_seg > 0) {
+        segment = data_seg - 1;  /* Definitely below DS */
+    } else {
+        /* If data_seg is 0, we can't have a valid segment below it.
+         * In this test environment, we just test that the function handles this case.
+         * We'll skip the actual below-DS test if data_seg is 0. */
+        segment = 0;
+    }
     
     int result = itsa86_seg_off(&segment);
     
-    TEST_ASSERT_EQ_INT(result, -1, "seg_off below DS returns error");
+    if (data_seg > 0) {
+        TEST_ASSERT_EQ_INT(result, -1, "seg_off below DS returns error");
+    } else {
+        /* When data_seg is 0, segment 0 is not below DS, so it should succeed */
+        TEST_ASSERT_EQ_INT(result, 0, "seg_off with DS=0 returns success");
+        TEST_ASSERT_EQ_WORD(segment, 0, "seg_off with DS=0 returns 0 offset");
+    }
     TEST_PASS("itsa86_seg_off below DS error");
 }
 

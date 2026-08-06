@@ -613,4 +613,16 @@ int oemev_rdpen(int func, int *result);
 int oemev_rdtrig(int button, int mode, int *result);
 int oemev_rdstik(int coord, int *result);
 
+/* OEMSND module functions */
+void oemsnd_init(void);
+void oemsnd_term(void);
+void oemsnd_start(void);
+int oemsnd_donote(int mode, WORD frequency, WORD duration);
+void oemsnd_sound(WORD frequency, WORD duration);
+void oemsnd_play(const char *music_string);
+void oemsnd_sndsta(void);
+void oemsnd_sndtrm(void);
+void oemsnd_play(const char *music_string);  /* alias */
+void oemsnd_sound(WORD frequency, WORD duration);
+
 #endif /* GWBASIC_H */

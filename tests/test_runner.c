@@ -348,6 +348,26 @@ void test_oemev_rdstik(void);
 void test_oemev_rdstik_invalid(void);
 void test_oemev_evtrm_cleanup(void);
 
+/* OEMSND test functions */
+void test_oemsnd_init(void);
+void test_oemsnd_term(void);
+void test_oemsnd_donote_reset(void);
+void test_oemsnd_donote_foreground(void);
+void test_oemsnd_donote_background(void);
+void test_oemsnd_donote_rest(void);
+void test_oemsnd_donote_zero_duration(void);
+void test_oemsnd_sound(void);
+void test_oemsnd_play(void);
+void test_oemsnd_start_term(void);
+void test_oemsnd_sndsta_sndtrm(void);
+void test_oemsnd_multiple_notes(void);
+void test_oemsnd_reset(void);
+void test_oemsnd_various_frequencies(void);
+void test_oemsnd_stop(void);
+void test_oemsnd_play_command(void);
+void test_oemsnd_edge_cases(void);
+void test_oemsnd_term_cleanup(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -650,6 +670,26 @@ int main(void) {
                                 failed += run_test("oemev_rdstik", test_oemev_rdstik);
                                 failed += run_test("oemev_rdstik_invalid", test_oemev_rdstik_invalid);
                                 failed += run_test("oemev_evtrm_cleanup", test_oemev_evtrm_cleanup);
+
+                                /* OEMSND tests */
+                                failed += run_test("oemsnd_init", test_oemsnd_init);
+                                failed += run_test("oemsnd_term", test_oemsnd_term);
+                                failed += run_test("oemsnd_donote_reset", test_oemsnd_donote_reset);
+                                failed += run_test("oemsnd_donote_foreground", test_oemsnd_donote_foreground);
+                                failed += run_test("oemsnd_donote_background", test_oemsnd_donote_background);
+                                failed += run_test("oemsnd_donote_rest", test_oemsnd_donote_rest);
+                                failed += run_test("oemsnd_donote_zero_duration", test_oemsnd_donote_zero_duration);
+                                failed += run_test("oemsnd_sound", test_oemsnd_sound);
+                                failed += run_test("oemsnd_play", test_oemsnd_play);
+                                failed += run_test("oemsnd_start_term", test_oemsnd_start_term);
+                                failed += run_test("oemsnd_sndsta_sndtrm", test_oemsnd_sndsta_sndtrm);
+                                failed += run_test("oemsnd_multiple_notes", test_oemsnd_multiple_notes);
+                                failed += run_test("oemsnd_reset", test_oemsnd_reset);
+                                failed += run_test("oemsnd_various_frequencies", test_oemsnd_various_frequencies);
+                                failed += run_test("oemsnd_stop", test_oemsnd_stop);
+                                failed += run_test("oemsnd_play_command", test_oemsnd_play_command);
+                                failed += run_test("oemsnd_edge_cases", test_oemsnd_edge_cases);
+                                failed += run_test("oemsnd_term_cleanup", test_oemsnd_term_cleanup);
 
                                 print_test_summary();
     

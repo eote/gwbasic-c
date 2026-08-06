@@ -68,7 +68,8 @@ TEST_SRCS = \
 	../tests/test_oem.c \
 	../tests/test_biboot.c \
 	../tests/test_ibmres.c \
-	../tests/test_oemev.c
+	../tests/test_oemev.c \
+	../tests/test_oemsnd.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o

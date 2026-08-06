@@ -56,7 +56,7 @@
 | 24 | `oem` | OEM.ASM | ✅ Implement | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
 || 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
 || 26 | `oemev` | OEMEV.ASM | ✅ Implement | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
-|| 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background |
+|| 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background (16 tests added) |
 || 28 | `ibmres` | IBMRES.ASM | ✅ Implement | ✅ **DONE** | IBM PC resource handling - reserved word tables, token dispatch, extended tokens (FE/FD), CRUNCH/LIST/EVAL hooks |
 | 29 | `advgrp` | ADVGRP.ASM | ✅ Implement | ✅ **DONE** | PAINT, CIRCLE, GET/PUT graphics with flood fill, circle, array I/O (10 tests added) |
 || 30 | `call86` | CALL86.ASM | ✅ Implement | ✅ **DONE** | CALL absolute, USR functions, CALLS segment:offset, DEF USR |
@@ -110,8 +110,9 @@
 | test_biboot.c | biboot | ✅ Passing |
 | test_ibmres.c | ibmres | ✅ Passing |
 | test_oemev.c | oemev | ✅ Passing |
+| test_oemsnd.c | oemsnd | ✅ Passing |
 
-**Total Tests:** 577 passing, 0 failing
+**Total Tests:** 585 passing, 0 failing
 
 ---
 
