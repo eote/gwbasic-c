@@ -54,7 +54,7 @@
 | Order | Module | ASM File | PLAN Status | Actual Status | Notes |
 |-------|--------|----------|-------------|---------------|-------|
 | 24 | `oem` | OEM.ASM | ✅ Implement | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
-| 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation |
+|| 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation (20 tests added) |
 | 26 | `oemev` | OEMEV.ASM | ✅ Implement | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background (16 tests added) |
 | 28 | `ibmres` | IBMRES.ASM | ✅ Implement | ✅ **DONE** | IBM PC resource handling - reserved word tables, token dispatch, extended tokens (FE/FD), CRUNCH/LIST/EVAL hooks (31 tests added) |
@@ -113,8 +113,9 @@
 | test_oemev.c | oemev | ✅ Passing |
 | test_oemsnd.c | oemsnd | ✅ Passing |
 | test_scnedt.c | scnedt | ✅ Passing |
+| test_oemcbk.c | oemcbk | ✅ Passing (20 tests) |
 
-**Total Tests:** 588 passing, 0 failing
+**Total Tests:** 606 passing, 0 failing
 
 ---
 

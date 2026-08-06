@@ -382,6 +382,28 @@ void test_scnedt_edit(void);
 void test_scnedt_scnsem(void);
 void test_scnedt_get_buf_len(void);
 
+/* OEMCBK test functions */
+void test_oemcbk_init(void);
+void test_oem_cbksta(void);
+void test_oem_cbktrm(void);
+void test_oem_check_ctrl_break(void);
+void test_oem_check_pause(void);
+void test_oem_simulate_ctrl_break(void);
+void test_oem_simulate_pause(void);
+void test_oem_process_keyboard_ctrl_shift_b(void);
+void test_oem_process_keyboard_ctrl_shift_p(void);
+void test_oem_process_keyboard_ctrl_numlock(void);
+void test_oem_process_keyboard_regular(void);
+void test_oem_process_keyboard_ctrl_only(void);
+void test_oem_process_keyboard_shift_only(void);
+void test_oem_process_keyboard_key_up(void);
+void test_oemcbk_init_term_double(void);
+void test_oemcbk_ctrl_break_cleared(void);
+void test_oemcbk_pause_cleared(void);
+void test_oemcbk_without_init(void);
+void test_oemcbk_process_without_cbksta(void);
+void test_oemcbk_right_ctrl_shift(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -718,6 +740,28 @@ int main(void) {
                                 failed += run_test("scnedt_edit", test_scnedt_edit);
                                 failed += run_test("scnedt_scnsem", test_scnedt_scnsem);
                                 failed += run_test("scnedt_get_buf_len", test_scnedt_get_buf_len);
+
+                                /* OEMCBK tests */
+                                failed += run_test("oemcbk_init", test_oemcbk_init);
+                                failed += run_test("oem_cbksta", test_oem_cbksta);
+                                failed += run_test("oem_cbktrm", test_oem_cbktrm);
+                                failed += run_test("oem_check_ctrl_break", test_oem_check_ctrl_break);
+                                failed += run_test("oem_check_pause", test_oem_check_pause);
+                                failed += run_test("oem_simulate_ctrl_break", test_oem_simulate_ctrl_break);
+                                failed += run_test("oem_simulate_pause", test_oem_simulate_pause);
+                                failed += run_test("oem_process_keyboard_ctrl_shift_b", test_oem_process_keyboard_ctrl_shift_b);
+                                failed += run_test("oem_process_keyboard_ctrl_shift_p", test_oem_process_keyboard_ctrl_shift_p);
+                                failed += run_test("oem_process_keyboard_ctrl_numlock", test_oem_process_keyboard_ctrl_numlock);
+                                failed += run_test("oem_process_keyboard_regular", test_oem_process_keyboard_regular);
+                                failed += run_test("oem_process_keyboard_ctrl_only", test_oem_process_keyboard_ctrl_only);
+                                failed += run_test("oem_process_keyboard_shift_only", test_oem_process_keyboard_shift_only);
+                                failed += run_test("oem_process_keyboard_key_up", test_oem_process_keyboard_key_up);
+                                failed += run_test("oemcbk_init_term_double", test_oemcbk_init_term_double);
+                                failed += run_test("oemcbk_ctrl_break_cleared", test_oemcbk_ctrl_break_cleared);
+                                failed += run_test("oemcbk_pause_cleared", test_oemcbk_pause_cleared);
+                                failed += run_test("oemcbk_without_init", test_oemcbk_without_init);
+                                failed += run_test("oemcbk_process_without_cbksta", test_oemcbk_process_without_cbksta);
+                                failed += run_test("oemcbk_right_ctrl_shift", test_oemcbk_right_ctrl_shift);
 
                                 print_test_summary();
     

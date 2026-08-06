@@ -645,4 +645,14 @@ const char* scnedt_get_buf(void);
 int scnedt_get_buf_len(void);
 void scnedt_set_buf(const char *buf);
 
+/* OEMCBK module functions */
+void oemcbk_init(void);
+void oem_cbksta(void);
+void oem_cbktrm(void);
+BOOL oem_check_ctrl_break(void);
+BOOL oem_check_pause(void);
+void oem_simulate_ctrl_break(void);
+void oem_simulate_pause(void);
+void oem_process_keyboard_input(INPUT_RECORD *ir);
+
 #endif /* GWBASIC_H */
