@@ -28,10 +28,16 @@ extern int g_fb_height;
 extern int g_screen_mode;
 extern unsigned char *g_framebuffer;
 
+/* Local framebuffer for testing when external not available */
+static unsigned char *g_local_framebuffer = NULL;
+static int g_local_fb_width = 640;
+static int g_local_fb_height = 480;
+
 /* Forward declarations */
 static void draw_line_bresenham(int x0, int y0, int x1, int y1, int color);
 static int scale_coord(int *x, int *y);
 static void map_xyc(void);
+static unsigned char* get_framebuffer(void);
 
 /* Module initialization */
 void gengrp_init(void) {
@@ -39,6 +45,14 @@ void gengrp_init(void) {
     g_forclr = 1;
     g_bakclr = 0;
     g_atrbyt = g_forclr;
+    
+    /* Set default screen mode for testing (320x200 - 4 colors) */
+    g_screen_mode = 1;
+    
+    /* Allocate local framebuffer for testing */
+    if (!g_local_framebuffer) {
+        g_local_framebuffer = (unsigned char*)calloc(g_local_fb_width * g_local_fb_height, 1);
+    }
     
     /* Reset graphics state */
     gengrp_grprst();
@@ -117,8 +131,10 @@ void gengrp_pset(int x, int y, int color) {
     }
     
     /* Actually set the pixel */
-    if (g_framebuffer && px >= 0 && px < g_fb_width && py >= 0 && py < g_fb_height) {
-        g_framebuffer[py * MAX_WIDTH + px] = (unsigned char)g_atrbyt;
+    unsigned char *fb = get_framebuffer();
+    if (fb && px >= 0 && py >= 0) {
+        int fb_w = g_fb_width > 0 ? g_fb_width : g_local_fb_width;
+        fb[py * fb_w + px] = (unsigned char)g_atrbyt;
     }
 }
 
@@ -143,8 +159,10 @@ int gengrp_point(int x, int y) {
     map_xyc();
     
     /* Read attribute */
-    if (g_framebuffer && px >= 0 && px < g_fb_width && py >= 0 && py < g_fb_height) {
-        return (int)g_framebuffer[py * MAX_WIDTH + px];
+    unsigned char *fb = get_framebuffer();
+    if (fb && px >= 0 && py >= 0) {
+        int fb_w = g_fb_width > 0 ? g_fb_width : g_local_fb_width;
+        return (int)fb[py * fb_w + px];
     }
     
     return -1;
@@ -165,14 +183,20 @@ void gengrp_direct_pset(int x, int y, int color) {
     if (g_screen_mode == 0) return;  /* Text mode - no graphics */
     
     /* Scale into bounds */
-    if (x < 0 || x >= g_fb_width || y < 0 || y >= g_fb_height) return;
+    if (x < 0 || y < 0) return;
+    
+    int fb_w = g_fb_width > 0 ? g_fb_width : g_local_fb_width;
+    int fb_h = g_fb_height > 0 ? g_fb_height : g_local_fb_height;
+    
+    if (x >= fb_w || y >= fb_h) return;
     
     /* Set attribute */
     gengrp_set_atr(color);
     
     /* Actually set the pixel */
-    if (g_framebuffer) {
-        g_framebuffer[y * MAX_WIDTH + x] = (unsigned char)g_atrbyt;
+    unsigned char *fb = get_framebuffer();
+    if (fb) {
+        fb[y * fb_w + x] = (unsigned char)g_atrbyt;
     }
 }
 
@@ -181,9 +205,32 @@ int gengrp_get_atr(void) {
     return g_atrbyt;
 }
 
+/* Accessor functions for testing */
+int gengrp_get_gxpos(void) { return g_gxpos; }
+int gengrp_get_gypos(void) { return g_gypos; }
+int gengrp_get_grpacx(void) { return g_grpacx; }
+int gengrp_get_grpacy(void) { return g_grpacy; }
+int gengrp_get_screen_mode(void) { return g_screen_mode; }
+int gengrp_get_fb_width(void) { return g_fb_width > 0 ? g_fb_width : g_local_fb_width; }
+int gengrp_get_fb_height(void) { return g_fb_height > 0 ? g_fb_height : g_local_fb_height; }
+void gengrp_set_screen_mode(int mode) { g_screen_mode = mode; }
+void gengrp_set_grpacx(int x) { g_grpacx = x; }
+void gengrp_set_grpacy(int y) { g_grpacy = y; }
+void gengrp_set_gxpos(int x) { g_gxpos = x; }
+void gengrp_set_gypos(int y) { g_gypos = y; }
+/* Get framebuffer (external or local) */
+static unsigned char* get_framebuffer(void) {
+    if (g_framebuffer) return g_framebuffer;
+    if (g_local_framebuffer) return g_local_framebuffer;
+    return NULL;
+}
+
 /* Scale coordinate into screen bounds */
 static int scale_coord(int *x, int *y) {
-    if (*x < 0 || *x >= g_fb_width || *y < 0 || *y >= g_fb_height) {
+    int fb_w = g_fb_width > 0 ? g_fb_width : g_local_fb_width;
+    int fb_h = g_fb_height > 0 ? g_fb_height : g_local_fb_height;
+    
+    if (*x < 0 || *x >= fb_w || *y < 0 || *y >= fb_h) {
         return -1;  /* Out of bounds */
     }
     return 0;
@@ -204,8 +251,15 @@ static void draw_line_bresenham(int x0, int y0, int x1, int y1, int color) {
     int err = dx - dy;
     
     while (true) {
-        if (x0 >= 0 && x0 < g_fb_width && y0 >= 0 && y0 < g_fb_height) {
-            g_framebuffer[y0 * 640 + x0] = (unsigned char)color;
+        if (x0 >= 0 && y0 >= 0) {
+            int fb_w = g_fb_width > 0 ? g_fb_width : g_local_fb_width;
+            int fb_h = g_fb_height > 0 ? g_fb_height : g_local_fb_height;
+            if (x0 < fb_w && y0 < fb_h) {
+                unsigned char *fb = get_framebuffer();
+                if (fb) {
+                    fb[y0 * fb_w + x0] = (unsigned char)color;
+                }
+            }
         }
         
         if (x0 == x1 && y0 == y1) break;

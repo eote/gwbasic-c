@@ -655,4 +655,31 @@ void oem_simulate_ctrl_break(void);
 void oem_simulate_pause(void);
 void oem_process_keyboard_input(INPUT_RECORD *ir);
 
+/* GENGRP module functions */
+void gengrp_init(void);
+void gengrp_grpini(void);
+void gengrp_grprst(void);
+void gengrp_scan_coord(int *x, int *y, bool relative);
+void gengrp_pset(int x, int y, int color);
+void gengrp_preset(int x, int y);
+int gengrp_point(int x, int y);
+void gengrp_set_atr(int color);
+void gengrp_direct_pset(int x, int y, int color);
+int gengrp_get_atr(void);
+void gengrp_line(const char *params);
+
+/* GENGRP accessor functions for testing */
+int gengrp_get_gxpos(void);
+int gengrp_get_gypos(void);
+int gengrp_get_grpacx(void);
+int gengrp_get_grpacy(void);
+int gengrp_get_screen_mode(void);
+int gengrp_get_fb_width(void);
+int gengrp_get_fb_height(void);
+void gengrp_set_screen_mode(int mode);
+void gengrp_set_grpacx(int x);
+void gengrp_set_grpacy(int y);
+void gengrp_set_gxpos(int x);
+void gengrp_set_gypos(int y);
+
 #endif /* GWBASIC_H */

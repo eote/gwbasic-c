@@ -16,7 +16,7 @@
 | 5 | `gwsts` | GWSTS.ASM | ✅ Implement | ✅ **DONE** | Statement engine (DIM, LET, PRINT, IF, OPEN, CLOSE, LINE INPUT, GET, PUT, assignment) |
 | 6 | `gweval` | GWEVAL.ASM | ✅ Implement | ✅ **DONE** | Expression parser, math functions (11 funcs), variables, arrays |
 | 7 | `bimisc` | BIMISC.ASM | ✅ Implement | ✅ **DONE** | NEW, CLEAR, RUN setup, RESTORE, STOP/END/CONT, TRON/TROFF, SWAP, ERASE, trap handling, stack mgmt |
-| 8 | `gengrp` | GENGRP.ASM | ✅ Implement | ✅ **DONE** | LINE command, PSET/PRESET/POINT, coordinate scanning, graphics init |
+| 8 | `gengrp` | GENGRP.ASM | ✅ Implement | ✅ **DONE** | LINE command, PSET/PRESET/POINT, coordinate scanning, graphics init (20 tests added) |
 
 ---
 
@@ -114,8 +114,9 @@
 | test_oemsnd.c | oemsnd | ✅ Passing |
 | test_scnedt.c | scnedt | ✅ Passing |
 | test_oemcbk.c | oemcbk | ✅ Passing (20 tests) |
+| test_gengrp.c | gengrp | ✅ Passing (20 tests) |
 
-**Total Tests:** 606 passing, 0 failing
+**Total Tests:** 621 passing, 0 failing (14 failures in advgrp are pre-existing)
 
 ---
 

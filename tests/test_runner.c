@@ -404,6 +404,39 @@ void test_oemcbk_without_init(void);
 void test_oemcbk_process_without_cbksta(void);
 void test_oemcbk_right_ctrl_shift(void);
 
+/* GENGRP test functions */
+void test_gengrp_init(void);
+void test_gengrp_grpini(void);
+void test_gengrp_grprst(void);
+void test_gengrp_scan_coord_absolute(void);
+void test_gengrp_scan_coord_relative(void);
+void test_gengrp_pset(void);
+void test_gengrp_preset(void);
+void test_gengrp_point(void);
+void test_gengrp_point_oob(void);
+void test_gengrp_set_atr(void);
+void test_gengrp_set_atr_mode1(void);
+void test_gengrp_set_atr_mode2(void);
+void test_gengrp_get_atr(void);
+void test_gengrp_direct_pset(void);
+void test_gengrp_line_simple(void);
+void test_gengrp_line_with_first(void);
+void test_gengrp_line_with_color(void);
+void test_gengrp_line_box(void);
+void test_gengrp_line_box_fill(void);
+void test_gengrp_line_empty(void);
+void test_gengrp_line_null(void);
+void test_gengrp_line_text_mode(void);
+void test_gengrp_pset_text_mode(void);
+void test_gengrp_point_text_mode(void);
+void test_gengrp_multiple_ops(void);
+void test_gengrp_grprst_resets(void);
+void test_gengrp_line_various_coords(void);
+void test_gengrp_scan_coord_multiple(void);
+void test_gengrp_set_atr_negative(void);
+void test_gengrp_boundaries(void);
+void test_gengrp_line_negative(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -762,6 +795,39 @@ int main(void) {
                                 failed += run_test("oemcbk_without_init", test_oemcbk_without_init);
                                 failed += run_test("oemcbk_process_without_cbksta", test_oemcbk_process_without_cbksta);
                                 failed += run_test("oemcbk_right_ctrl_shift", test_oemcbk_right_ctrl_shift);
+
+                                /* GENGRP tests */
+                                failed += run_test("gengrp_init", test_gengrp_init);
+                                failed += run_test("gengrp_grpini", test_gengrp_grpini);
+                                failed += run_test("gengrp_grprst", test_gengrp_grprst);
+                                failed += run_test("gengrp_scan_coord_absolute", test_gengrp_scan_coord_absolute);
+                                failed += run_test("gengrp_scan_coord_relative", test_gengrp_scan_coord_relative);
+                                failed += run_test("gengrp_pset", test_gengrp_pset);
+                                failed += run_test("gengrp_preset", test_gengrp_preset);
+                                failed += run_test("gengrp_point", test_gengrp_point);
+                                failed += run_test("gengrp_point_oob", test_gengrp_point_oob);
+                                failed += run_test("gengrp_set_atr", test_gengrp_set_atr);
+                                failed += run_test("gengrp_set_atr_mode1", test_gengrp_set_atr_mode1);
+                                failed += run_test("gengrp_set_atr_mode2", test_gengrp_set_atr_mode2);
+                                failed += run_test("gengrp_get_atr", test_gengrp_get_atr);
+                                failed += run_test("gengrp_direct_pset", test_gengrp_direct_pset);
+                                failed += run_test("gengrp_line_simple", test_gengrp_line_simple);
+                                failed += run_test("gengrp_line_with_first", test_gengrp_line_with_first);
+                                failed += run_test("gengrp_line_with_color", test_gengrp_line_with_color);
+                                failed += run_test("gengrp_line_box", test_gengrp_line_box);
+                                failed += run_test("gengrp_line_box_fill", test_gengrp_line_box_fill);
+                                failed += run_test("gengrp_line_empty", test_gengrp_line_empty);
+                                failed += run_test("gengrp_line_null", test_gengrp_line_null);
+                                failed += run_test("gengrp_line_text_mode", test_gengrp_line_text_mode);
+                                failed += run_test("gengrp_pset_text_mode", test_gengrp_pset_text_mode);
+                                failed += run_test("gengrp_point_text_mode", test_gengrp_point_text_mode);
+                                failed += run_test("gengrp_multiple_ops", test_gengrp_multiple_ops);
+                                failed += run_test("gengrp_grprst_resets", test_gengrp_grprst_resets);
+                                failed += run_test("gengrp_line_various_coords", test_gengrp_line_various_coords);
+                                failed += run_test("gengrp_scan_coord_multiple", test_gengrp_scan_coord_multiple);
+                                failed += run_test("gengrp_set_atr_negative", test_gengrp_set_atr_negative);
+                                failed += run_test("gengrp_boundaries", test_gengrp_boundaries);
+                                failed += run_test("gengrp_line_negative", test_gengrp_line_negative);
 
                                 print_test_summary();
     
