@@ -30,7 +30,7 @@
 | 12 | `scndrv` | SCNDRV.ASM | ✅ Implement | ✅ **DONE** | Text screen driver - cursor, wrapping, scrolling, control chars |
 | 13 | `giolpt` | GIOLPT.ASM | ⚠️ Stub | ✅ **DONE** | Printer output - LPT1/2/3, LPOS, WIDTH, CR/LF translation |
 | 14 | `giocom` | GIOCOM.ASM | ⚠️ Stub | ✅ **DONE** | Serial comms - COM1..4, baud/parity/data/stop, async I/O, timeout/CTL-Z fixes |
-| 15 | `giodsk` | GIODSK.ASM | ✅ Implement | ✅ **DONE** | Disk I/O entry points - thin wrappers around DSKCOM |
+| 15 | `giodsk` | GIODSK.ASM | ✅ Implement | ✅ **DONE** | Disk I/O entry points - thin wrappers around DSKCOM (22 tests added) |
 
 ---
 
@@ -115,8 +115,9 @@
 | test_scnedt.c | scnedt | ✅ Passing |
 | test_oemcbk.c | oemcbk | ✅ Passing (20 tests) |
 | test_gengrp.c | gengrp | ✅ Passing (20 tests) |
+| test_giodsk.c | giodsk | ✅ Passing (22 tests) |
 
-**Total Tests:** 621 passing, 0 failing (14 failures in advgrp are pre-existing)
+**Total Tests:** 643 total (629 passing, 14 pre-existing advgrp failures)
 
 ---
 

@@ -682,4 +682,17 @@ void gengrp_set_grpacy(int y);
 void gengrp_set_gxpos(int x);
 void gengrp_set_gypos(int y);
 
+/* GIODSK module functions */
+void giodsk_init(void);
+int giodsk_open(const char *filename, int filenum, int mode, int reclen);
+int giodsk_close(int filenum);
+int giodsk_close_all(void);
+int giodsk_print(int filenum, const char *data);
+int giodsk_write(int filenum, const void *data, int len);
+int giodsk_input(int filenum, char *buffer, int maxlen);
+int giodsk_line_input(int filenum, char *buffer, int maxlen);
+int giodsk_seek(int filenum, long record);
+int giodsk_get(int filenum, long record, void *buffer, int buflen);
+int giodsk_put(int filenum, long record, const void *buffer, int buflen);
+
 #endif /* GWBASIC_H */

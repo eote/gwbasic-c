@@ -437,6 +437,32 @@ void test_gengrp_set_atr_negative(void);
 void test_gengrp_boundaries(void);
 void test_gengrp_line_negative(void);
 
+/* GIODSK test functions */
+void test_giodsk_init(void);
+void test_giodsk_open_sqi(void);
+void test_giodsk_open_sqo(void);
+void test_giodsk_open_rnd(void);
+void test_giodsk_open_app(void);
+void test_giodsk_open_invalid_filenum(void);
+void test_giodsk_close(void);
+void test_giodsk_close_all(void);
+void test_giodsk_print(void);
+void test_giodsk_write(void);
+void test_giodsk_input(void);
+void test_giodsk_line_input(void);
+void test_giodsk_seek(void);
+void test_giodsk_get(void);
+void test_giodsk_put(void);
+void test_giodsk_multiple_files(void);
+void test_giodsk_open_close_cycle(void);
+void test_giodsk_binary_mode(void);
+void test_giodsk_empty_file(void);
+void test_giodsk_invalid_closed(void);
+void test_giodsk_write_read(void);
+void test_giodsk_append(void);
+void test_giodsk_record_size(void);
+void test_giodsk_default_record_size(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -828,6 +854,32 @@ int main(void) {
                                 failed += run_test("gengrp_set_atr_negative", test_gengrp_set_atr_negative);
                                 failed += run_test("gengrp_boundaries", test_gengrp_boundaries);
                                 failed += run_test("gengrp_line_negative", test_gengrp_line_negative);
+
+                                /* GIODSK tests */
+                                failed += run_test("giodsk_init", test_giodsk_init);
+                                failed += run_test("giodsk_open_sqi", test_giodsk_open_sqi);
+                                failed += run_test("giodsk_open_sqo", test_giodsk_open_sqo);
+                                failed += run_test("giodsk_open_rnd", test_giodsk_open_rnd);
+                                failed += run_test("giodsk_open_app", test_giodsk_open_app);
+                                failed += run_test("giodsk_open_invalid_filenum", test_giodsk_open_invalid_filenum);
+                                failed += run_test("giodsk_close", test_giodsk_close);
+                                failed += run_test("giodsk_close_all", test_giodsk_close_all);
+                                failed += run_test("giodsk_print", test_giodsk_print);
+                                failed += run_test("giodsk_write", test_giodsk_write);
+                                failed += run_test("giodsk_input", test_giodsk_input);
+                                failed += run_test("giodsk_line_input", test_giodsk_line_input);
+                                failed += run_test("giodsk_seek", test_giodsk_seek);
+                                failed += run_test("giodsk_get", test_giodsk_get);
+                                failed += run_test("giodsk_put", test_giodsk_put);
+                                failed += run_test("giodsk_multiple_files", test_giodsk_multiple_files);
+                                failed += run_test("giodsk_open_close_cycle", test_giodsk_open_close_cycle);
+                                failed += run_test("giodsk_binary_mode", test_giodsk_binary_mode);
+                                failed += run_test("giodsk_empty_file", test_giodsk_empty_file);
+                                failed += run_test("giodsk_invalid_closed", test_giodsk_invalid_closed);
+                                failed += run_test("giodsk_write_read", test_giodsk_write_read);
+                                failed += run_test("giodsk_append", test_giodsk_append);
+                                failed += run_test("giodsk_record_size", test_giodsk_record_size);
+                                failed += run_test("giodsk_default_record_size", test_giodsk_default_record_size);
 
                                 print_test_summary();
     

@@ -72,7 +72,8 @@ TEST_SRCS = \
 	../tests/test_oemsnd.c \
 	../tests/test_scnedt.c \
 	../tests/test_oemcbk.c \
-	../tests/test_gengrp.c
+	../tests/test_gengrp.c \
+	../tests/test_giodsk.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o
