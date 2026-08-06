@@ -695,4 +695,15 @@ int giodsk_seek(int filenum, long record);
 int giodsk_get(int filenum, long record, void *buffer, int buflen);
 int giodsk_put(int filenum, long record, const void *buffer, int buflen);
 
+/* GIOLPT module functions */
+void giolpt_init(void);
+void giolpt_open(int device_id, int mode);
+void giolpt_close(int device_id);
+void giolpt_swd(int device_id, int width);
+int giolpt_gwd(int device_id);
+void giolpt_sot(int device_id, int ch);
+int giolpt_gps(int device_id);
+int giolpt_gwd(int device_id);
+int giolpt_lpos(int device_id);
+
 #endif /* GWBASIC_H */

@@ -463,6 +463,34 @@ void test_giodsk_append(void);
 void test_giodsk_record_size(void);
 void test_giodsk_default_record_size(void);
 
+/* GIOLPT test functions */
+void test_giolpt_init(void);
+void test_giolpt_open_lpt1(void);
+void test_giolpt_open_lpt2(void);
+void test_giolpt_open_lpt3(void);
+void test_giolpt_open_invalid(void);
+void test_giolpt_close(void);
+void test_giolpt_swd(void);
+void test_giolpt_swd_invalid(void);
+void test_giolpt_gwd(void);
+void test_giolpt_sot(void);
+void test_giolpt_sot_tab(void);
+void test_giolpt_sot_cr(void);
+void test_giolpt_sot_lf(void);
+void test_giolpt_sot_crlf(void);
+void test_giolpt_gps(void);
+void test_giolpt_gwd2(void);
+void test_giolpt_lpos(void);
+void test_giolpt_swd_gwd(void);
+void test_giolpt_sot_multiple(void);
+void test_giolpt_sot_overflow(void);
+void test_giolpt_reopen(void);
+void test_giolpt_invalid_device(void);
+void test_giolpt_multiple_devices(void);
+void test_giolpt_lpos_after_output(void);
+void test_giolpt_sot_cr_resets_pos(void);
+void test_giolpt_gwd_after_close(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -856,32 +884,60 @@ int main(void) {
                                 failed += run_test("gengrp_line_negative", test_gengrp_line_negative);
 
                                 /* GIODSK tests */
-                                failed += run_test("giodsk_init", test_giodsk_init);
-                                failed += run_test("giodsk_open_sqi", test_giodsk_open_sqi);
-                                failed += run_test("giodsk_open_sqo", test_giodsk_open_sqo);
-                                failed += run_test("giodsk_open_rnd", test_giodsk_open_rnd);
-                                failed += run_test("giodsk_open_app", test_giodsk_open_app);
-                                failed += run_test("giodsk_open_invalid_filenum", test_giodsk_open_invalid_filenum);
-                                failed += run_test("giodsk_close", test_giodsk_close);
-                                failed += run_test("giodsk_close_all", test_giodsk_close_all);
-                                failed += run_test("giodsk_print", test_giodsk_print);
-                                failed += run_test("giodsk_write", test_giodsk_write);
-                                failed += run_test("giodsk_input", test_giodsk_input);
-                                failed += run_test("giodsk_line_input", test_giodsk_line_input);
-                                failed += run_test("giodsk_seek", test_giodsk_seek);
-                                failed += run_test("giodsk_get", test_giodsk_get);
-                                failed += run_test("giodsk_put", test_giodsk_put);
-                                failed += run_test("giodsk_multiple_files", test_giodsk_multiple_files);
-                                failed += run_test("giodsk_open_close_cycle", test_giodsk_open_close_cycle);
-                                failed += run_test("giodsk_binary_mode", test_giodsk_binary_mode);
-                                failed += run_test("giodsk_empty_file", test_giodsk_empty_file);
-                                failed += run_test("giodsk_invalid_closed", test_giodsk_invalid_closed);
-                                failed += run_test("giodsk_write_read", test_giodsk_write_read);
-                                failed += run_test("giodsk_append", test_giodsk_append);
-                                failed += run_test("giodsk_record_size", test_giodsk_record_size);
-                                failed += run_test("giodsk_default_record_size", test_giodsk_default_record_size);
+                                                                failed += run_test("giodsk_init", test_giodsk_init);
+                                                                failed += run_test("giodsk_open_sqi", test_giodsk_open_sqi);
+                                                                failed += run_test("giodsk_open_sqo", test_giodsk_open_sqo);
+                                                                failed += run_test("giodsk_open_rnd", test_giodsk_open_rnd);
+                                                                failed += run_test("giodsk_open_app", test_giodsk_open_app);
+                                                                failed += run_test("giodsk_open_invalid_filenum", test_giodsk_open_invalid_filenum);
+                                                                failed += run_test("giodsk_close", test_giodsk_close);
+                                                                failed += run_test("giodsk_close_all", test_giodsk_close_all);
+                                                                failed += run_test("giodsk_print", test_giodsk_print);
+                                                                failed += run_test("giodsk_write", test_giodsk_write);
+                                                                failed += run_test("giodsk_input", test_giodsk_input);
+                                                                failed += run_test("giodsk_line_input", test_giodsk_line_input);
+                                                                failed += run_test("giodsk_seek", test_giodsk_seek);
+                                                                failed += run_test("giodsk_get", test_giodsk_get);
+                                                                failed += run_test("giodsk_put", test_giodsk_put);
+                                                                failed += run_test("giodsk_multiple_files", test_giodsk_multiple_files);
+                                                                failed += run_test("giodsk_open_close_cycle", test_giodsk_open_close_cycle);
+                                                                failed += run_test("giodsk_binary_mode", test_giodsk_binary_mode);
+                                                                failed += run_test("giodsk_empty_file", test_giodsk_empty_file);
+                                                                failed += run_test("giodsk_invalid_closed", test_giodsk_invalid_closed);
+                                                                failed += run_test("giodsk_write_read", test_giodsk_write_read);
+                                                                failed += run_test("giodsk_append", test_giodsk_append);
+                                                                failed += run_test("giodsk_record_size", test_giodsk_record_size);
+                                                                failed += run_test("giodsk_default_record_size", test_giodsk_default_record_size);
 
-                                print_test_summary();
+                                                                /* GIOLPT tests */
+                                                                failed += run_test("giolpt_init", test_giolpt_init);
+                                                                failed += run_test("giolpt_open_lpt1", test_giolpt_open_lpt1);
+                                                                failed += run_test("giolpt_open_lpt2", test_giolpt_open_lpt2);
+                                                                failed += run_test("giolpt_open_lpt3", test_giolpt_open_lpt3);
+                                                                failed += run_test("giolpt_open_invalid", test_giolpt_open_invalid);
+                                                                failed += run_test("giolpt_close", test_giolpt_close);
+                                                                failed += run_test("giolpt_swd", test_giolpt_swd);
+                                                                failed += run_test("giolpt_swd_invalid", test_giolpt_swd_invalid);
+                                                                failed += run_test("giolpt_gwd", test_giolpt_gwd);
+                                                                failed += run_test("giolpt_sot", test_giolpt_sot);
+                                                                failed += run_test("giolpt_sot_tab", test_giolpt_sot_tab);
+                                                                failed += run_test("giolpt_sot_cr", test_giolpt_sot_cr);
+                                                                failed += run_test("giolpt_sot_lf", test_giolpt_sot_lf);
+                                                                failed += run_test("giolpt_sot_crlf", test_giolpt_sot_crlf);
+                                                                failed += run_test("giolpt_gps", test_giolpt_gps);
+                                                                failed += run_test("giolpt_gwd2", test_giolpt_gwd2);
+                                                                failed += run_test("giolpt_lpos", test_giolpt_lpos);
+                                                                failed += run_test("giolpt_swd_gwd", test_giolpt_swd_gwd);
+                                                                failed += run_test("giolpt_sot_multiple", test_giolpt_sot_multiple);
+                                                                failed += run_test("giolpt_sot_overflow", test_giolpt_sot_overflow);
+                                                                failed += run_test("giolpt_reopen", test_giolpt_reopen);
+                                                                failed += run_test("giolpt_invalid_device", test_giolpt_invalid_device);
+                                                                failed += run_test("giolpt_multiple_devices", test_giolpt_multiple_devices);
+                                                                failed += run_test("giolpt_lpos_after_output", test_giolpt_lpos_after_output);
+                                                                failed += run_test("giolpt_sot_cr_resets_pos", test_giolpt_sot_cr_resets_pos);
+                                                                failed += run_test("giolpt_gwd_after_close", test_giolpt_gwd_after_close);
+
+                                                                print_test_summary();
     
     return failed ? 1 : 0;
 }

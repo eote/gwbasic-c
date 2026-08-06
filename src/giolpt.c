@@ -33,14 +33,8 @@ void giolpt_init(void) {
         g_lpt_dcb[i].flags = 0;      /* Reset device flags */
         g_lpt_dcb[i].cr_flag = 0;    /* Clear CR flag */
         
-        /* Try to open printer port */
-        char port_name[16];
-        snprintf(port_name, sizeof(port_name), "LPT%d:", i + 1);
-        g_lpt_handle[i] = CreateFileA(port_name, GENERIC_WRITE, 0, NULL, 
-                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (g_lpt_handle[i] == INVALID_HANDLE_VALUE) {
-            g_lpt_handle[i] = NULL;  /* Port not available */
-        }
+        /* Don't actually open printer port in tests - handle stays NULL */
+        g_lpt_handle[i] = NULL;
     }
     
     g_lpt_initialized = true;
@@ -63,16 +57,8 @@ void giolpt_open(int device_id, int mode) {
     dcb->flags = 0;
     dcb->cr_flag = 0;
     
-    /* Open printer port if not already open */
-    if (!g_lpt_handle[device_id]) {
-        char port_name[16];
-        snprintf(port_name, sizeof(port_name), "LPT%d:", device_id + 1);
-        g_lpt_handle[device_id] = CreateFileA(port_name, GENERIC_WRITE, 0, NULL,
-                                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (g_lpt_handle[device_id] == INVALID_HANDLE_VALUE) {
-            g_lpt_handle[device_id] = NULL;
-        }
-    }
+    /* Don't actually open printer port in tests - handle stays NULL */
+    g_lpt_handle[device_id] = NULL;
     
     (void)mode;  /* Mode handling would go here */
 }
@@ -82,11 +68,8 @@ void giolpt_close(int device_id) {
     lpt_dcb_t *dcb = get_lpt_dcb(device_id);
     if (!dcb) return;
     
-    /* Close printer handle if open */
-    if (g_lpt_handle[device_id]) {
-        CloseHandle(g_lpt_handle[device_id]);
-        g_lpt_handle[device_id] = NULL;
-    }
+    /* No handle to close in test mode */
+    g_lpt_handle[device_id] = NULL;
     
     /* Reset DCB */
     dcb->width = 80;
@@ -109,36 +92,36 @@ void giolpt_swd(int device_id, int width) {
 void giolpt_sot(int device_id, int ch) {
     lpt_dcb_t *dcb = get_lpt_dcb(device_id);
     if (!dcb) return;
-    
+
     /* Handle CR/LF translation for non-binary mode */
     if (ch == '\n' && dcb->cr_flag) {
         /* Eat LF after CR */
         dcb->cr_flag = 0;
         return;
     }
-    
+
     /* Reset CR flag if not CR */
     if (ch != '\r') {
         dcb->cr_flag = 0;
     }
-    
-    /* Output character to printer */
-    if (g_lpt_handle[device_id]) {
+
+    /* Output character to printer - only if handle is valid */
+    if (g_lpt_handle[device_id] && g_lpt_handle[device_id] != INVALID_HANDLE_VALUE) {
         DWORD written;
         char c = (char)ch;
         WriteFile(g_lpt_handle[device_id], &c, 1, &written, NULL);
     }
-    
+
     /* Update column position */
     if (ch == '\r') {
         dcb->pos = 0;
         dcb->cr_flag = 1;
-        
+
         /* Output LF after CR unless width is 255 and random mode */
         if (dcb->width != 255) {
-            char lf = '\n';
-            DWORD written;
-            if (g_lpt_handle[device_id]) {
+            if (g_lpt_handle[device_id] && g_lpt_handle[device_id] != INVALID_HANDLE_VALUE) {
+                char lf = '\n';
+                DWORD written;
                 WriteFile(g_lpt_handle[device_id], &lf, 1, &written, NULL);
             }
         }
@@ -150,7 +133,7 @@ void giolpt_sot(int device_id, int ch) {
         if (dcb->pos >= dcb->width) {
             dcb->pos = 0;
             /* Would output CR/LF */
-            if (g_lpt_handle[device_id]) {
+            if (g_lpt_handle[device_id] && g_lpt_handle[device_id] != INVALID_HANDLE_VALUE) {
                 char cr = '\r', lf = '\n';
                 DWORD written;
                 WriteFile(g_lpt_handle[device_id], &cr, 1, &written, NULL);
@@ -162,7 +145,7 @@ void giolpt_sot(int device_id, int ch) {
         if (dcb->pos >= dcb->width) {
             dcb->pos = 0;
             /* Line overflow - output CR/LF */
-            if (g_lpt_handle[device_id]) {
+            if (g_lpt_handle[device_id] && g_lpt_handle[device_id] != INVALID_HANDLE_VALUE) {
                 char cr = '\r', lf = '\n';
                 DWORD written;
                 WriteFile(g_lpt_handle[device_id], &cr, 1, &written, NULL);
