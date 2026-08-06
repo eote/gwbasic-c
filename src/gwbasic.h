@@ -604,4 +604,13 @@ int ibmres_list_extended(WORD token, char *buffer, int buflen);
 extern int ibmres_is_extended_token(BYTE token);
 extern int ibmres_get_token_length(BYTE first_byte);
 
+/* OEMEV module functions */
+void oemev_init(void);
+void oemev_evsta(void);
+void oemev_evtrm(void);
+BOOL oemev_pollev(void);
+int oemev_rdpen(int func, int *result);
+int oemev_rdtrig(int button, int mode, int *result);
+int oemev_rdstik(int coord, int *result);
+
 #endif /* GWBASIC_H */

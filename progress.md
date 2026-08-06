@@ -109,8 +109,9 @@
 | test_oem.c | oem | ✅ Passing |
 | test_biboot.c | biboot | ✅ Passing |
 | test_ibmres.c | ibmres | ✅ Passing |
+| test_oemev.c | oemev | ✅ Passing |
 
-**Total Tests:** 528 passing, 0 failing
+**Total Tests:** 577 passing, 0 failing
 
 ---
 

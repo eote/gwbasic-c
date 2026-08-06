@@ -333,6 +333,21 @@ void test_ibmres_list_token(void);
 void test_ibmres_list_extended(void);
 void test_ibmres_term(void);
 
+/* OEMEV test functions */
+void test_oemev_init(void);
+void test_oemev_evsta_evtrm(void);
+void test_oemev_pollev(void);
+void test_oemev_rdpen_on(void);
+void test_oemev_rdpen_off(void);
+void test_oemev_rdpen_status(void);
+void test_oemev_rdpen_invalid(void);
+void test_oemev_rdtrig_current(void);
+void test_oemev_rdtrig_latched(void);
+void test_oemev_rdtrig_invalid(void);
+void test_oemev_rdstik(void);
+void test_oemev_rdstik_invalid(void);
+void test_oemev_evtrm_cleanup(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -620,6 +635,21 @@ int main(void) {
                                 failed += run_test("ibmres_list_token", test_ibmres_list_token);
                                 failed += run_test("ibmres_list_extended", test_ibmres_list_extended);
                                 failed += run_test("ibmres_term", test_ibmres_term);
+
+                                /* OEMEV tests */
+                                failed += run_test("oemev_init", test_oemev_init);
+                                failed += run_test("oemev_evsta_evtrm", test_oemev_evsta_evtrm);
+                                failed += run_test("oemev_pollev", test_oemev_pollev);
+                                failed += run_test("oemev_rdpen_on", test_oemev_rdpen_on);
+                                failed += run_test("oemev_rdpen_off", test_oemev_rdpen_off);
+                                failed += run_test("oemev_rdpen_status", test_oemev_rdpen_status);
+                                failed += run_test("oemev_rdpen_invalid", test_oemev_rdpen_invalid);
+                                failed += run_test("oemev_rdtrig_current", test_oemev_rdtrig_current);
+                                failed += run_test("oemev_rdtrig_latched", test_oemev_rdtrig_latched);
+                                failed += run_test("oemev_rdtrig_invalid", test_oemev_rdtrig_invalid);
+                                failed += run_test("oemev_rdstik", test_oemev_rdstik);
+                                failed += run_test("oemev_rdstik_invalid", test_oemev_rdstik_invalid);
+                                failed += run_test("oemev_evtrm_cleanup", test_oemev_evtrm_cleanup);
 
                                 print_test_summary();
     
