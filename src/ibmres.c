@@ -226,18 +226,13 @@ static const struct keyword_entry g_core_keywords[] = {
 /* Token lookup tables */
 static const char *g_token_names[256] = {0};
 
-/* Forward declarations */
-static void ibmres_build_tables(void);
-static int ibmres_is_extended_token(BYTE token);
-static int ibmres_get_token_length(BYTE first_byte);
-
 /* Module initialization */
 void ibmres_init(void) {
     ibmres_build_tables();
 }
 
 /* Build token lookup tables */
-static void ibmres_build_tables(void) {
+void ibmres_build_tables(void) {
     int i;
     
     /* Initialize token name table */
@@ -258,12 +253,12 @@ static void ibmres_build_tables(void) {
 }
 
 /* Check if token is an extended (2-byte) token */
-static int ibmres_is_extended_token(BYTE token) {
+int ibmres_is_extended_token(BYTE token) {
     return (token == 0xFE || token == 0xFD);
 }
 
 /* Get token length (1 or 2 bytes) */
-static int ibmres_get_token_length(BYTE first_byte) {
+int ibmres_get_token_length(BYTE first_byte) {
     if (ibmres_is_extended_token(first_byte)) {
         return 2;
     }

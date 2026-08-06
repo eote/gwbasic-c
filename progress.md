@@ -108,8 +108,9 @@
 | test_giotbl.c | giotbl | ✅ Passing |
 | test_oem.c | oem | ✅ Passing |
 | test_biboot.c | biboot | ✅ Passing |
+| test_ibmres.c | ibmres | ✅ Passing |
 
-**Total Tests:** 449 passing, 0 failing
+**Total Tests:** 528 passing, 0 failing
 
 ---
 

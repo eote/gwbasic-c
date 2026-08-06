@@ -313,6 +313,26 @@ void test_oem_setatr(void);
 void test_biboot_init(void);
 void test_biboot_lstvar(void);
 
+/* IBMRES test functions */
+void test_ibmres_init(void);
+void test_ibmres_lookup_statement(void);
+void test_ibmres_lookup_function(void);
+void test_ibmres_lookup_extended_stmt(void);
+void test_ibmres_lookup_extended_func(void);
+void test_ibmres_lookup_case_insensitive(void);
+void test_ibmres_lookup_not_found(void);
+void test_ibmres_get_token(void);
+void test_ibmres_get_token_name(void);
+void test_ibmres_is_reserved_word(void);
+void test_ibmres_get_keyword_type(void);
+void test_ibmres_is_extended_token(void);
+void test_ibmres_get_token_length(void);
+void test_ibmres_crunch_extended(void);
+void test_ibmres_eval_extended(void);
+void test_ibmres_list_token(void);
+void test_ibmres_list_extended(void);
+void test_ibmres_term(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -580,6 +600,26 @@ int main(void) {
                                 /* BIBOOT tests */
                                 failed += run_test("biboot_init", test_biboot_init);
                                 failed += run_test("biboot_lstvar", test_biboot_lstvar);
+
+                                /* IBMRES tests */
+                                failed += run_test("ibmres_init", test_ibmres_init);
+                                failed += run_test("ibmres_lookup_statement", test_ibmres_lookup_statement);
+                                failed += run_test("ibmres_lookup_function", test_ibmres_lookup_function);
+                                failed += run_test("ibmres_lookup_extended_stmt", test_ibmres_lookup_extended_stmt);
+                                failed += run_test("ibmres_lookup_extended_func", test_ibmres_lookup_extended_func);
+                                failed += run_test("ibmres_lookup_case_insensitive", test_ibmres_lookup_case_insensitive);
+                                failed += run_test("ibmres_lookup_not_found", test_ibmres_lookup_not_found);
+                                failed += run_test("ibmres_get_token", test_ibmres_get_token);
+                                failed += run_test("ibmres_get_token_name", test_ibmres_get_token_name);
+                                failed += run_test("ibmres_is_reserved_word", test_ibmres_is_reserved_word);
+                                failed += run_test("ibmres_get_keyword_type", test_ibmres_get_keyword_type);
+                                failed += run_test("ibmres_is_extended_token", test_ibmres_is_extended_token);
+                                failed += run_test("ibmres_get_token_length", test_ibmres_get_token_length);
+                                failed += run_test("ibmres_crunch_extended", test_ibmres_crunch_extended);
+                                failed += run_test("ibmres_eval_extended", test_ibmres_eval_extended);
+                                failed += run_test("ibmres_list_token", test_ibmres_list_token);
+                                failed += run_test("ibmres_list_extended", test_ibmres_list_extended);
+                                failed += run_test("ibmres_term", test_ibmres_term);
 
                                 print_test_summary();
     

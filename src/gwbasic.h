@@ -581,4 +581,27 @@ void oem_set_pgtact(WORD val);
 void biboot_init(void);
 void *biboot_lstvar(void);
 
+/* IBMRES module functions */
+void ibmres_init(void);
+void ibmres_term(void);
+const struct keyword_entry* ibmres_lookup_keyword(const char *name);
+WORD ibmres_get_token(const char *name);
+const char* ibmres_get_token_name(WORD token);
+int ibmres_is_reserved_word(const char *text, WORD *out_token);
+BYTE ibmres_get_keyword_type(const char *name);
+int ibmres_crunch_extended(const char **text, WORD *out_token);
+int ibmres_eval_extended(const char **text, float *result);
+const char* ibmres_list_token(WORD token);
+int ibmres_list_extended(WORD token, char *buffer, int buflen);
+
+/* Token types */
+#define TK_STMT 0x00    /* 1-byte statement token */
+#define TK_FUNC 0x80    /* 1-byte function token (high bit set) */
+#define TK_STMT_EXT 0xFE /* 2-byte extended statement token (FE xx) */
+#define TK_FUNC_EXT 0xFD /* 2-byte extended function token (FD xx) */
+
+/* IBMRES helper functions */
+extern int ibmres_is_extended_token(BYTE token);
+extern int ibmres_get_token_length(BYTE first_byte);
+
 #endif /* GWBASIC_H */
