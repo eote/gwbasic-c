@@ -706,4 +706,16 @@ int giolpt_gps(int device_id);
 int giolpt_gwd(int device_id);
 int giolpt_lpos(int device_id);
 
+/* GIOCOM module functions */
+void giocom_init(void);
+void giocom_open(int device_id, int baud, int parity, int data_bits, int stop_bits);
+void giocom_close(int device_id);
+void giocom_swd(int device_id, int width);
+int giocom_gwd(int device_id);
+void giocom_sot(int device_id, int ch);
+int giocom_loc(int device_id);
+int giocom_lof(int device_id);
+int giocom_gps(int device_id);
+int giocom_gwd(int device_id);
+
 #endif /* GWBASIC_H */

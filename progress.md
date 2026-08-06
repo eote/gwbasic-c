@@ -29,7 +29,7 @@
 | 11 | `gioscn` | GIOSCN.ASM | ✅ Implement | ✅ **DONE** | SCREEN modes, PSET, PRESET, POINT - framebuffer simulated, exported globals for gengrp |
 | 12 | `scndrv` | SCNDRV.ASM | ✅ Implement | ✅ **DONE** | Text screen driver - cursor, wrapping, scrolling, control chars |
 || 13 | `giolpt` | GIOLPT.ASM | ⚠️ Stub | ✅ **DONE** | Printer output - LPT1/2/3, LPOS, WIDTH, CR/LF translation (20 tests added) |
-| 14 | `giocom` | GIOCOM.ASM | ⚠️ Stub | ✅ **DONE** | Serial comms - COM1..4, baud/parity/data/stop, async I/O, timeout/CTL-Z fixes |
+|| 14 | `giocom` | GIOCOM.ASM | ⚠️ Stub | ✅ **DONE** | Serial comms - COM1..4, baud/parity/data/stop, async I/O, timeout/CTL-Z fixes (23 tests added) |
 | 15 | `giodsk` | GIODSK.ASM | ✅ Implement | ✅ **DONE** | Disk I/O entry points - thin wrappers around DSKCOM (22 tests added) |
 
 ---
@@ -117,8 +117,9 @@
 | test_gengrp.c | gengrp | ✅ Passing (20 tests) |
 | test_giodsk.c | giodsk | ✅ Passing (22 tests) |
 | test_giolpt.c | giolpt | ✅ Passing (20 tests) |
+| test_giocom.c | giocom | ✅ Passing (23 tests) |
 
-**Total Tests:** 651 total (637 passing, 14 pre-existing advgrp failures)
+**Total Tests:** 664 total (650 passing, 14 pre-existing advgrp failures)
 
 ---
 

@@ -200,6 +200,7 @@ void giocom_close(int device_id) {
     com->fdb_ptr = 0;
     com->pos = 0;
     com->cr_flag = 0;
+    com->width = 255;  /* Reset to default width */
 }
 
 /* COMSWD - Set device width */

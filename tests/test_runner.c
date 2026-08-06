@@ -491,6 +491,42 @@ void test_giolpt_lpos_after_output(void);
 void test_giolpt_sot_cr_resets_pos(void);
 void test_giolpt_gwd_after_close(void);
 
+/* GIOCOM test functions */
+void test_giocom_init(void);
+void test_giocom_open_com1(void);
+void test_giocom_open_com2(void);
+void test_giocom_open_com3(void);
+void test_giocom_open_com4(void);
+void test_giocom_open_invalid(void);
+void test_giocom_close(void);
+void test_giocom_swd(void);
+void test_giocom_swd_invalid(void);
+void test_giocom_gwd(void);
+void test_giocom_sot(void);
+void test_giocom_sot_tab(void);
+void test_giocom_sot_cr(void);
+void test_giocom_sot_lf(void);
+void test_giocom_sot_crlf(void);
+void test_giocom_loc(void);
+void test_giocom_lof(void);
+void test_giocom_gps(void);
+void test_giocom_gwd2(void);
+void test_giocom_swd_gwd(void);
+void test_giocom_sot_multiple(void);
+void test_giocom_sot_overflow(void);
+void test_giocom_reopen(void);
+void test_giocom_invalid_device(void);
+void test_giocom_multiple_devices(void);
+void test_giocom_default_baud(void);
+void test_giocom_stop_bits_defaults(void);
+void test_giocom_parity(void);
+void test_giocom_data_bits(void);
+void test_giocom_close_resets_pos(void);
+void test_giocom_sot_cr_resets_pos(void);
+void test_giocom_sot_lf_resets_pos(void);
+void test_giocom_gwd_after_close(void);
+void test_giocom_sin_timeout(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -936,6 +972,42 @@ int main(void) {
                                                                 failed += run_test("giolpt_lpos_after_output", test_giolpt_lpos_after_output);
                                                                 failed += run_test("giolpt_sot_cr_resets_pos", test_giolpt_sot_cr_resets_pos);
                                                                 failed += run_test("giolpt_gwd_after_close", test_giolpt_gwd_after_close);
+
+                                                                /* GIOCOM tests */
+                                                                failed += run_test("giocom_init", test_giocom_init);
+                                                                failed += run_test("giocom_open_com1", test_giocom_open_com1);
+                                                                failed += run_test("giocom_open_com2", test_giocom_open_com2);
+                                                                failed += run_test("giocom_open_com3", test_giocom_open_com3);
+                                                                failed += run_test("giocom_open_com4", test_giocom_open_com4);
+                                                                failed += run_test("giocom_open_invalid", test_giocom_open_invalid);
+                                                                failed += run_test("giocom_close", test_giocom_close);
+                                                                failed += run_test("giocom_swd", test_giocom_swd);
+                                                                failed += run_test("giocom_swd_invalid", test_giocom_swd_invalid);
+                                                                failed += run_test("giocom_gwd", test_giocom_gwd);
+                                                                failed += run_test("giocom_sot", test_giocom_sot);
+                                                                failed += run_test("giocom_sot_tab", test_giocom_sot_tab);
+                                                                failed += run_test("giocom_sot_cr", test_giocom_sot_cr);
+                                                                failed += run_test("giocom_sot_lf", test_giocom_sot_lf);
+                                                                failed += run_test("giocom_sot_crlf", test_giocom_sot_crlf);
+                                                                failed += run_test("giocom_loc", test_giocom_loc);
+                                                                failed += run_test("giocom_lof", test_giocom_lof);
+                                                                failed += run_test("giocom_gps", test_giocom_gps);
+                                                                failed += run_test("giocom_gwd2", test_giocom_gwd2);
+                                                                failed += run_test("giocom_swd_gwd", test_giocom_swd_gwd);
+                                                                failed += run_test("giocom_sot_multiple", test_giocom_sot_multiple);
+                                                                failed += run_test("giocom_sot_overflow", test_giocom_sot_overflow);
+                                                                failed += run_test("giocom_reopen", test_giocom_reopen);
+                                                                failed += run_test("giocom_invalid_device", test_giocom_invalid_device);
+                                                                failed += run_test("giocom_multiple_devices", test_giocom_multiple_devices);
+                                                                failed += run_test("giocom_default_baud", test_giocom_default_baud);
+                                                                failed += run_test("giocom_stop_bits_defaults", test_giocom_stop_bits_defaults);
+                                                                failed += run_test("giocom_parity", test_giocom_parity);
+                                                                failed += run_test("giocom_data_bits", test_giocom_data_bits);
+                                                                failed += run_test("giocom_close_resets_pos", test_giocom_close_resets_pos);
+                                                                failed += run_test("giocom_sot_cr_resets_pos", test_giocom_sot_cr_resets_pos);
+                                                                failed += run_test("giocom_sot_lf_resets_pos", test_giocom_sot_lf_resets_pos);
+                                                                failed += run_test("giocom_gwd_after_close", test_giocom_gwd_after_close);
+                                                                failed += run_test("giocom_sin_timeout", test_giocom_sin_timeout);
 
                                                                 print_test_summary();
     
