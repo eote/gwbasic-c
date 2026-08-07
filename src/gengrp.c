@@ -28,6 +28,9 @@ extern int g_fb_height;
 extern int g_screen_mode;
 extern unsigned char *g_framebuffer;
 
+/* MAX_WIDTH must match gioiscn.c - used as framebuffer stride */
+#define MAX_WIDTH 640
+
 /* Local framebuffer for testing when external not available */
 static unsigned char *g_local_framebuffer = NULL;
 static int g_local_fb_width = 640;
@@ -130,11 +133,10 @@ void gengrp_pset(int x, int y, int color) {
         gengrp_set_atr(g_forclr);
     }
     
-    /* Actually set the pixel */
+    /* Actually set the pixel - use MAX_WIDTH stride for consistency with gioiscn */
     unsigned char *fb = get_framebuffer();
     if (fb && px >= 0 && py >= 0) {
-        int fb_w = g_fb_width > 0 ? g_fb_width : g_local_fb_width;
-        fb[py * fb_w + px] = (unsigned char)g_atrbyt;
+        fb[py * MAX_WIDTH + px] = (unsigned char)g_atrbyt;
     }
 }
 
@@ -147,22 +149,17 @@ void gengrp_preset(int x, int y) {
 int gengrp_point(int x, int y) {
     if (g_screen_mode == 0) return -1;  /* Text mode */
     
-    /* Scan coordinate */
+    /* Direct coordinate - do NOT call scan_coord (which modifies graphics cursor) */
     int px = x;
     int py = y;
-    gengrp_scan_coord(&px, &py, false);
     
     /* Scale into bounds */
     if (scale_coord(&px, &py) != 0) return -1;  /* Out of bounds */
     
-    /* Map to framebuffer coordinates */
-    map_xyc();
-    
-    /* Read attribute */
+    /* Read attribute - use MAX_WIDTH stride for consistency with gioiscn */
     unsigned char *fb = get_framebuffer();
     if (fb && px >= 0 && py >= 0) {
-        int fb_w = g_fb_width > 0 ? g_fb_width : g_local_fb_width;
-        return (int)fb[py * fb_w + px];
+        return (int)fb[py * MAX_WIDTH + px];
     }
     
     return -1;
@@ -193,10 +190,10 @@ void gengrp_direct_pset(int x, int y, int color) {
     /* Set attribute */
     gengrp_set_atr(color);
     
-    /* Actually set the pixel */
+    /* Actually set the pixel - use MAX_WIDTH stride */
     unsigned char *fb = get_framebuffer();
     if (fb) {
-        fb[y * fb_w + x] = (unsigned char)g_atrbyt;
+        fb[y * MAX_WIDTH + x] = (unsigned char)g_atrbyt;
     }
 }
 
@@ -252,12 +249,11 @@ static void draw_line_bresenham(int x0, int y0, int x1, int y1, int color) {
     
     while (true) {
         if (x0 >= 0 && y0 >= 0) {
-            int fb_w = g_fb_width > 0 ? g_fb_width : g_local_fb_width;
             int fb_h = g_fb_height > 0 ? g_fb_height : g_local_fb_height;
-            if (x0 < fb_w && y0 < fb_h) {
+            if (x0 < MAX_WIDTH && y0 < fb_h) {
                 unsigned char *fb = get_framebuffer();
                 if (fb) {
-                    fb[y0 * fb_w + x0] = (unsigned char)color;
+                    fb[y0 * MAX_WIDTH + x0] = (unsigned char)color;
                 }
             }
         }
