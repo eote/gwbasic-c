@@ -525,6 +525,28 @@ void test_gwlist_special_chars(void);
 void test_gwlist_init_twice(void);
 void test_gwlist_delete_then_add_same(void);
 void test_gwlist_many_lines(void);
+/* GWSTS extended test functions */
+void test_gwsts_let_numeric_expr(void);
+void test_gwsts_let_mult(void);
+void test_gwsts_direct_assign(void);
+void test_gwsts_direct_assign_expr(void);
+void test_gwsts_print_expr(void);
+void test_gwsts_if_true(void);
+void test_gwsts_if_false(void);
+void test_gwsts_if_expr(void);
+void test_gwsts_reassign(void);
+void test_gwsts_multi_assign(void);
+void test_gwsts_let_string(void);
+void test_gwsts_negative_assign(void);
+void test_gwsts_paren_expr(void);
+void test_gwsts_division(void);
+void test_gwsts_power(void);
+void test_gwsts_nested_if(void);
+void test_gwsts_null_input(void);
+void test_gwsts_empty_input(void);
+void test_gwsts_var_in_expr(void);
+void test_gwsts_chained_ops(void);
+void test_gwsts_print_empty(void);
 void test_giocom_loc(void);
 void test_giocom_lof(void);
 void test_giocom_gps(void);
@@ -1043,6 +1065,28 @@ int main(void) {
         failed += run_test("gwlist_init_twice", test_gwlist_init_twice);
         failed += run_test("gwlist_delete_then_add_same", test_gwlist_delete_then_add_same);
         failed += run_test("gwlist_many_lines", test_gwlist_many_lines);
+/* GWSTS extended tests */
+        failed += run_test("gwsts_let_numeric_expr", test_gwsts_let_numeric_expr);
+        failed += run_test("gwsts_let_mult", test_gwsts_let_mult);
+        failed += run_test("gwsts_direct_assign", test_gwsts_direct_assign);
+        failed += run_test("gwsts_direct_assign_expr", test_gwsts_direct_assign_expr);
+        failed += run_test("gwsts_print_expr", test_gwsts_print_expr);
+        failed += run_test("gwsts_if_true", test_gwsts_if_true);
+        failed += run_test("gwsts_if_false", test_gwsts_if_false);
+        failed += run_test("gwsts_if_expr", test_gwsts_if_expr);
+        failed += run_test("gwsts_reassign", test_gwsts_reassign);
+        failed += run_test("gwsts_multi_assign", test_gwsts_multi_assign);
+        failed += run_test("gwsts_let_string", test_gwsts_let_string);
+        failed += run_test("gwsts_negative_assign", test_gwsts_negative_assign);
+        failed += run_test("gwsts_paren_expr", test_gwsts_paren_expr);
+        failed += run_test("gwsts_division", test_gwsts_division);
+        failed += run_test("gwsts_power", test_gwsts_power);
+        failed += run_test("gwsts_nested_if", test_gwsts_nested_if);
+        failed += run_test("gwsts_null_input", test_gwsts_null_input);
+        failed += run_test("gwsts_empty_input", test_gwsts_empty_input);
+        failed += run_test("gwsts_var_in_expr", test_gwsts_var_in_expr);
+        failed += run_test("gwsts_chained_ops", test_gwsts_chained_ops);
+        failed += run_test("gwsts_print_empty", test_gwsts_print_empty);
 
                                                                 print_test_summary();
     

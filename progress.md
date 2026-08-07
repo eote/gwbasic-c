@@ -119,8 +119,9 @@
 | test_giolpt.c | giolpt | ✅ Passing (20 tests) |
 | test_giocom.c | giocom | ✅ Passing (23 tests) |
 | test_gwlist.c | gwlist | ✅ Passing (26 tests) |
+| test_gwsts.c | gwsts | ✅ Passing (20 tests) |
 
-**Total Tests:** 781 total (767 passing, 14 pre-existing advgrp failures)
+**Total Tests:** 833 total (819 passing, 14 pre-existing advgrp failures)
 
 ---
 
