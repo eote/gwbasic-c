@@ -51,7 +51,6 @@ TEST_SRCS = \
 	../tests/test_gwsts_gweval.c \
 	../tests/test_giocon.c \
 	../tests/test_giokyb_gioscn.c \
-	../tests/test_gwlist_bistrs.c \
 	../tests/test_biprtu_biptrg.c \
 	../tests/test_dskcom.c \
 	../tests/test_math.c \
@@ -75,7 +74,8 @@ TEST_SRCS = \
 	../tests/test_gengrp.c \
 	../tests/test_giodsk.c \
 	../tests/test_giolpt.c \
-	../tests/test_giocom.c
+	../tests/test_giocom.c \
+	../tests/test_gwlist.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o

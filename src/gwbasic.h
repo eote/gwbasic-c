@@ -718,4 +718,12 @@ int giocom_lof(int device_id);
 int giocom_gps(int device_id);
 int giocom_gwd(int device_id);
 
+/* GWLIST module functions */
+void gwlist_init(void);
+void gwlist_add_line(int number, const char *text);
+struct program_line *gwlist_find_line(int number);
+void gwlist_delete_line(int number);
+void gwlist_list(int start, int end);
+struct program_line *gwlist_get_first_line(void);
+
 #endif /* GWBASIC_H */
