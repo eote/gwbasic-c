@@ -77,7 +77,8 @@ TEST_SRCS = \
 	../tests/test_giocom.c \
 	../tests/test_gwlist.c \
 ../tests/test_gwsts.c \
-../tests/test_bistrs.c
+../tests/test_bistrs.c \
+../tests/test_bimisc.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o
