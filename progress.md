@@ -122,8 +122,9 @@
 | test_gwsts.c | gwsts | ✅ Passing (20 tests) |
 | test_bistrs.c | bistrs | ✅ Passing (30 tests) |
 | test_bimisc.c | bimisc | ✅ Passing (30 tests) |
+| test_biptrg.c | biptrg | ✅ Passing (26 tests) |
 
-**Total Tests:** 921 total (907 passing, 14 pre-existing advgrp failures)
+**Total Tests:** 959 total (945 passing, 14 pre-existing advgrp failures)
 
 ---
 
