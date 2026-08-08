@@ -657,6 +657,21 @@ void test_giocom_sin_timeout(void);
 
 /* FIVEO test functions */
 void test_fiveo_init(void);
+void test_fiveo_init_multiple(void);
+void test_fiveo_init_clears_while_stack(void);
+void test_fiveo_while_push(void);
+void test_fiveo_while_push_multiple(void);
+void test_fiveo_while_pop(void);
+void test_fiveo_while_pop_empty(void);
+void test_fiveo_while_pop_order(void);
+void test_fiveo_while_depth(void);
+void test_fiveo_while_overflow(void);
+void test_fiveo_while_clear(void);
+void test_fiveo_find_matching_while(void);
+void test_fiveo_find_while_not_found(void);
+void test_fiveo_find_while_empty_stack(void);
+void test_fiveo_write_init(void);
+void test_fiveo_write_clears_state(void);
 
 /* SCNDRV test functions */
 void test_scndrv_init(void);
@@ -1297,6 +1312,21 @@ int main(void) {
 
     /* FIVEO tests */
     failed += run_test("fiveo_init", test_fiveo_init);
+    failed += run_test("fiveo_init_multiple", test_fiveo_init_multiple);
+    failed += run_test("fiveo_init_clears_while_stack", test_fiveo_init_clears_while_stack);
+    failed += run_test("fiveo_while_push", test_fiveo_while_push);
+    failed += run_test("fiveo_while_push_multiple", test_fiveo_while_push_multiple);
+    failed += run_test("fiveo_while_pop", test_fiveo_while_pop);
+    failed += run_test("fiveo_while_pop_empty", test_fiveo_while_pop_empty);
+    failed += run_test("fiveo_while_pop_order", test_fiveo_while_pop_order);
+    failed += run_test("fiveo_while_depth", test_fiveo_while_depth);
+    failed += run_test("fiveo_while_overflow", test_fiveo_while_overflow);
+    failed += run_test("fiveo_while_clear", test_fiveo_while_clear);
+    failed += run_test("fiveo_find_matching_while", test_fiveo_find_matching_while);
+    failed += run_test("fiveo_find_while_not_found", test_fiveo_find_while_not_found);
+    failed += run_test("fiveo_find_while_empty_stack", test_fiveo_find_while_empty_stack);
+    failed += run_test("fiveo_write_init", test_fiveo_write_init);
+    failed += run_test("fiveo_write_clears_state", test_fiveo_write_clears_state);
 
     /* SCNDRV tests */
     failed += run_test("scndrv_init", test_scndrv_init);

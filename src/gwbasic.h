@@ -95,6 +95,13 @@ struct program_line {
     struct program_line *next;
 };
 
+/* WHILE/WEND stack entry - matches FIVEO.ASM WHLSIZ=7 format */
+struct while_entry {
+    int while_text_ptr;  /* Text pointer after WHILE keyword */
+    int wend_text_ptr;   /* Text pointer after WEND keyword */
+    int while_line;       /* Line number of WHILE statement */
+};
+
 /* String heap for dynamic string storage */
 #define STRING_HEAP_SIZE  16384
 
@@ -209,6 +216,20 @@ struct program_line *gwlist_find_line(int number);
 void gwlist_delete_line(int number);
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
+
+/* FIVEO module functions - WHILE/WEND stack, WRITE, CHAIN */
+void fiveo_init(void);
+int fiveo_push_while(int while_text_ptr, int wend_text_ptr, int while_line);
+int fiveo_pop_while(struct while_entry *entry);
+int fiveo_while_depth(void);
+void fiveo_clear_while_stack(void);
+int fiveo_find_while(int wend_text_ptr);
+int fiveo_peek_while(struct while_entry *entry);
+void fiveo_write_reset(void);
+void fiveo_write_begin(int filenum);
+void fiveo_write_end(void);
+bool fiveo_write_active(void);
+int fiveo_write_file(void);
 
 /* BISTRS module functions */
 void bistrs_init(void);

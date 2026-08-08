@@ -80,7 +80,7 @@ TEST_SRCS = \
 ../tests/test_bistrs.c \
 ../tests/test_bimisc.c \
 ../tests/test_biptrg.c \
-../tests/test_fiveo.c \
+../tests/test_fiveo_ext.c \
 ../tests/test_scndrv.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
