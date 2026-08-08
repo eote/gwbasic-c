@@ -655,6 +655,37 @@ void test_giocom_sot_lf_resets_pos(void);
 void test_giocom_gwd_after_close(void);
 void test_giocom_sin_timeout(void);
 
+/* FIVEO test functions */
+void test_fiveo_init(void);
+
+/* SCNDRV test functions */
+void test_scndrv_init(void);
+void test_scndrv_init_multiple(void);
+void test_scndrv_swi_default(void);
+void test_scndrv_swi_40(void);
+void test_scndrv_swi_80(void);
+void test_scndrv_loc_basic(void);
+void test_scndrv_loc_origin(void);
+void test_scndrv_loc_clamp_low(void);
+void test_scndrv_loc_clamp_high(void);
+void test_scndrv_pos_after_init(void);
+void test_scndrv_pos_null_ptrs(void);
+void test_scndrv_clr(void);
+void test_scndrv_gwi_default(void);
+void test_scndrv_gwi_after_swi(void);
+void test_scndrv_wdo_valid(void);
+void test_scndrv_wdo_out_of_bounds(void);
+void test_scndrv_wdo_truncate(void);
+void test_scndrv_brk(void);
+void test_scndrv_ipi(void);
+void test_scndrv_mrk_input(void);
+void test_scndrv_mrk_output(void);
+void test_scndrv_rdl(void);
+void test_scndrv_out_printable(void);
+void test_scndrv_out_cr(void);
+void test_scndrv_out_bs(void);
+void test_scndrv_out_bs_at_origin(void);
+
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
@@ -1264,7 +1295,38 @@ int main(void) {
         failed += run_test("biptrg_get_null_name", test_biptrg_get_null_name);
         failed += run_test("biptrg_large_array", test_biptrg_large_array);
 
-                                                                print_test_summary();
+    /* FIVEO tests */
+    failed += run_test("fiveo_init", test_fiveo_init);
+
+    /* SCNDRV tests */
+    failed += run_test("scndrv_init", test_scndrv_init);
+    failed += run_test("scndrv_init_multiple", test_scndrv_init_multiple);
+    failed += run_test("scndrv_swi_default", test_scndrv_swi_default);
+    failed += run_test("scndrv_swi_40", test_scndrv_swi_40);
+    failed += run_test("scndrv_swi_80", test_scndrv_swi_80);
+    failed += run_test("scndrv_loc_basic", test_scndrv_loc_basic);
+    failed += run_test("scndrv_loc_origin", test_scndrv_loc_origin);
+    failed += run_test("scndrv_loc_clamp_low", test_scndrv_loc_clamp_low);
+    failed += run_test("scndrv_loc_clamp_high", test_scndrv_loc_clamp_high);
+    failed += run_test("scndrv_pos_after_init", test_scndrv_pos_after_init);
+    failed += run_test("scndrv_pos_null_ptrs", test_scndrv_pos_null_ptrs);
+    failed += run_test("scndrv_clr", test_scndrv_clr);
+    failed += run_test("scndrv_gwi_default", test_scndrv_gwi_default);
+    failed += run_test("scndrv_gwi_after_swi", test_scndrv_gwi_after_swi);
+    failed += run_test("scndrv_wdo_valid", test_scndrv_wdo_valid);
+    failed += run_test("scndrv_wdo_out_of_bounds", test_scndrv_wdo_out_of_bounds);
+    failed += run_test("scndrv_wdo_truncate", test_scndrv_wdo_truncate);
+    failed += run_test("scndrv_brk", test_scndrv_brk);
+    failed += run_test("scndrv_ipi", test_scndrv_ipi);
+    failed += run_test("scndrv_mrk_input", test_scndrv_mrk_input);
+    failed += run_test("scndrv_mrk_output", test_scndrv_mrk_output);
+    failed += run_test("scndrv_rdl", test_scndrv_rdl);
+    failed += run_test("scndrv_out_printable", test_scndrv_out_printable);
+    failed += run_test("scndrv_out_cr", test_scndrv_out_cr);
+    failed += run_test("scndrv_out_bs", test_scndrv_out_bs);
+    failed += run_test("scndrv_out_bs_at_origin", test_scndrv_out_bs_at_origin);
+
+    print_test_summary();
     
     return failed ? 1 : 0;
 }
