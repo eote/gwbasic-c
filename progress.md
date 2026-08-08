@@ -44,7 +44,7 @@
 | 19 | `biptrg` | BIPTRG.ASM | ✅ Implement | ✅ **DONE** | DIM arrays, get/set numeric & string elements |
 | 20 | `math1` | MATH1.ASM | ✅ Implement | ✅ **DONE** | SIN, COS, TAN, ATN, EXP, LOG |
 | 21 | `math2` | MATH2.ASM | ✅ Implement | ✅ **DONE** | SQR, ABS, SGN, RND, INT, FIX |
-| 22 | `fiveo` | FIVEO.ASM | ✅ Implement | ✅ **DONE** | WHILE/WEND stack (16 levels), WRITE state mgmt (24 tests) |
+| 22 | `fiveo` | FIVEO.ASM | ✅ Implement | ✅ **DONE** | WHILE/WEND stack (16 levels), WRITE state mgmt, CHAIN with COMMON var preservation (55 tests) |
 | 23 | `dskcom` | DSKCOM.ASM | ✅ Implement | ✅ **DONE** | OPEN/CLOSE/PRINT#/INPUT#/LINE INPUT#/GET/PUT/SEEK |
 
 ---
@@ -124,7 +124,7 @@
 | test_bimisc.c | bimisc | ✅ Passing (30 tests) |
 | test_biptrg.c | biptrg | ✅ Passing (26 tests) |
 
-**Total Tests:** 1008 total (1008 passing, 0 failures) ✅
+**Total Tests:** 1039 total (1039 passing, 0 failures) ✅
 
 ---
 

@@ -174,3 +174,190 @@ void test_fiveo_write_clears_state(void) {
     fiveo_write_reset();
     TEST_PASS("fiveo_write_reset safe");
 }
+
+/* ========== COMMON Variable Tests ========== */
+
+void test_fiveo_common_mark_basic(void) {
+    fiveo_init();
+    fiveo_common_mark("X");
+    TEST_ASSERT(fiveo_common_is_marked("X"), "X is marked");
+    TEST_ASSERT(!fiveo_common_is_marked("Y"), "Y not marked");
+    TEST_PASS("fiveo_common_mark basic");
+}
+
+void test_fiveo_common_mark_multiple(void) {
+    fiveo_init();
+    fiveo_common_mark("A");
+    fiveo_common_mark("B");
+    fiveo_common_mark("C");
+    TEST_ASSERT(fiveo_common_is_marked("A"), "A marked");
+    TEST_ASSERT(fiveo_common_is_marked("B"), "B marked");
+    TEST_ASSERT(fiveo_common_is_marked("C"), "C marked");
+    TEST_ASSERT(!fiveo_common_is_marked("D"), "D not marked");
+    TEST_PASS("fiveo_common_mark multiple");
+}
+
+void test_fiveo_common_mark_case_insensitive(void) {
+    fiveo_init();
+    fiveo_common_mark("MYVAR");
+    TEST_ASSERT(fiveo_common_is_marked("myvar"), "case insensitive match");
+    TEST_ASSERT(fiveo_common_is_marked("MyVar"), "mixed case match");
+    TEST_PASS("fiveo_common_mark case insensitive");
+}
+
+void test_fiveo_common_mark_duplicate(void) {
+    fiveo_init();
+    fiveo_common_mark("X");
+    fiveo_common_mark("X");
+    fiveo_common_mark("X");
+    /* Should not add duplicates */
+    fiveo_common_list_reset();
+    int count = 0;
+    while (fiveo_common_list_next()) count++;
+    TEST_ASSERT_EQ_INT(count, 1, "Only one entry for duplicates");
+    TEST_PASS("fiveo_common_mark duplicate");
+}
+
+void test_fiveo_common_mark_empty(void) {
+    fiveo_init();
+    fiveo_common_mark("");
+    TEST_ASSERT(!fiveo_common_is_marked(""), "Empty not marked");
+    TEST_PASS("fiveo_common_mark empty name");
+}
+
+void test_fiveo_common_mark_null(void) {
+    fiveo_init();
+    fiveo_common_mark(NULL);
+    TEST_ASSERT(!fiveo_common_is_marked(NULL), "NULL not marked");
+    TEST_PASS("fiveo_common_mark null name");
+}
+
+void test_fiveo_common_clear_all(void) {
+    fiveo_init();
+    fiveo_common_mark("A");
+    fiveo_common_mark("B");
+    fiveo_common_clear_all();
+    TEST_ASSERT(!fiveo_common_is_marked("A"), "A cleared");
+    TEST_ASSERT(!fiveo_common_is_marked("B"), "B cleared");
+    TEST_PASS("fiveo_common_clear_all");
+}
+
+void test_fiveo_common_list_iterator(void) {
+    fiveo_init();
+    fiveo_common_mark("ALPHA");
+    fiveo_common_mark("BETA");
+    fiveo_common_mark("GAMMA");
+    
+    fiveo_common_list_reset();
+    const char *name;
+    int count = 0;
+    while ((name = fiveo_common_list_next()) != NULL) {
+        count++;
+    }
+    TEST_ASSERT_EQ_INT(count, 3, "Iterator returns 3 names");
+    TEST_PASS("fiveo_common_list iterator");
+}
+
+void test_fiveo_common_list_empty(void) {
+    fiveo_init();
+    fiveo_common_list_reset();
+    TEST_ASSERT(fiveo_common_list_next() == NULL, "Empty list returns NULL");
+    TEST_PASS("fiveo_common_list empty");
+}
+
+void test_fiveo_common_list_reset(void) {
+    fiveo_init();
+    fiveo_common_mark("X");
+    fiveo_common_mark("Y");
+    
+    fiveo_common_list_reset();
+    fiveo_common_list_next();
+    fiveo_common_list_next();
+    
+    /* After reset, should start from beginning */
+    fiveo_common_list_reset();
+    const char *name = fiveo_common_list_next();
+    TEST_ASSERT(name != NULL, "Has entry after reset");
+    TEST_ASSERT(strcmp(name, "X") == 0, "First entry after reset is X");
+    TEST_PASS("fiveo_common_list_reset");
+}
+
+void test_fiveo_common_get_marked(void) {
+    fiveo_init();
+    fiveo_common_mark("VAR1");
+    fiveo_common_mark("VAR2");
+    
+    char *names[10];
+    int count = fiveo_common_get_marked(names, 10);
+    TEST_ASSERT_EQ_INT(count, 2, "get_marked returns 2");
+    TEST_PASS("fiveo_common_get_marked");
+}
+
+void test_fiveo_common_get_marked_overflow(void) {
+    fiveo_init();
+    fiveo_common_mark("A");
+    fiveo_common_mark("B");
+    fiveo_common_mark("C");
+    
+    char *names[2];
+    int count = fiveo_common_get_marked(names, 2);
+    TEST_ASSERT_EQ_INT(count, 3, "get_marked returns total count (3)");
+    TEST_PASS("fiveo_common_get_marked with overflow");
+}
+
+void test_fiveo_common_init_clears(void) {
+    fiveo_init();
+    fiveo_common_mark("PRESERVED");
+    fiveo_init();
+    TEST_ASSERT(!fiveo_common_is_marked("PRESERVED"), "Cleared on init");
+    TEST_PASS("fiveo_init clears common marks");
+}
+
+/* ========== CHAIN State Tests ========== */
+
+void test_fiveo_chain_line_default(void) {
+    fiveo_init();
+    TEST_ASSERT_EQ_INT(fiveo_get_chain_line(), 0, "Default chain line 0");
+    TEST_PASS("fiveo_chain_line default");
+}
+
+void test_fiveo_chain_merge_default(void) {
+    fiveo_init();
+    TEST_ASSERT(!fiveo_get_chain_merge(), "Default merge false");
+    TEST_PASS("fiveo_chain_merge default");
+}
+
+void test_fiveo_chain_null_filename(void) {
+    fiveo_init();
+    int rc = fiveo_chain(NULL, 0, false, false);
+    TEST_ASSERT_EQ_INT(rc, -1, "NULL filename returns -1");
+    TEST_PASS("fiveo_chain null filename");
+}
+
+void test_fiveo_chain_empty_filename(void) {
+    fiveo_init();
+    int rc = fiveo_chain("", 0, false, false);
+    TEST_ASSERT_EQ_INT(rc, -1, "Empty filename returns -1");
+    TEST_PASS("fiveo_chain empty filename");
+}
+
+void test_fiveo_chain_nonexistent_file(void) {
+    fiveo_init();
+    int rc = fiveo_chain("NONEXIST.BAS", 0, false, false);
+    TEST_ASSERT(rc != 0, "Nonexistent file returns error");
+    TEST_PASS("fiveo_chain nonexistent file");
+}
+
+void test_fiveo_chain_init_resets_state(void) {
+    fiveo_init();
+    /* Set some state */
+    fiveo_push_while(100, 200, 10);
+    fiveo_common_mark("VAR");
+    /* Re-init should reset */
+    fiveo_init();
+    TEST_ASSERT_EQ_INT(fiveo_while_depth(), 0, "While stack cleared");
+    TEST_ASSERT(!fiveo_common_is_marked("VAR"), "Common cleared");
+    TEST_ASSERT_EQ_INT(fiveo_get_chain_line(), 0, "Chain line cleared");
+    TEST_ASSERT(!fiveo_get_chain_merge(), "Merge flag cleared");
+    TEST_PASS("fiveo_init resets all state");
+}

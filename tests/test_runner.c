@@ -672,6 +672,25 @@ void test_fiveo_find_while_not_found(void);
 void test_fiveo_find_while_empty_stack(void);
 void test_fiveo_write_init(void);
 void test_fiveo_write_clears_state(void);
+void test_fiveo_common_mark_basic(void);
+void test_fiveo_common_mark_multiple(void);
+void test_fiveo_common_mark_case_insensitive(void);
+void test_fiveo_common_mark_duplicate(void);
+void test_fiveo_common_mark_empty(void);
+void test_fiveo_common_mark_null(void);
+void test_fiveo_common_clear_all(void);
+void test_fiveo_common_list_iterator(void);
+void test_fiveo_common_list_empty(void);
+void test_fiveo_common_list_reset(void);
+void test_fiveo_common_get_marked(void);
+void test_fiveo_common_get_marked_overflow(void);
+void test_fiveo_common_init_clears(void);
+void test_fiveo_chain_line_default(void);
+void test_fiveo_chain_merge_default(void);
+void test_fiveo_chain_null_filename(void);
+void test_fiveo_chain_empty_filename(void);
+void test_fiveo_chain_nonexistent_file(void);
+void test_fiveo_chain_init_resets_state(void);
 
 /* SCNDRV test functions */
 void test_scndrv_init(void);
@@ -1327,6 +1346,25 @@ int main(void) {
     failed += run_test("fiveo_find_while_empty_stack", test_fiveo_find_while_empty_stack);
     failed += run_test("fiveo_write_init", test_fiveo_write_init);
     failed += run_test("fiveo_write_clears_state", test_fiveo_write_clears_state);
+    failed += run_test("fiveo_common_mark_basic", test_fiveo_common_mark_basic);
+    failed += run_test("fiveo_common_mark_multiple", test_fiveo_common_mark_multiple);
+    failed += run_test("fiveo_common_mark_case_insensitive", test_fiveo_common_mark_case_insensitive);
+    failed += run_test("fiveo_common_mark_duplicate", test_fiveo_common_mark_duplicate);
+    failed += run_test("fiveo_common_mark_empty", test_fiveo_common_mark_empty);
+    failed += run_test("fiveo_common_mark_null", test_fiveo_common_mark_null);
+    failed += run_test("fiveo_common_clear_all", test_fiveo_common_clear_all);
+    failed += run_test("fiveo_common_list_iterator", test_fiveo_common_list_iterator);
+    failed += run_test("fiveo_common_list_empty", test_fiveo_common_list_empty);
+    failed += run_test("fiveo_common_list_reset", test_fiveo_common_list_reset);
+    failed += run_test("fiveo_common_get_marked", test_fiveo_common_get_marked);
+    failed += run_test("fiveo_common_get_marked_overflow", test_fiveo_common_get_marked_overflow);
+    failed += run_test("fiveo_common_init_clears", test_fiveo_common_init_clears);
+    failed += run_test("fiveo_chain_line_default", test_fiveo_chain_line_default);
+    failed += run_test("fiveo_chain_merge_default", test_fiveo_chain_merge_default);
+    failed += run_test("fiveo_chain_null_filename", test_fiveo_chain_null_filename);
+    failed += run_test("fiveo_chain_empty_filename", test_fiveo_chain_empty_filename);
+    failed += run_test("fiveo_chain_nonexistent_file", test_fiveo_chain_nonexistent_file);
+    failed += run_test("fiveo_chain_init_resets_state", test_fiveo_chain_init_resets_state);
 
     /* SCNDRV tests */
     failed += run_test("scndrv_init", test_scndrv_init);

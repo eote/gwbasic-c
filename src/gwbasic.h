@@ -79,6 +79,7 @@ struct variable {
     char name[MAX_VAR_NAME + 1];
     var_type_t type;
     bool is_array;
+    bool is_common;     /* COMMON flag: variable preserved across CHAIN */
     union {
         int32_t  i;
         float    f;
@@ -230,6 +231,17 @@ void fiveo_write_begin(int filenum);
 void fiveo_write_end(void);
 bool fiveo_write_active(void);
 int fiveo_write_file(void);
+
+/* FIVEO CHAIN/COMMON functions */
+int fiveo_chain(const char *filename, int line_number, bool merge, bool all_vars);
+void fiveo_common_mark(const char *varname);
+void fiveo_common_clear_all(void);
+int fiveo_common_get_marked(char *names[], int max_count);
+bool fiveo_common_is_marked(const char *varname);
+void fiveo_common_list_reset(void);
+const char *fiveo_common_list_next(void);
+int fiveo_get_chain_line(void);
+bool fiveo_get_chain_merge(void);
 
 /* BISTRS module functions */
 void bistrs_init(void);
