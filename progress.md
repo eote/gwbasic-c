@@ -53,7 +53,7 @@
 
 | Order | Module | ASM File | PLAN Status | Actual Status | Notes |
 |-------|--------|----------|-------------|---------------|-------|
-| 24 | `oem` | OEM.ASM | ✅ Implement | ✅ **DONE** | OEM abstraction layer - screen I/O, graphics primitives, keyboard, printer, serial, PAINT/GET/PUT support, SCREEN/COLOR commands |
+| 24 | `oem` | OEM.ASM | ✅ Implement | ✅ **DONE** | OEM abstraction layer - all 7 TODOs implemented: CLREOL, SCROLL, SCRINP (Win32 ReadConsoleOutputCharacterA), NSETCX/NREAD/NWRITE pixel operations, CLRSCN window clearing, graphics viewport clearing |
 || 25 | `oemcbk` | OEMCBK.ASM | ✅ Implement | ✅ **DONE** | Ctrl-Break & Pause handling - INT 1BH/15H hooks, Ctrl-Shift-B/P, Ctrl-NumLock emulation (20 tests added) |
 | 26 | `oemev` | OEMEV.ASM | ✅ Implement | ✅ **DONE** | Event handling - joystick (STICK, STRIG), light pen (PEN), timer events (ON TIMER), POLLEV |
 | 27 | `oemsnd` | OEMSND.ASM | ⚠️ Stub | ✅ **DONE** | Sound (SOUND, PLAY) - Windows Beep API, queue-based playback, foreground/background (16 tests added) |

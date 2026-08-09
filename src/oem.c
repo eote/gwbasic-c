@@ -213,31 +213,193 @@ static void slr_begin(void) {
    al = 2: Clear text window */
 void oem_clrscn(int al) {
     if (al == 2) {
-        /* Clear text window */
-        /* TODO: implement window clearing */
+        /* Clear text window - clear from (WDOLFT, WDOTOP) to (WDORGT, WDOBOT) */
+        /* Walk through each row in the window, clearing from left col to right col */
+        for (int row = WDOTOP; row <= WDOBOT && row <= LINCNT; row++) {
+            scndrv_loc(WDOLFT, row);
+            for (int col = WDOLFT; col <= WDORGT && col <= CRTWID; col++) {
+                scndrv_out(' ');
+            }
+        }
+        /* Move cursor to top-left of window */
+        scndrv_loc(WDOLFT, WDOTOP);
+    } else if (al == 1) {
+        /* Clear graphics viewport */
+        extern unsigned char *g_framebuffer;
+        extern int g_fb_width;
+        extern int g_fb_height;
+        if (g_framebuffer && g_fb_width > 0 && g_fb_height > 0) {
+            /* Clear the entire framebuffer (graphics mode) */
+            /* Use MAX_WIDTH as the actual stride (matches gengrp/advgrp fix) */
+            memset(g_framebuffer, 0, MAX_WIDTH * g_fb_height);
+        }
     } else {
-        /* Clear all */
+        /* Clear all (al = 0) */
         scndrv_clr();
     }
 }
 
 /* OEM supplied screen clear to end of line */
 void oem_clreol(int col, int row) {
-    /* Clear from (col, row) to end of line */
-    /* TODO: implement */
+    if (col < 1 || row < 1 || col > CRTWID || row > LINCNT) return;
+
+    /* Position cursor and write spaces from col to end of row */
+    scndrv_loc(col, row);
+    for (int c = col; c <= CRTWID; c++) {
+        scndrv_out(' ');
+    }
+    /* Restore cursor position */
+    scndrv_loc(col, row);
 }
 
-/* OEM supplied SCROLL routine */
+/* OEM supplied SCROLL routine
+   Scrolls a rectangular region up/down/left/right by 1 line.
+   src_col,src_row: source region top-left
+   dst_col,dst_row: destination region top-left
+   width,height: dimensions of region */
 void oem_scroll(int src_col, int src_row, int dst_col, int dst_row, int width, int height) {
-    /* Scroll a region of the screen */
-    /* TODO: implement */
+    /* Validate inputs */
+    if (width <= 0 || height <= 0) return;
+    if (src_col < 1 || src_row < 1) return;
+    if (dst_col < 1 || dst_row < 1) return;
+    if (src_col + width - 1 > CRTWID || src_row + height - 1 > LINCNT) return;
+    if (dst_col + width - 1 > CRTWID || dst_row + height - 1 > LINCNT) return;
+
+    /* Calculate direction and line count for scroll */
+    int row_delta = dst_row - src_row;  /* positive = down, negative = up */
+    int col_delta = dst_col - src_col;  /* positive = right, negative = left */
+
+    if (row_delta == 0 && col_delta == 0) return;  /* No scroll */
+
+    /* Step 1: Copy characters in the scroll direction
+       To avoid overwriting source data, iterate from far end to near end. */
+    if (row_delta > 0) {
+        /* Scrolling down: copy from bottom to top */
+        for (int r = height - 1; r >= 0; r--) {
+            int from_row = src_row + r;
+            int to_row = dst_row + r;
+            if (to_row > LINCNT) continue;
+            for (int c = 0; c < width; c++) {
+                int from_col = src_col + c;
+                int to_col = dst_col + c;
+                if (to_col > CRTWID) continue;
+                /* Read source char */
+                int ch = oem_scrinp(from_col, from_row);
+                /* Write to destination */
+                oem_scrout((char)ch, to_col, to_row);
+            }
+        }
+    } else if (row_delta < 0) {
+        /* Scrolling up: copy from top to bottom */
+        for (int r = 0; r < height; r++) {
+            int from_row = src_row + r;
+            int to_row = dst_row + r;
+            if (to_row < 1) continue;
+            for (int c = 0; c < width; c++) {
+                int from_col = src_col + c;
+                int to_col = dst_col + c;
+                if (to_col > CRTWID) continue;
+                int ch = oem_scrinp(from_col, from_row);
+                oem_scrout((char)ch, to_col, to_row);
+            }
+        }
+    } else if (col_delta > 0) {
+        /* Scrolling right: copy from right to left */
+        for (int r = 0; r < height; r++) {
+            for (int c = width - 1; c >= 0; c--) {
+                int from_col = src_col + c;
+                int to_col = dst_col + c;
+                if (to_col > CRTWID) continue;
+                int ch = oem_scrinp(from_col, src_row + r);
+                oem_scrout((char)ch, to_col, dst_row + r);
+            }
+        }
+    } else {
+        /* Scrolling left: copy from left to right */
+        for (int r = 0; r < height; r++) {
+            for (int c = 0; c < width; c++) {
+                int from_col = src_col + c;
+                int to_col = dst_col + c;
+                if (to_col > CRTWID) continue;
+                int ch = oem_scrinp(from_col, src_row + r);
+                oem_scrout((char)ch, to_col, dst_row + r);
+            }
+        }
+    }
+
+    /* Step 2: Clear the vacated area (source region after move) */
+    /* Calculate the vacated region */
+    int clear_col1, clear_row1, clear_col2, clear_row2;
+
+    if (row_delta != 0) {
+        /* Vertical scroll: clear source column range on vacated rows */
+        if (row_delta > 0) {
+            /* Scrolled down: clear top 'row_delta' rows of source */
+            clear_col1 = src_col;
+            clear_row1 = src_row;
+            clear_col2 = src_col + width - 1;
+            clear_row2 = src_row + row_delta - 1;
+        } else {
+            /* Scrolled up: clear bottom '|row_delta|' rows of source */
+            clear_col1 = src_col;
+            clear_row1 = src_row + height + row_delta;
+            clear_col2 = src_col + width - 1;
+            clear_row2 = src_row + height - 1;
+        }
+    } else {
+        /* Horizontal scroll: clear vacated columns */
+        if (col_delta > 0) {
+            /* Scrolled right: clear left 'col_delta' columns */
+            clear_col1 = src_col;
+            clear_row1 = src_row;
+            clear_col2 = src_col + col_delta - 1;
+            clear_row2 = src_row + height - 1;
+        } else {
+            /* Scrolled left: clear right '|col_delta|' columns */
+            clear_col1 = src_col + width + col_delta;
+            clear_row1 = src_row;
+            clear_col2 = src_col + width - 1;
+            clear_row2 = src_row + height - 1;
+        }
+    }
+
+    /* Clamp to screen bounds */
+    if (clear_col1 < 1) clear_col1 = 1;
+    if (clear_row1 < 1) clear_row1 = 1;
+    if (clear_col2 > CRTWID) clear_col2 = CRTWID;
+    if (clear_row2 > LINCNT) clear_row2 = LINCNT;
+
+    /* Clear vacated region with spaces */
+    for (int r = clear_row1; r <= clear_row2; r++) {
+        scndrv_loc(clear_col1, r);
+        for (int c = clear_col1; c <= clear_col2; c++) {
+            scndrv_out(' ');
+        }
+    }
 }
 
-/* OEM supplied screen input (read character) */
+/* OEM supplied screen input (read character)
+   Reads character at (col, row) from screen memory.
+   Since our text mode uses Windows CONSOLE, we use ReadConsoleOutputCharacter. */
 int oem_scrinp(int col, int row) {
-    /* Read character at (col, row) */
-    /* TODO: implement */
-    return ' ';
+    if (col < 1 || row < 1 || col > CRTWID || row > LINCNT) return ' ';
+
+    /* Use Windows console API to read screen character */
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hConsole == INVALID_HANDLE_VALUE || hConsole == NULL) {
+        return ' ';
+    }
+
+    COORD coord;
+    coord.X = (SHORT)(col - 1);
+    coord.Y = (SHORT)(row - 1);
+
+    char ch = ' ';
+    DWORD read = 0;
+    if (!ReadConsoleOutputCharacterA(hConsole, &ch, 1, coord, &read)) {
+        return ' ';
+    }
+    return (read > 0) ? (unsigned char)ch : ' ';
 }
 
 /* OEM supplied character output */
@@ -269,10 +431,68 @@ bool oem_swidth(int width, int height) {
     return false;  /* Success */
 }
 
-/* NSETCX - Set a horizontal series of pixels */
+/* NSETCX - Set a horizontal series of pixels
+   Sets 'count' pixels starting at current pixel (PIXOFS, ATRMSK)
+   to the current color pattern (ATRPAT). */
 void oem_nsetcx(int count) {
-    /* Set count pixels to current color */
-    /* TODO: implement */
+    if (count <= 0 || ATRMSK == 0) return;
+
+    extern unsigned char *g_framebuffer;
+    if (!g_framebuffer) return;
+
+    /* Calculate pixel bit position */
+    int bit_pos = 0;
+    BYTE mask = ATRMSK;
+    while (!(mask & 1)) { mask >>= 1; bit_pos++; }
+
+    int current_ofs = PIXOFS;
+    BYTE current_mask = ATRMSK;
+
+    /* Set 'count' pixels */
+    for (int i = 0; i < count; i++) {
+        /* Bounds check */
+        if (current_ofs < 0 || current_ofs >= MAX_WIDTH * MAX_HEIGHT) break;
+
+        /* Read current byte */
+        BYTE val = g_framebuffer[current_ofs];
+
+        if (PIXBTS == 1) {
+            /* 1 bit per pixel */
+            /* Clear the pixel bit */
+            val &= ~current_mask;
+            /* Set the pixel bit if ATRPAT is non-zero */
+            if (ATRPAT & 1) val |= current_mask;
+        } else if (PIXBTS == 2) {
+            /* 2 bits per pixel */
+            /* Clear the 2 pixel bits */
+            val &= ~current_mask;
+            /* Set the 2 pixel bits */
+            val |= (ATRPAT << bit_pos) & current_mask;
+        }
+
+        g_framebuffer[current_ofs] = val;
+
+        /* Advance to next pixel */
+        if (PIXBTS == 1) {
+            if (current_mask & 0x80) {
+                current_ofs++;
+                current_mask = 0x80;
+            } else {
+                current_mask = (current_mask << 1) | 1;
+            }
+        } else if (PIXBTS == 2) {
+            if (current_mask & 0xC0) {
+                current_ofs++;
+                current_mask = 0xC0;
+            } else {
+                current_mask = (current_mask << 2) | 0x03;
+            }
+        }
+    }
+
+    /* Update state to current pixel */
+    PIXOFS = current_ofs;
+    ATRMSK = current_mask;
 }
 
 /* SNDLPT - Send a byte to printer */
@@ -494,16 +714,156 @@ void oem_pginit(int action, int *array_ptr, int bit_count) {
     PGTACT = (int)pgt_actions[action];
 }
 
-/* NREAD - Read horizontal pixels into array */
+/* NREAD - Read horizontal pixels into array
+   Reads bit_count bits from framebuffer starting at current pixel
+   and packs them into the array. */
 void oem_nread(int *array_ptr, int bit_count) {
-    /* Read pixels into array */
-    /* TODO: implement */
+    if (!array_ptr || bit_count <= 0 || ATRMSK == 0) return;
+
+    extern unsigned char *g_framebuffer;
+    if (!g_framebuffer) return;
+
+    int current_ofs = PIXOFS;
+    BYTE current_mask = ATRMSK;
+
+    /* Read pixels and pack into array as bytes.
+       Each int in array holds up to 8 pixels (1 bit per pixel).
+       For 2 bits per pixel, each int holds 4 pixels. */
+    int arr_idx = 0;
+    int bit_buf = 0;
+    int bits_in_buf = 0;
+    int bits_per_pixel = PIXBTS;
+    if (bits_per_pixel == 0) bits_per_pixel = 1;  /* Default 1 bit per pixel */
+
+    int bits_read = 0;
+    while (bits_read < bit_count) {
+        if (current_ofs < 0 || current_ofs >= MAX_WIDTH * MAX_HEIGHT) break;
+
+        BYTE val = g_framebuffer[current_ofs];
+        int pixel = 0;
+
+        if (PIXBTS == 1) {
+            pixel = (val & current_mask) ? 1 : 0;
+        } else if (PIXBTS == 2) {
+            /* Calculate bit position from mask */
+            int bp = 0;
+            BYTE m = current_mask;
+            while (!(m & 1)) { m >>= 1; bp++; }
+            pixel = (val >> bp) & 0x03;
+        }
+
+        /* Pack pixel bits into buffer */
+        bit_buf |= (pixel << bits_in_buf);
+        bits_in_buf += bits_per_pixel;
+        bits_read += bits_per_pixel;
+
+        /* Flush to array if buffer is full */
+        if (bits_in_buf >= 8) {
+            array_ptr[arr_idx++] = bit_buf;
+            bit_buf = 0;
+            bits_in_buf = 0;
+        }
+
+        /* Advance to next pixel */
+        if (PIXBTS == 1) {
+            if (current_mask & 0x80) {
+                current_ofs++;
+                current_mask = 0x80;
+            } else {
+                current_mask = (current_mask << 1) | 1;
+            }
+        } else if (PIXBTS == 2) {
+            if (current_mask & 0xC0) {
+                current_ofs++;
+                current_mask = 0xC0;
+            } else {
+                current_mask = (current_mask << 2) | 0x03;
+            }
+        }
+    }
+
+    /* Flush remaining bits */
+    if (bits_in_buf > 0) {
+        array_ptr[arr_idx++] = bit_buf;
+    }
+
+    /* Update state */
+    PIXOFS = current_ofs;
+    ATRMSK = current_mask;
 }
 
-/* NWRITE - Write horizontal pixels from array */
+/* NWRITE - Write horizontal pixels from array
+   Unpacks bits from array and writes them to framebuffer starting
+   at current pixel. */
 void oem_nwrite(int *array_ptr, int bit_count) {
-    /* Write pixels from array */
-    /* TODO: implement */
+    if (!array_ptr || bit_count <= 0 || ATRMSK == 0) return;
+
+    extern unsigned char *g_framebuffer;
+    if (!g_framebuffer) return;
+
+    int current_ofs = PIXOFS;
+    BYTE current_mask = ATRMSK;
+
+    int arr_idx = 0;
+    int bit_buf = array_ptr[0];
+    int bits_in_buf = 8;
+    int bits_per_pixel = PIXBTS;
+    if (bits_per_pixel == 0) bits_per_pixel = 1;
+
+    int bits_written = 0;
+    while (bits_written < bit_count) {
+        if (current_ofs < 0 || current_ofs >= MAX_WIDTH * MAX_HEIGHT) break;
+
+        /* Extract pixel bits from buffer */
+        int pixel = bit_buf & ((1 << bits_per_pixel) - 1);
+
+        BYTE val = g_framebuffer[current_ofs];
+        if (PIXBTS == 1) {
+            val &= ~current_mask;
+            if (pixel & 1) val |= current_mask;
+        } else if (PIXBTS == 2) {
+            int bp = 0;
+            BYTE m = current_mask;
+            while (!(m & 1)) { m >>= 1; bp++; }
+            val &= ~current_mask;
+            val |= (pixel << bp) & current_mask;
+        }
+        g_framebuffer[current_ofs] = val;
+
+        /* Advance buffer */
+        bit_buf >>= bits_per_pixel;
+        bits_in_buf -= bits_per_pixel;
+        if (bits_in_buf <= 0) {
+            arr_idx++;
+            if (bits_written + bits_per_pixel < bit_count) {
+                bit_buf = array_ptr[arr_idx];
+                bits_in_buf = 8;
+            }
+        }
+
+        bits_written += bits_per_pixel;
+
+        /* Advance to next pixel */
+        if (PIXBTS == 1) {
+            if (current_mask & 0x80) {
+                current_ofs++;
+                current_mask = 0x80;
+            } else {
+                current_mask = (current_mask << 1) | 1;
+            }
+        } else if (PIXBTS == 2) {
+            if (current_mask & 0xC0) {
+                current_ofs++;
+                current_mask = 0xC0;
+            } else {
+                current_mask = (current_mask << 2) | 0x03;
+            }
+        }
+    }
+
+    /* Update state */
+    PIXOFS = current_ofs;
+    ATRMSK = current_mask;
 }
 
 /* TDOWNC - Move pixel down (with boundary check) */
