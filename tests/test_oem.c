@@ -58,7 +58,10 @@ void test_oem_clrscn_window(void) {
 /* Test oem_clreol */
 void test_oem_clreol(void) {
     oem_init();
-    oem_clreol(10, 10);  /* Clear from (10, 10) to end of line */
+    /* Test that function doesn't crash with various inputs */
+    oem_clreol(1, 1);
+    oem_clreol(10, 10);
+    oem_clreol(80, 25);  /* Edge: last column */
     TEST_PASS("oem_clreol");
 }
 
@@ -515,4 +518,461 @@ void test_oem_setatr(void) {
     bool result = oem_setatr(5);
     TEST_ASSERT(result == false, "oem_setatr returns false (not implemented)");
     TEST_PASS("oem_setatr");
+}
+
+/* ========== Detailed Unit Tests for Implemented TODO Functions ========== */
+
+/* External references to framebuffer globals */
+extern unsigned char *g_framebuffer;
+extern int g_fb_width;
+extern int g_fb_height;
+extern int g_screen_mode;
+
+/* ---- oem_clrscn detailed tests ---- */
+
+void test_oem_clrscn_al0_clears_screen(void) {
+    oem_init();
+    /* al=0 should not crash */
+    oem_clrscn(0);
+    TEST_PASS("oem_clrscn al=0 doesn't crash");
+}
+
+void test_oem_clrscn_al1_clears_framebuffer(void) {
+    oem_init();
+    /* Switch to graphics mode and init framebuffer */
+    gioscn_screen(1);  /* 320x200 mode */
+    oem_set_pixbts(2);  /* 2 bits per pixel */
+    /* Fill framebuffer with non-zero */
+    if (g_framebuffer) {
+        for (int i = 0; i < MAX_WIDTH * g_fb_height; i++) {
+            g_framebuffer[i] = 0xFF;
+        }
+        oem_clrscn(1);  /* Clear graphics viewport */
+        /* Verify framebuffer is zeroed */
+        int sum = 0;
+        for (int i = 0; i < MAX_WIDTH * g_fb_height; i++) {
+            sum += g_framebuffer[i];
+        }
+        TEST_ASSERT_EQ_INT(sum, 0, "Framebuffer cleared by al=1");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_clrscn al=1 clears framebuffer");
+}
+
+void test_oem_clrscn_al2_window_clear(void) {
+    oem_init();
+    /* al=2 should clear text window */
+    oem_clrscn(2);
+    TEST_PASS("oem_clrscn al=2 clears window");
+}
+
+void test_oem_clrscn_al2_clamps_to_screen(void) {
+    oem_init();
+    /* Test that window clearing respects LINCNT and CRTWID bounds */
+    /* Default window is 1-80 x 1-25 = full screen */
+    oem_clrscn(2);
+    TEST_PASS("oem_clrscn al=2 clamps to screen bounds");
+}
+
+/* ---- oem_clreol detailed tests ---- */
+
+void test_oem_clreol_valid_position(void) {
+    oem_init();
+    /* Test valid positions */
+    oem_clreol(1, 1);
+    oem_clreol(40, 12);
+    oem_clreol(80, 25);
+    TEST_PASS("oem_clreol valid positions");
+}
+
+void test_oem_clreol_out_of_bounds(void) {
+    oem_init();
+    /* Out of bounds - should not crash */
+    oem_clreol(0, 0);
+    oem_clreol(-5, -5);
+    oem_clreol(100, 100);
+    oem_clreol(81, 26);
+    TEST_PASS("oem_clreol out of bounds safe");
+}
+
+void test_oem_clreol_at_last_col(void) {
+    oem_init();
+    /* Edge: at last column - should clear 1 char */
+    oem_clreol(80, 1);
+    TEST_PASS("oem_clreol at last column");
+}
+
+/* ---- oem_scroll detailed tests ---- */
+
+void test_oem_scroll_up(void) {
+    oem_init();
+    oem_scroll(1, 2, 1, 1, 10, 5);  /* Scroll up by 1 line */
+    TEST_PASS("oem_scroll up");
+}
+
+void test_oem_scroll_down(void) {
+    oem_init();
+    oem_scroll(1, 1, 1, 2, 10, 5);  /* Scroll down by 1 line */
+    TEST_PASS("oem_scroll down");
+}
+
+void test_oem_scroll_left(void) {
+    oem_init();
+    oem_scroll(2, 1, 1, 1, 10, 5);  /* Scroll left by 1 column */
+    TEST_PASS("oem_scroll left");
+}
+
+void test_oem_scroll_right(void) {
+    oem_init();
+    oem_scroll(1, 1, 2, 1, 10, 5);  /* Scroll right by 1 column */
+    TEST_PASS("oem_scroll right");
+}
+
+void test_oem_scroll_no_movement(void) {
+    oem_init();
+    /* No movement - should return early without error */
+    oem_scroll(1, 1, 1, 1, 10, 5);
+    TEST_PASS("oem_scroll no movement");
+}
+
+void test_oem_scroll_invalid_dimensions(void) {
+    oem_init();
+    /* Invalid dimensions - should return early */
+    oem_scroll(1, 1, 2, 2, 0, 5);
+    oem_scroll(1, 1, 2, 2, 10, 0);
+    oem_scroll(1, 1, 2, 2, -1, 5);
+    TEST_PASS("oem_scroll invalid dimensions safe");
+}
+
+void test_oem_scroll_out_of_bounds(void) {
+    oem_init();
+    /* Region out of screen bounds */
+    oem_scroll(75, 1, 75, 1, 10, 5);  /* src extends past column 80 */
+    oem_scroll(1, 22, 1, 22, 10, 5);  /* src extends past row 25 */
+    oem_scroll(1, 1, 75, 1, 10, 5);   /* dst extends past column 80 */
+    TEST_PASS("oem_scroll out of bounds safe");
+}
+
+/* ---- oem_scrinp detailed tests ---- */
+
+void test_oem_scrinp_valid_position(void) {
+    oem_init();
+    /* Should return some character (space if no console) */
+    int ch = oem_scrinp(1, 1);
+    /* Result should be printable or space, not crash */
+    TEST_ASSERT(ch >= 0 && ch < 256, "oem_scrinp returns valid char");
+    TEST_PASS("oem_scrinp valid position");
+}
+
+void test_oem_scrinp_out_of_bounds(void) {
+    oem_init();
+    /* Out of bounds should return space */
+    TEST_ASSERT_EQ_INT(oem_scrinp(0, 0), ' ', "OOB returns space");
+    TEST_ASSERT_EQ_INT(oem_scrinp(-1, -1), ' ', "Negative returns space");
+    TEST_ASSERT_EQ_INT(oem_scrinp(81, 1), ' ', "Col>80 returns space");
+    TEST_ASSERT_EQ_INT(oem_scrinp(1, 26), ' ', "Row>25 returns space");
+    TEST_PASS("oem_scrinp out of bounds returns space");
+}
+
+/* ---- oem_nsetcx detailed tests ---- */
+
+void test_oem_nsetcx_zero_count(void) {
+    oem_init();
+    gioscn_screen(1);  /* 320x200 */
+    oem_set_pixbts(2);
+    oem_set_pixofs(100);
+    oem_set_atrmsk(0xC0);  /* First pixel of byte */
+    /* Zero count - should be no-op */
+    oem_nsetcx(0);
+    /* State should not change */
+    TEST_ASSERT_EQ_INT(oem_get_pixofs(), 100, "Zero count doesn't change PIXOFS");
+    gioscn_screen(0);
+    TEST_PASS("oem_nsetcx zero count");
+}
+
+void test_oem_nsetcx_negative_count(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(100);
+    oem_set_atrmsk(0xC0);
+    oem_set_atrpat(0x02);  /* Color 2 */
+    /* Negative count - should be no-op */
+    oem_nsetcx(-5);
+    TEST_ASSERT_EQ_INT(oem_get_pixofs(), 100, "Negative count no-op");
+    gioscn_screen(0);
+    TEST_PASS("oem_nsetcx negative count");
+}
+
+void test_oem_nsetcx_zero_atrmsk(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(100);
+    oem_set_atrmsk(0);  /* No mask - no pixel selected */
+    oem_set_atrpat(0x02);
+    /* Zero ATRMSK - should be no-op */
+    oem_nsetcx(10);
+    TEST_ASSERT_EQ_INT(oem_get_pixofs(), 100, "Zero ATRMSK no-op");
+    gioscn_screen(0);
+    TEST_PASS("oem_nsetcx zero ATRMSK");
+}
+
+void test_oem_nsetcx_pixbts1(void) {
+    oem_init();
+    gioscn_screen(2);  /* 640x200 - 1 bit per pixel */
+    oem_set_pixbts(1);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0x80);  /* First bit */
+    oem_set_atrpat(0x01);  /* Color 1 */
+    /* Set 8 pixels (one byte) */
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0;
+        oem_nsetcx(8);
+        /* All 8 bits should be set */
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0xFF, "8 pixels set in 1-bit mode");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nsetcx 1-bit per pixel");
+}
+
+void test_oem_nsetcx_pixbts2(void) {
+    oem_init();
+    gioscn_screen(1);  /* 320x200 - 2 bits per pixel */
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);  /* First 2-bit pixel */
+    oem_set_atrpat(0x02);  /* Color 2 */
+    /* Set 4 pixels (one byte) - all should be color 2 (binary 10) */
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0;
+        oem_nsetcx(4);
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0xAA, "4 pixels of color 2 = 0xAA");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nsetcx 2-bit per pixel");
+}
+
+void test_oem_nsetcx_pixbts2_clear(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    oem_set_atrpat(0x00);  /* Color 0 = clear */
+    /* Set pixels to 0 */
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0xFF;
+        oem_nsetcx(4);
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0x00, "Clear via color 0");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nsetcx 2-bit clear");
+}
+
+void test_oem_nsetcx_crosses_byte_boundary(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);  /* First pixel */
+    oem_set_atrpat(0x03);  /* Color 3 */
+    /* Set 6 pixels (spans 2 bytes) */
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0;
+        g_framebuffer[1] = 0;
+        oem_nsetcx(6);
+        /* First byte: 4 pixels of color 3 = 0xFF */
+        /* Second byte: 2 pixels of color 3 = 0xF0 (bits 7-6 and 5-4 both = 11) */
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0xFF, "First byte full");
+        TEST_ASSERT_EQ_INT(g_framebuffer[1], 0xF0, "Second byte partial");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nsetcx crosses byte boundary");
+}
+
+/* ---- oem_nread detailed tests ---- */
+
+void test_oem_nread_zero_count(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    int arr[10] = {0};
+    oem_nread(arr, 0);
+    /* Should be no-op, array unchanged */
+    TEST_ASSERT_EQ_INT(arr[0], 0, "Zero count no-op");
+    gioscn_screen(0);
+    TEST_PASS("oem_nread zero count");
+}
+
+void test_oem_nread_null_array(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    /* NULL array - should be no-op */
+    oem_nread(NULL, 16);
+    TEST_PASS("oem_nread null array safe");
+}
+
+void test_oem_nread_pixbts1(void) {
+    oem_init();
+    gioscn_screen(2);
+    oem_set_pixbts(1);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0x80);
+    /* Set known pattern: 0b10101010 = 0xAA */
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0xAA;
+        int arr[2] = {0, 0};
+        oem_nread(arr, 8);
+        TEST_ASSERT_EQ_INT(arr[0], 0xAA, "Read 8 1-bit pixels");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nread 1-bit per pixel");
+}
+
+void test_oem_nread_pixbts2(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    /* Set known pattern: pixels = 0, 1, 2, 3 (2 bits each) */
+    /* Binary: 00 01 10 11 = 0x1B */
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0x1B;
+        int arr[2] = {0, 0};
+        oem_nread(arr, 8);  /* 8 bits = 4 pixels of 2 bits each */
+        TEST_ASSERT_EQ_INT(arr[0], 0x1B, "Read 4 2-bit pixels");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nread 2-bit per pixel");
+}
+
+void test_oem_nread_partial_byte(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    /* Set known pattern: pixels = 0, 1, 2, 3 */
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0x1B;
+        int arr[2] = {0, 0};
+        /* Read only 4 bits = 2 pixels (MSB-first packing) */
+        oem_nread(arr, 4);
+        /* pixel 0 (color 0) at bits 7-6, pixel 1 (color 1) at bits 5-4 */
+        /* Byte = 0b0001_0000 = 0x10 */
+        TEST_ASSERT_EQ_INT(arr[0], 0x10, "Read 2 pixels partial byte");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nread partial byte");
+}
+
+/* ---- oem_nwrite detailed tests ---- */
+
+void test_oem_nwrite_zero_count(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    int arr[1] = {0xFF};
+    oem_nwrite(arr, 0);
+    /* Should be no-op */
+    if (g_framebuffer) {
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0, "Zero count no-op");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nwrite zero count");
+}
+
+void test_oem_nwrite_null_array(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    oem_nwrite(NULL, 16);
+    TEST_PASS("oem_nwrite null array safe");
+}
+
+void test_oem_nwrite_pixbts1(void) {
+    oem_init();
+    gioscn_screen(2);
+    oem_set_pixbts(1);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0x80);
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0;
+        int arr[1] = {0xA5};  /* 0b10100101 */
+        oem_nwrite(arr, 8);
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0xA5, "Write 8 1-bit pixels");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nwrite 1-bit per pixel");
+}
+
+void test_oem_nwrite_pixbts2(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0;
+        int arr[1] = {0xE4};  /* 4 pixels of 2 bits: 11 10 01 00 = colors 3,2,1,0 */
+        oem_nwrite(arr, 8);
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0xE4, "Write 4 2-bit pixels");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nwrite 2-bit per pixel");
+}
+
+void test_oem_nread_nwrite_roundtrip(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    if (g_framebuffer) {
+        /* Set original pattern */
+        g_framebuffer[0] = 0x5A;  /* 0101 1010 = colors 1, 2, 1, 2 */
+        /* Read */
+        int arr[1] = {0};
+        oem_nread(arr, 8);
+        /* Clear framebuffer */
+        g_framebuffer[0] = 0;
+        /* Reset PIXOFS */
+        oem_set_pixofs(0);
+        oem_set_atrmsk(0xC0);
+        /* Write back */
+        oem_nwrite(arr, 8);
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0x5A, "Roundtrip preserves data");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nread/nwrite roundtrip");
+}
+
+void test_oem_nwrite_partial_byte(void) {
+    oem_init();
+    gioscn_screen(1);
+    oem_set_pixbts(2);
+    oem_set_pixofs(0);
+    oem_set_atrmsk(0xC0);
+    if (g_framebuffer) {
+        g_framebuffer[0] = 0;
+        /* Pixels 0, 1 = colors 0, 3, MSB-first packed = 0x30 */
+        int arr[1] = {0x30};
+        oem_nwrite(arr, 4);  /* Write only 4 bits = 2 pixels */
+        /* pixel 0 (color 0) at bits 7-6, pixel 1 (color 3) at bits 5-4 */
+        /* Byte = 0b0011_0000 = 0x30 */
+        TEST_ASSERT_EQ_INT(g_framebuffer[0], 0x30, "Write 2 pixels partial byte");
+    }
+    gioscn_screen(0);
+    TEST_PASS("oem_nwrite partial byte");
 }

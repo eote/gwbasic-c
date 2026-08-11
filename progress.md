@@ -124,7 +124,7 @@
 | test_bimisc.c | bimisc | ✅ Passing (30 tests) |
 | test_biptrg.c | biptrg | ✅ Passing (26 tests) |
 
-**Total Tests:** 1039 total (1039 passing, 0 failures) ✅
+**Total Tests:** 1062 total (1062 passing, 0 failures) ✅
 
 ---
 

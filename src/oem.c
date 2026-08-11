@@ -463,29 +463,34 @@ void oem_nsetcx(int count) {
             /* Set the pixel bit if ATRPAT is non-zero */
             if (ATRPAT & 1) val |= current_mask;
         } else if (PIXBTS == 2) {
-            /* 2 bits per pixel */
+            /* 2 bits per pixel - calculate bit position from current mask */
+            int bp = 0;
+            BYTE m = current_mask;
+            while (!(m & 1)) { m >>= 1; bp++; }
             /* Clear the 2 pixel bits */
             val &= ~current_mask;
             /* Set the 2 pixel bits */
-            val |= (ATRPAT << bit_pos) & current_mask;
+            val |= (ATRPAT << bp) & current_mask;
         }
 
         g_framebuffer[current_ofs] = val;
 
         /* Advance to next pixel */
         if (PIXBTS == 1) {
-            if (current_mask & 0x80) {
+            if (current_mask & 0x01) {
+                /* At last bit of byte - move to next byte */
                 current_ofs++;
                 current_mask = 0x80;
             } else {
-                current_mask = (current_mask << 1) | 1;
+                current_mask >>= 1;
             }
         } else if (PIXBTS == 2) {
-            if (current_mask & 0xC0) {
+            if (current_mask & 0x03) {
+                /* At last 2-bit pixel of byte - move to next byte */
                 current_ofs++;
                 current_mask = 0xC0;
             } else {
-                current_mask = (current_mask << 2) | 0x03;
+                current_mask >>= 2;
             }
         }
     }
@@ -752,8 +757,11 @@ void oem_nread(int *array_ptr, int bit_count) {
             pixel = (val >> bp) & 0x03;
         }
 
-        /* Pack pixel bits into buffer */
-        bit_buf |= (pixel << bits_in_buf);
+        /* Pack pixel bits into buffer (MSB-first, matches mask position) */
+        /* Shift amount from MSB of buffer: 7 - bits_in_buf (for 1 bpp) or 6 - bits_in_buf (for 2 bpp) */
+        int shift = (8 - bits_per_pixel) - bits_in_buf;
+        if (shift < 0) shift = 0;
+        bit_buf |= (pixel << shift);
         bits_in_buf += bits_per_pixel;
         bits_read += bits_per_pixel;
 
@@ -766,18 +774,18 @@ void oem_nread(int *array_ptr, int bit_count) {
 
         /* Advance to next pixel */
         if (PIXBTS == 1) {
-            if (current_mask & 0x80) {
+            if (current_mask & 0x01) {
                 current_ofs++;
                 current_mask = 0x80;
             } else {
-                current_mask = (current_mask << 1) | 1;
+                current_mask >>= 1;
             }
         } else if (PIXBTS == 2) {
-            if (current_mask & 0xC0) {
+            if (current_mask & 0x03) {
                 current_ofs++;
                 current_mask = 0xC0;
             } else {
-                current_mask = (current_mask << 2) | 0x03;
+                current_mask >>= 2;
             }
         }
     }
@@ -806,7 +814,7 @@ void oem_nwrite(int *array_ptr, int bit_count) {
 
     int arr_idx = 0;
     int bit_buf = array_ptr[0];
-    int bits_in_buf = 8;
+    int bits_in_buf = 0;  /* Number of bits already consumed */
     int bits_per_pixel = PIXBTS;
     if (bits_per_pixel == 0) bits_per_pixel = 1;
 
@@ -814,8 +822,10 @@ void oem_nwrite(int *array_ptr, int bit_count) {
     while (bits_written < bit_count) {
         if (current_ofs < 0 || current_ofs >= MAX_WIDTH * MAX_HEIGHT) break;
 
-        /* Extract pixel bits from buffer */
-        int pixel = bit_buf & ((1 << bits_per_pixel) - 1);
+        /* Extract pixel bits from buffer (MSB-first, matching nread) */
+        int shift = (8 - bits_per_pixel) - bits_in_buf;
+        if (shift < 0) shift = 0;
+        int pixel = (bit_buf >> shift) & ((1 << bits_per_pixel) - 1);
 
         BYTE val = g_framebuffer[current_ofs];
         if (PIXBTS == 1) {
@@ -831,32 +841,31 @@ void oem_nwrite(int *array_ptr, int bit_count) {
         g_framebuffer[current_ofs] = val;
 
         /* Advance buffer */
-        bit_buf >>= bits_per_pixel;
-        bits_in_buf -= bits_per_pixel;
-        if (bits_in_buf <= 0) {
+        bits_in_buf += bits_per_pixel;
+        if (bits_in_buf >= 8) {
             arr_idx++;
             if (bits_written + bits_per_pixel < bit_count) {
                 bit_buf = array_ptr[arr_idx];
-                bits_in_buf = 8;
             }
+            bits_in_buf = 0;
         }
 
         bits_written += bits_per_pixel;
 
         /* Advance to next pixel */
         if (PIXBTS == 1) {
-            if (current_mask & 0x80) {
+            if (current_mask & 0x01) {
                 current_ofs++;
                 current_mask = 0x80;
             } else {
-                current_mask = (current_mask << 1) | 1;
+                current_mask >>= 1;
             }
         } else if (PIXBTS == 2) {
-            if (current_mask & 0xC0) {
+            if (current_mask & 0x03) {
                 current_ofs++;
                 current_mask = 0xC0;
             } else {
-                current_mask = (current_mask << 2) | 0x03;
+                current_mask >>= 2;
             }
         }
     }
