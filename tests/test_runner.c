@@ -12,23 +12,23 @@ int g_tests_failed = 0;
 int run_test(const char *name, test_func_t test_func) {
     printf("RUN: %s... ", name);
     fflush(stdout);
-    
+
     int tests_before = g_tests_run;
     int failed_before = g_tests_failed;
-    
+
     /* Run the test */
     test_func();
-    
+
     int tests_in_suite = g_tests_run - tests_before;
     int failed_in_suite = g_tests_failed - failed_before;
     int passed_in_suite = tests_in_suite - failed_in_suite;
-    
+
     if (failed_in_suite == 0) {
         printf("OK (%d passed)\n", passed_in_suite);
     } else {
         printf("FAILED (%d passed, %d failed)\n", passed_in_suite, failed_in_suite);
     }
-    
+
     return failed_in_suite;
 }
 
@@ -41,7 +41,7 @@ void print_test_summary(void) {
     printf("Tests passed:      %d\n", g_tests_passed);
     printf("Tests failed:      %d\n", g_tests_failed);
     printf("========================\n");
-    
+
     if (g_tests_failed == 0) {
         printf("ALL TESTS PASSED!\n");
     } else {
@@ -770,7 +770,7 @@ void test_scndrv_out_bs_at_origin(void);
 int main(void) {
     printf("GW-BASIC C Port - Test Suite\n");
     printf("============================\n");
-    
+
     int failed = 0;
     failed += run_test("gwdata_init", test_gwdata_init);
     failed += run_test("gwdata_variable_table", test_gwdata_variable_table);
@@ -831,7 +831,7 @@ int main(void) {
         failed += run_test("math2_int", test_math2_int);
         failed += run_test("math2_fix", test_math2_fix);
         failed += run_test("math_expression_eval", test_math_expression_eval);
-    
+
         /* ADVGRP tests */
         failed += run_test("advgrp_paint_basic", test_advgrp_paint_basic);
         failed += run_test("advgrp_paint_border_color", test_advgrp_paint_border_color);
@@ -1440,25 +1440,27 @@ int main(void) {
     failed += run_test("fiveo_common_get_marked", test_fiveo_common_get_marked);
     failed += run_test("fiveo_common_get_marked_overflow", test_fiveo_common_get_marked_overflow);
     failed += run_test("fiveo_common_init_clears", test_fiveo_common_init_clears);
+    failed += run_test("fiveo_common_mark_duplicate", test_fiveo_common_mark_duplicate);
+    failed += run_test("fiveo_common_mark_empty", test_fiveo_common_mark_empty);
     failed += run_test("fiveo_chain_line_default", test_fiveo_chain_line_default);
     failed += run_test("fiveo_chain_merge_default", test_fiveo_chain_merge_default);
     failed += run_test("fiveo_chain_null_filename", test_fiveo_chain_null_filename);
-        failed += run_test("fiveo_chain_empty_filename", test_fiveo_chain_empty_filename);
-        failed += run_test("fiveo_chain_nonexistent_file", test_fiveo_chain_nonexistent_file);
-        failed += run_test("fiveo_chain_init_resets_state", test_fiveo_chain_init_resets_state);
-        failed += run_test("fiveo_peek_while_empty", test_fiveo_peek_while_empty);
-        failed += run_test("fiveo_peek_while_after_push", test_fiveo_peek_while_after_push);
-        failed += run_test("fiveo_peek_while_does_not_pop", test_fiveo_peek_while_does_not_pop);
-        failed += run_test("fiveo_write_begin_sets_state", test_fiveo_write_begin_sets_state);
-        failed += run_test("fiveo_write_begin_overrides", test_fiveo_write_begin_overrides);
-        failed += run_test("fiveo_write_end_clears_state", test_fiveo_write_end_clears_state);
-        failed += run_test("fiveo_write_end_when_not_active", test_fiveo_write_end_when_not_active);
-        failed += run_test("fiveo_write_active_after_begin_end", test_fiveo_write_active_after_begin_end);
-        failed += run_test("fiveo_write_file_default", test_fiveo_write_file_default);
-        failed += run_test("fiveo_write_file_returns_current", test_fiveo_write_file_returns_current);
-        failed += run_test("fiveo_common_is_marked_basic", test_fiveo_common_is_marked_basic);
-        failed += run_test("fiveo_common_is_marked_case_insensitive", test_fiveo_common_is_marked_case_insensitive);
-        failed += run_test("fiveo_common_is_marked_null", test_fiveo_common_is_marked_null);
+    failed += run_test("fiveo_chain_empty_filename", test_fiveo_chain_empty_filename);
+    failed += run_test("fiveo_chain_nonexistent_file", test_fiveo_chain_nonexistent_file);
+    failed += run_test("fiveo_chain_init_resets_state", test_fiveo_chain_init_resets_state);
+    failed += run_test("fiveo_peek_while_empty", test_fiveo_peek_while_empty);
+    failed += run_test("fiveo_peek_while_after_push", test_fiveo_peek_while_after_push);
+    failed += run_test("fiveo_peek_while_does_not_pop", test_fiveo_peek_while_does_not_pop);
+    failed += run_test("fiveo_write_begin_sets_state", test_fiveo_write_begin_sets_state);
+    failed += run_test("fiveo_write_begin_overrides", test_fiveo_write_begin_overrides);
+    failed += run_test("fiveo_write_end_clears_state", test_fiveo_write_end_clears_state);
+    failed += run_test("fiveo_write_end_when_not_active", test_fiveo_write_end_when_not_active);
+    failed += run_test("fiveo_write_active_after_begin_end", test_fiveo_write_active_after_begin_end);
+    failed += run_test("fiveo_write_file_default", test_fiveo_write_file_default);
+    failed += run_test("fiveo_write_file_returns_current", test_fiveo_write_file_returns_current);
+    failed += run_test("fiveo_common_is_marked_basic", test_fiveo_common_is_marked_basic);
+    failed += run_test("fiveo_common_is_marked_case_insensitive", test_fiveo_common_is_marked_case_insensitive);
+    failed += run_test("fiveo_common_is_marked_null", test_fiveo_common_is_marked_null);
 
         /* SCNDRV tests */
     failed += run_test("scndrv_init", test_scndrv_init);
@@ -1489,6 +1491,6 @@ int main(void) {
     failed += run_test("scndrv_out_bs_at_origin", test_scndrv_out_bs_at_origin);
 
     print_test_summary();
-    
+
     return failed ? 1 : 0;
 }
