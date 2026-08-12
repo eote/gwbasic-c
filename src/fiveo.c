@@ -348,10 +348,8 @@ int fiveo_chain(const char *filename, int line_number, bool merge, bool all_vars
     
     /* If not MERGE, clear current program */
     if (!merge) {
-        /* Delete all program lines - simplified: just reset state */
-        if (g_state) {
-            g_state->prog_buf.used = 0;
-        }
+        /* Delete all program lines using gwlist_clear to avoid memory leaks */
+        gwlist_clear();
     }
     
     /* Read program lines from file */

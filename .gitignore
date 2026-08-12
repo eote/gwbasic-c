@@ -4,6 +4,10 @@ test.txt
 test_*.txt
 test_*.dat
 
+# Test generated files in tests/
+tests/*.txt
+tests/*.dat
+
 # Build artifacts
 *.o
 *.exe

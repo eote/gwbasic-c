@@ -361,3 +361,133 @@ void test_fiveo_chain_init_resets_state(void) {
     TEST_ASSERT(!fiveo_get_chain_merge(), "Merge flag cleared");
     TEST_PASS("fiveo_init resets all state");
 }
+
+/* ========== Untested Functions Coverage (MEDIUM-3) ========== */
+
+/* ---- fiveo_peek_while ---- */
+
+void test_fiveo_peek_while_empty(void) {
+    fiveo_init();
+    /* Peek on empty stack should return -1 */
+    struct while_entry entry;
+    TEST_ASSERT_EQ_INT(fiveo_peek_while(&entry), -1, "Peek empty stack returns -1");
+    TEST_PASS("fiveo_peek_while empty");
+}
+
+void test_fiveo_peek_while_after_push(void) {
+    fiveo_init();
+    fiveo_push_while(100, 200, 10);
+    /* Peek should return 0 on success and fill entry */
+    struct while_entry entry;
+    TEST_ASSERT_EQ_INT(fiveo_peek_while(&entry), 0, "Peek returns 0 on success");
+    TEST_ASSERT_EQ_INT(entry.while_text_ptr, 100, "while_text_ptr correct");
+    TEST_ASSERT_EQ_INT(entry.wend_text_ptr, 200, "wend_text_ptr correct");
+    TEST_ASSERT_EQ_INT(entry.while_line, 10, "while_line correct");
+    TEST_PASS("fiveo_peek_while success path");
+}
+
+void test_fiveo_peek_while_does_not_pop(void) {
+    fiveo_init();
+    fiveo_push_while(50, 100, 5);
+    fiveo_push_while(150, 200, 15);
+    struct while_entry entry;
+    fiveo_peek_while(&entry);
+    TEST_ASSERT_EQ_INT(entry.while_line, 15, "Top is most recent");
+    /* Stack depth should be unchanged */
+    TEST_ASSERT_EQ_INT(fiveo_while_depth(), 2, "Peek doesn't pop");
+    TEST_PASS("fiveo_peek_while non-destructive");
+}
+
+/* ---- fiveo_write_begin ---- */
+
+void test_fiveo_write_begin_sets_state(void) {
+    fiveo_init();
+    /* Initially inactive */
+    TEST_ASSERT(!fiveo_write_active(), "Inactive before begin");
+    /* Begin WRITE to file 5 */
+    fiveo_write_begin(5);
+    TEST_ASSERT(fiveo_write_active(), "Active after begin");
+    TEST_ASSERT_EQ_INT(fiveo_write_file(), 5, "File number set");
+    TEST_PASS("fiveo_write_begin sets state");
+}
+
+void test_fiveo_write_begin_overrides(void) {
+    fiveo_init();
+    fiveo_write_begin(1);
+    fiveo_write_begin(2);  /* Second begin should override */
+    TEST_ASSERT_EQ_INT(fiveo_write_file(), 2, "Second begin overrides");
+    TEST_PASS("fiveo_write_begin overrides");
+}
+
+/* ---- fiveo_write_end ---- */
+
+void test_fiveo_write_end_clears_state(void) {
+    fiveo_init();
+    fiveo_write_begin(3);
+    TEST_ASSERT(fiveo_write_active(), "Active after begin");
+    fiveo_write_end();
+    TEST_ASSERT(!fiveo_write_active(), "Inactive after end");
+    TEST_PASS("fiveo_write_end clears state");
+}
+
+void test_fiveo_write_end_when_not_active(void) {
+    fiveo_init();
+    /* End when not active - should be safe no-op */
+    fiveo_write_end();
+    TEST_ASSERT(!fiveo_write_active(), "Still inactive");
+    TEST_PASS("fiveo_write_end safe when inactive");
+}
+
+/* ---- fiveo_write_active ---- */
+
+void test_fiveo_write_active_after_begin_end(void) {
+    fiveo_init();
+    TEST_ASSERT(!fiveo_write_active(), "Initially inactive");
+    fiveo_write_begin(1);
+    TEST_ASSERT(fiveo_write_active(), "Active after begin");
+    fiveo_write_end();
+    TEST_ASSERT(!fiveo_write_active(), "Inactive after end");
+    TEST_PASS("fiveo_write_active tracks state");
+}
+
+/* ---- fiveo_write_file ---- */
+
+void test_fiveo_write_file_default(void) {
+    fiveo_init();
+    /* Default should be 0 (console) */
+    TEST_ASSERT_EQ_INT(fiveo_write_file(), 0, "Default file = 0 (console)");
+    TEST_PASS("fiveo_write_file default");
+}
+
+void test_fiveo_write_file_returns_current(void) {
+    fiveo_init();
+    fiveo_write_begin(7);
+    TEST_ASSERT_EQ_INT(fiveo_write_file(), 7, "Returns current file");
+    fiveo_write_end();
+    /* After end, file number may persist but active flag cleared */
+    TEST_PASS("fiveo_write_file returns current");
+}
+
+/* ---- fiveo_common_is_marked ---- */
+
+void test_fiveo_common_is_marked_basic(void) {
+    fiveo_init();
+    TEST_ASSERT(!fiveo_common_is_marked("X"), "Unmarked returns false");
+    fiveo_common_mark("X");
+    TEST_ASSERT(fiveo_common_is_marked("X"), "Marked returns true");
+    TEST_PASS("fiveo_common_is_marked basic");
+}
+
+void test_fiveo_common_is_marked_case_insensitive(void) {
+    fiveo_init();
+    fiveo_common_mark("X");
+    TEST_ASSERT(fiveo_common_is_marked("x"), "Lowercase match");
+    TEST_ASSERT(fiveo_common_is_marked("X"), "Uppercase match");
+    TEST_PASS("fiveo_common_is_marked case insensitive");
+}
+
+void test_fiveo_common_is_marked_null(void) {
+    fiveo_init();
+    TEST_ASSERT(!fiveo_common_is_marked(NULL), "NULL returns false");
+    TEST_PASS("fiveo_common_is_marked NULL safe");
+}

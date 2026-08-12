@@ -93,3 +93,17 @@ void gwlist_list(int start, int end) {
 struct program_line *gwlist_get_first_line(void) {
     return g_program_head;
 }
+
+/* Clear all program lines - free linked list nodes */
+void gwlist_clear(void) {
+    struct program_line *curr = g_program_head;
+    while (curr) {
+        struct program_line *next = curr->next;
+        if (curr->text) {
+            gwram_free(curr->text);
+        }
+        gwram_free(curr);
+        curr = next;
+    }
+    g_program_head = NULL;
+}

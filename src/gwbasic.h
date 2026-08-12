@@ -217,6 +217,7 @@ struct program_line *gwlist_find_line(int number);
 void gwlist_delete_line(int number);
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
+void gwlist_clear(void);
 
 /* FIVEO module functions - WHILE/WEND stack, WRITE, CHAIN */
 void fiveo_init(void);
