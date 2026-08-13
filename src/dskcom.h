@@ -38,4 +38,7 @@ int dskcom_seek(int filenum, long record);
 int dskcom_get(int filenum, long record, void *buffer, int buflen);
 int dskcom_put(int filenum, long record, const void *buffer, int buflen);
 
+/* Find a free file number (1-255) not currently in use */
+int dskcom_find_free_filenum(void);
+
 #endif /* DSKCOM_H */

@@ -491,3 +491,104 @@ void test_fiveo_common_is_marked_null(void) {
     TEST_ASSERT(!fiveo_common_is_marked(NULL), "NULL returns false");
     TEST_PASS("fiveo_common_is_marked NULL safe");
 }
+
+/* ========== CHAIN Success Path Tests (MEDIUM-3) ========== */
+
+void test_fiveo_chain_load_basic(void) {
+    fiveo_init();
+    /* Create a temporary BASIC file to chain load */
+    const char *test_file = "tests/chain_test1.bas";
+    FILE *f = fopen(test_file, "w");
+    if (f) {
+        fprintf(f, "10 PRINT \"HELLO FROM CHAIN\"\n");
+        fprintf(f, "20 END\n");
+        fclose(f);
+        
+        int rc = fiveo_chain(test_file, 0, false, false);
+        TEST_ASSERT(rc == 0, "CHAIN loads file successfully");
+        
+        remove(test_file);
+    }
+    TEST_PASS("fiveo_chain load basic");
+}
+
+void test_fiveo_chain_merge_mode(void) {
+    fiveo_init();
+    /* Add an existing program line */
+    gwlist_add_line(100, "PRINT \"EXISTING\"");
+    
+    /* Create a file to merge */
+    const char *test_file = "tests/chain_test2.bas";
+    FILE *f = fopen(test_file, "w");
+    if (f) {
+        fprintf(f, "200 PRINT \"MERGED\"\n");
+        fprintf(f, "210 END\n");
+        fclose(f);
+        
+        int rc = fiveo_chain(test_file, 0, true, false);  /* merge=true */
+        TEST_ASSERT(rc == 0, "CHAIN merge succeeds");
+        
+        /* Verify both original and merged lines exist */
+        struct program_line *line100 = gwlist_find_line(100);
+        struct program_line *line200 = gwlist_find_line(200);
+        TEST_ASSERT(line100 != NULL, "Original line 100 preserved");
+        TEST_ASSERT(line200 != NULL, "Merged line 200 added");
+        
+        remove(test_file);
+    }
+    TEST_PASS("fiveo_chain merge mode");
+}
+
+void test_fiveo_chain_all_vars(void) {
+    fiveo_init();
+    /* Set some variables using gwdata_alloc_variable */
+    struct variable *var_a = gwdata_alloc_variable("A", VT_INTEGER);
+    if (var_a) var_a->value.i = 42;
+    struct variable *var_b = gwdata_alloc_variable("B$", VT_STRING);
+    if (var_b) {
+        var_b->value.s = gwdata_alloc_string(5);
+        strcpy(var_b->value.s, "TEST");
+    }
+    fiveo_common_mark("A");
+    fiveo_common_mark("B$");
+    
+    /* Create a file to chain */
+    const char *test_file = "tests/chain_test3.bas";
+    FILE *f = fopen(test_file, "w");
+    if (f) {
+        fprintf(f, "10 PRINT \"VARS PRESERVED\"\n");
+        fprintf(f, "20 END\n");
+        fclose(f);
+        
+        int rc = fiveo_chain(test_file, 0, false, true);  /* all_vars=true */
+        TEST_ASSERT(rc == 0, "CHAIN all_vars succeeds");
+        
+        /* Verify variables are preserved */
+        struct variable *found_a = gwdata_find_variable("A");
+        struct variable *found_b = gwdata_find_variable("B$");
+        TEST_ASSERT(found_a != NULL && found_a->value.i == 42, "Variable A preserved");
+        TEST_ASSERT(found_b != NULL && strcmp(found_b->value.s, "TEST") == 0, "Variable B$ preserved");
+        
+        remove(test_file);
+    }
+    TEST_PASS("fiveo_chain all_vars");
+}
+
+void test_fiveo_chain_line_number(void) {
+    fiveo_init();
+    /* Create a file to chain with specific start line */
+    const char *test_file = "tests/chain_test4.bas";
+    FILE *f = fopen(test_file, "w");
+    if (f) {
+        fprintf(f, "100 PRINT \"LINE 100\"\n");
+        fprintf(f, "110 END\n");
+        fclose(f);
+        
+        int rc = fiveo_chain(test_file, 100, false, false);  /* start at line 100 */
+        TEST_ASSERT(rc == 0, "CHAIN with line number succeeds");
+        TEST_ASSERT_EQ_INT(fiveo_get_chain_line(), 100, "Chain line set to 100");
+        
+        remove(test_file);
+    }
+    TEST_PASS("fiveo_chain line number");
+}

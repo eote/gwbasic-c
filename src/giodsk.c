@@ -53,3 +53,7 @@ int giodsk_get(int filenum, long record, void *buffer, int buflen) {
 int giodsk_put(int filenum, long record, const void *buffer, int buflen) {
     return dskcom_put(filenum, record, buffer, buflen);
 }
+
+int giodsk_find_free_filenum(void) {
+    return dskcom_find_free_filenum();
+}

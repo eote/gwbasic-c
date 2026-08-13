@@ -340,7 +340,11 @@ int fiveo_chain(const char *filename, int line_number, bool merge, bool all_vars
      * A full implementation would use the tokenized program loader.
      * This simplified version reads lines as text and adds them via gwlist.
      */
-    int filenum = 1;  /* Use file number 1 for CHAIN */
+    /* Use free file number to avoid conflicting with user's OPEN files */
+    int filenum = giodsk_find_free_filenum();
+    if (filenum == 0) {
+        return -1;  /* No free file numbers */
+    }
     int rc = giodsk_open(filename, filenum, 0, 0);  /* Mode 0 = input */
     if (rc != 0) {
         return -1;  /* File not found or open error */
@@ -360,23 +364,19 @@ int fiveo_chain(const char *filename, int line_number, bool merge, bool all_vars
     char line_buf[256];
     while (giodsk_input(filenum, line_buf, sizeof(line_buf) - 1) == 0) {
         /* Parse line number from start of line: "10 PRINT ..." */
-        int linenum = 0;
-        char *p = line_buf;
+        char *endptr;
+        long linenum = strtol(line_buf, &endptr, 10);
         
-        /* Skip whitespace */
-        while (*p == ' ' || *p == '\t') p++;
+        /* Check for overflow - GW-BASIC line numbers max 65535 */
+        if (linenum > 65535) linenum = 65535;
         
-        /* Parse line number */
-        while (*p >= '0' && *p <= '9') {
-            linenum = linenum * 10 + (*p - '0');
-            p++;
-        }
+        char *p = endptr;
         
         /* Skip whitespace between number and text */
         while (*p == ' ' || *p == '\t') p++;
         
         if (linenum > 0 && *p) {
-            gwlist_add_line(linenum, p);
+            gwlist_add_line((int)linenum, p);
         }
     }
     

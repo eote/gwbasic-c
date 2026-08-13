@@ -738,6 +738,10 @@ void test_fiveo_write_file_returns_current(void);
 void test_fiveo_common_is_marked_basic(void);
 void test_fiveo_common_is_marked_case_insensitive(void);
 void test_fiveo_common_is_marked_null(void);
+void test_fiveo_chain_load_basic(void);
+void test_fiveo_chain_merge_mode(void);
+void test_fiveo_chain_all_vars(void);
+void test_fiveo_chain_line_number(void);
 
 /* SCNDRV test functions */
 void test_scndrv_init(void);
@@ -1457,8 +1461,12 @@ int main(void) {
     failed += run_test("fiveo_write_file_default", test_fiveo_write_file_default);
     failed += run_test("fiveo_write_file_returns_current", test_fiveo_write_file_returns_current);
     failed += run_test("fiveo_common_is_marked_basic", test_fiveo_common_is_marked_basic);
-    failed += run_test("fiveo_common_is_marked_case_insensitive", test_fiveo_common_is_marked_case_insensitive);
-    failed += run_test("fiveo_common_is_marked_null", test_fiveo_common_is_marked_null);
+        failed += run_test("fiveo_common_is_marked_case_insensitive", test_fiveo_common_is_marked_case_insensitive);
+        failed += run_test("fiveo_common_is_marked_null", test_fiveo_common_is_marked_null);
+        failed += run_test("fiveo_chain_load_basic", test_fiveo_chain_load_basic);
+        failed += run_test("fiveo_chain_merge_mode", test_fiveo_chain_merge_mode);
+        failed += run_test("fiveo_chain_all_vars", test_fiveo_chain_all_vars);
+        failed += run_test("fiveo_chain_line_number", test_fiveo_chain_line_number);
 
         /* SCNDRV tests */
     failed += run_test("scndrv_init", test_scndrv_init);

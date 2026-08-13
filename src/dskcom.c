@@ -314,3 +314,14 @@ int dskcom_put(int filenum, long record, const void *buffer, int buflen) {
 
     return SUCCESS;
 }
+
+/* Find a free file number (1-255) not currently in use */
+int dskcom_find_free_filenum(void) {
+    /* Scan from 1 to 255 for a free file number */
+    for (int filenum = 1; filenum <= 255; filenum++) {
+        if (!dskcom_find_file(filenum)) {
+            return filenum;
+        }
+    }
+    return 0;  /* All file numbers in use */
+}
