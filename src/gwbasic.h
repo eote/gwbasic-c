@@ -130,6 +130,15 @@ struct _runtime_state {
     bool in_direct_mode;
 };
 
+/* Debug print macro - controlled by DEBUG compile flag */
+#ifdef DEBUG
+#define DEBUG_PRINT(fmt, ...) do { \
+    fprintf(stderr, "[DEBUG] " fmt "\n", ##__VA_ARGS__); \
+} while(0)
+#else
+#define DEBUG_PRINT(fmt, ...) do { } while(0)
+#endif
+
 /* Global state (defined in gwdata.c) */
 extern struct _runtime_state *g_state;
 
@@ -218,6 +227,7 @@ void gwlist_delete_line(int number);
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
 void gwlist_clear(void);
+int gwlist_load_file(const char *filename);
 
 /* FIVEO module functions - WHILE/WEND stack, WRITE, CHAIN */
 void fiveo_init(void);

@@ -10,8 +10,8 @@ extern int main(int argc, char *argv[]);
 void biboot_init(void) {
     /* In the original ASM, this copies 100H bytes from ES:0 to CS:0
      * and then jumps to START. In our C implementation, the
-     * OS loader handles this, so we just call the main entry point. */
-    main(0, NULL);
+     * OS loader handles this, so initialization is already done
+     * in init_all_modules() before calling biboot_init(). */
 }
 
 /* Last label in data segment - used by BASIC to initialize TXTTAB, etc. */

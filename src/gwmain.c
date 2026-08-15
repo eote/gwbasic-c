@@ -49,8 +49,11 @@ extern void scnedt_init(void);
 
 /* Initialize all modules */
 static void init_all_modules(void) {
+    /* Initialize core infrastructure first (required by other modules) */
+    gwdata_init();
+    gwram_init();
+    
     advgrp_init();
-    biboot_init();
     bimisc_init();
     biprtu_init();
     biptrg_init();
@@ -68,11 +71,9 @@ static void init_all_modules(void) {
     giolpt_init();
     gioscn_init();
     giotbl_init();
-    gwdata_init();
     gweval_init();
     gwinit_init();
     gwlist_init();
-    gwram_init();
     gwsts_init();
     ibmres_init();
     itsa86_init();
@@ -208,20 +209,62 @@ static void run_interpreter(void) {
 int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
-    
+
+    printf("[MAIN] Starting GWBASIC\n");
+    fflush(stdout);
+
     /* Initialize all modules (gwdata_init allocates g_state) */
     init_all_modules();
-    
+
     if (!g_state) {
         return ERROR;
     }
-    
-    /* Run the interpreter */
+
+    DEBUG_PRINT("GWBASIC starting");
+
+    /* If a .bas file is provided as argument, load and run it */
+    if (argc >= 2) {
+        const char *filename = argv[1];
+        DEBUG_PRINT("Loading program: %s", filename);
+        
+        /* Load the program file */
+        int load_rc = gwlist_load_file(filename);
+        if (load_rc != SUCCESS) {
+            printf("Error loading file: %s\n", filename);
+            free(g_state);
+            g_state = NULL;
+            return ERROR;
+        }
+        
+        DEBUG_PRINT("Program loaded, executing...");
+        
+        /* Execute all program lines in order */
+        struct program_line *curr = gwlist_get_first_line();
+        while (curr) {
+            if (curr->text) {
+                DEBUG_PRINT("Executing line %d: '%s'", curr->number, curr->text);
+                int rc = gwsts_exec_statement(curr->text);
+                DEBUG_PRINT("Statement returned %d", rc);
+                if (rc != 0) {
+                    printf("Error at line %d\n", curr->number);
+                    break;
+                }
+            }
+            curr = curr->next;
+        }
+        
+        /* Cleanup */
+        free(g_state);
+        g_state = NULL;
+        return SUCCESS;
+    }
+
+    /* Run the interpreter (interactive mode) */
     run_interpreter();
-    
+
     /* Cleanup */
     free(g_state);
     g_state = NULL;
-    
+
     return SUCCESS;
 }

@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -O2 -I./src
+DEBUG_CFLAGS = -std=c11 -Wall -Wextra -O2 -I./src -DDEBUG
 LDFLAGS = -mconsole -lwinmm
 
 # Source files (matching original GW-BASIC ASM modules)
@@ -53,6 +54,9 @@ TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_TARGET = test_gwbasic.exe
 
 all: $(TARGET)
+
+debug: $(SRCS)
+	$(CC) $(DEBUG_CFLAGS) -o $(TARGET) $^ $(LDFLAGS)
 
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)

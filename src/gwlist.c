@@ -107,3 +107,53 @@ void gwlist_clear(void) {
     }
     g_program_head = NULL;
 }
+
+/* Load program from .bas file */
+int gwlist_load_file(const char *filename) {
+    if (!filename) return ERROR;
+
+    DEBUG_PRINT("Opening file: %s", filename);
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        DEBUG_PRINT("Failed to open file: %s", filename);
+        return ERROR;
+    }
+
+    DEBUG_PRINT("File opened successfully");
+    /* Clear existing program */
+    gwlist_clear();
+
+    char line[256];
+    int line_count = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        /* Remove trailing newline */
+        line[strcspn(line, "\n")] = '\0';
+
+        /* Skip empty lines and comments */
+        char *trimmed = line;
+        while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+        if (!*trimmed || *trimmed == '\'') continue;
+
+        /* Extract line number */
+        int num = 0;
+        char *p = trimmed;
+        while (*p && isdigit((unsigned char)*p)) {
+            num = num * 10 + (*p - '0');
+            p++;
+        }
+
+        if (num > 0 && num <= 65529) {
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p) {
+                DEBUG_PRINT("Adding line %d: '%s'", num, p);
+                gwlist_add_line(num, p);
+                line_count++;
+            }
+        }
+    }
+
+    DEBUG_PRINT("Loaded %d lines", line_count);
+
+    fclose(fp);
+    return SUCCESS;
+}
