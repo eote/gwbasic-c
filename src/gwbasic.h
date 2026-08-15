@@ -226,6 +226,7 @@ struct program_line *gwlist_find_line(int number);
 void gwlist_delete_line(int number);
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
+struct program_line *gwlist_find_line_by_text_ptr(WORD text_ptr);
 void gwlist_clear(void);
 int gwlist_load_file(const char *filename);
 
@@ -478,8 +479,26 @@ void call86_calls(const char **text);
 float call86_usr(int usr_num, float arg);
 void call86_defusr(int usr_num, int address);
 
-/* NEXT86 module functions - NEXT Loop Handling */
+/* NEXT86 module functions - FOR/NEXT stack, CHRGET */
+struct for_entry {
+    BYTE token;           /* FOR token in high byte */
+    intptr_t var_ptr;     /* Pointer to loop variable */
+    WORD next_text_ptr;   /* Text pointer of matching NEXT */
+    BYTE step_sign;       /* Sign of increment */
+    BYTE var_type;        /* Integer vs floating point */
+    float step;           /* Step value */
+    float limit;          /* Upper/lower limit value */
+    WORD for_line;        /* Line number of FOR statement */
+    WORD for_text_ptr;    /* Text pointer into FOR statement */
+    char var_name[41];    /* Variable name for matching with NEXT */
+};
+
 void next86_init(void);
+int next86_push_for(BYTE token, intptr_t var_ptr, WORD next_text_ptr, 
+                    BYTE step_sign, BYTE var_type, float step, float limit,
+                    WORD for_line, WORD for_text_ptr, const char *var_name);
+int next86_pop_for(struct for_entry *entry);
+struct for_entry* next86_find_for(const char *var_name, WORD next_text_ptr);
 int next86_next(const char **text);
 int next86_for(const char **text);
 int next86_get_for_depth(void);

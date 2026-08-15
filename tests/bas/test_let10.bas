@@ -1,0 +1,2 @@
+10 A = 5
+20 PRINT A; "hello"

@@ -1,0 +1,2 @@
+10 LET A = 5
+20 PRINT A

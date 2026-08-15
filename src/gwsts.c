@@ -114,6 +114,41 @@ int gwsts_exec_statement(const char *stmt) {
             if (expr) gwram_free(expr);
         }
     }
+    /* FOR statement: FOR var = start TO limit [STEP step] */
+    else if (starts_with(trimmed, "FOR ")) {
+        extern int next86_for(const char **text);
+        const char *text_ptr = trimmed + 4;  /* Skip "FOR " */
+        result = next86_for(&text_ptr);
+    }
+    /* NEXT statement: NEXT [var] */
+    else if (starts_with(trimmed, "NEXT ")) {
+        extern int next86_next(const char **text);
+        const char *text_ptr = trimmed + 5;  /* Skip "NEXT " */
+        result = next86_next(&text_ptr);
+    }
+    /* GOTO statement */
+    else if (starts_with(trimmed, "GOTO ")) {
+        extern int next86_goto(const char **text);
+        const char *text_ptr = trimmed + 5;  /* Skip "GOTO " */
+        result = next86_goto(&text_ptr);
+    }
+    /* GOSUB statement */
+    else if (starts_with(trimmed, "GOSUB ")) {
+        extern int next86_gosub(const char **text);
+        const char *text_ptr = trimmed + 6;  /* Skip "GOSUB " */
+        result = next86_gosub(&text_ptr);
+    }
+    /* RETURN statement */
+    else if (starts_with(trimmed, "RETURN")) {
+        extern int next86_return(const char **text);
+        const char *text_ptr = trimmed + 6;  /* Skip "RETURN" */
+        result = next86_return(&text_ptr);
+    }
+    /* END statement */
+    else if (starts_with(trimmed, "END")) {
+        /* END - stop execution */
+        result = ERROR;  /* Signal to stop execution */
+    }
     /* PRINT statement */
     else if (starts_with(trimmed, "PRINT ")) {
         /* Check for PRINT #filenum, (file output) */
@@ -147,15 +182,79 @@ int gwsts_exec_statement(const char *stmt) {
             /* Regular PRINT to console */
             char *expr = strdup_trim(trimmed + 6);
             if (expr) {
-                /* Try string evaluation first, then numeric */
-                char *str_val = gweval_eval_string(expr);
-                if (str_val) {
-                    printf("%s\n", str_val);
-                } else {
-                    float val = gweval_eval_numeric(expr);
-                    printf("%g\n", val);
+                /* Handle multiple expressions separated by commas/semicolons */
+                char *text = expr;
+                bool trailing_comma = false;
+                bool trailing_semicolon = false;
+                
+                while (*text) {
+                    /* Find end of expression (next comma, semicolon, or end) - skip commas/semicolons inside quotes */
+                    char *expr_start = text;
+                    char *expr_end = text;
+                    bool in_quotes = false;
+                    while (*expr_end && !(!in_quotes && (*expr_end == ',' || *expr_end == ';'))) {
+                        if (*expr_end == '"') in_quotes = !in_quotes;
+                        expr_end++;
+                    }
+                    
+                    /* Extract expression */
+                    size_t expr_len = expr_end - expr_start;
+                    char *single_expr = (char *)gwram_alloc(expr_len + 1);
+                    if (!single_expr) {
+                        gwram_free(expr);
+                        return ERROR;
+                    }
+                    memcpy(single_expr, expr_start, expr_len);
+                    single_expr[expr_len] = '\0';
+                    
+                    /* Trim whitespace - use a separate pointer to avoid corrupting the allocated pointer */
+                    char *trim_start = single_expr;
+                    char *trim_end = single_expr + strlen(single_expr) - 1;
+                    while (trim_end >= trim_start && isspace((unsigned char)*trim_end)) {
+                        *trim_end = '\0';
+                        trim_end--;
+                    }
+                    while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
+                    
+                    if (*trim_start) {
+                        /* Try string evaluation first, then numeric */
+                        char *str_val = gweval_eval_string(trim_start);
+                        if (str_val) {
+                            printf("%s", str_val);
+                        } else {
+                            float val = gweval_eval_numeric(trim_start);
+                            printf("%g", val);
+                        }
+                    }
+                    
+                    gwram_free(single_expr);
+                    
+                    /* Handle separator */
+                    if (*expr_end == ',') {
+                        trailing_comma = true;
+                        trailing_semicolon = false;
+                        /* Zone separator - add tab */
+                        printf("\t");
+                    } else if (*expr_end == ';') {
+                        trailing_semicolon = true;
+                        trailing_comma = false;
+                        /* No separator */
+                    } else {
+                        trailing_comma = false;
+                        trailing_semicolon = false;
+                    }
+                    
+                    text = expr_end;
+                    if (*text) text++;
                 }
+                
                 gwram_free(expr);
+                
+                /* Print newline unless last expression ended with comma or semicolon */
+                if (!trailing_comma && !trailing_semicolon) {
+                    printf("\n");
+                }
+                
                 result = SUCCESS;
             }
         }

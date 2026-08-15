@@ -159,21 +159,21 @@ static void run_interpreter(void) {
         }
         
         /* Check for RUN command */
-                if (strcasecmp(trimmed, "RUN") == 0) {
-                    /* Execute all program lines in order */
-                    struct program_line *curr = gwlist_get_first_line();
-                    while (curr) {
-                        if (curr->text) {
-                            int rc = gwsts_exec_statement(curr->text);
-                            if (rc != 0) {
-                                printf("Error at line %d\n", curr->number);
-                                break;
-                            }
-                        }
-                        curr = curr->next;
+        if (strcasecmp(trimmed, "RUN") == 0) {
+            /* Execute all program lines in order */
+            struct program_line *curr = gwlist_get_first_line();
+            while (curr) {
+                if (curr->text) {
+                    int rc = gwsts_exec_statement(curr->text);
+                    if (rc != 0) {
+                        printf("Error at line %d\n", curr->number);
+                        break;
                     }
-                    continue;
                 }
+                curr = curr->next;
+            }
+            continue;
+        }
         
         /* If line starts with number, it's a program line */
         if (has_line_number(trimmed)) {
@@ -210,9 +210,6 @@ int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
 
-    printf("[MAIN] Starting GWBASIC\n");
-    fflush(stdout);
-
     /* Initialize all modules (gwdata_init allocates g_state) */
     init_all_modules();
 
@@ -238,17 +235,37 @@ int main(int argc, char *argv[]) {
         
         DEBUG_PRINT("Program loaded, executing...");
         
-        /* Execute all program lines in order */
+        /* Execute all program lines in order - with jump handling for FOR/GOTO/GOSUB */
         struct program_line *curr = gwlist_get_first_line();
+        int exec_rc = SUCCESS;
+        
         while (curr) {
             if (curr->text) {
                 DEBUG_PRINT("Executing line %d: '%s'", curr->number, curr->text);
+                
+                /* Set current line for FOR/GOTO handling */
+                extern WORD g_curlin;
+                g_curlin = curr->number;
+                
                 int rc = gwsts_exec_statement(curr->text);
                 DEBUG_PRINT("Statement returned %d", rc);
-                if (rc != 0) {
+                
+                if (rc > 0) {
+                    /* FOR/GOTO/GOSUB/RETURN continuation - rc is the text pointer to jump to */
+                    curr = gwlist_find_line_by_text_ptr((WORD)rc);
+                    continue;
+                } else if (rc < 0) {
+                    /* Check if it's END statement (-1 from gwsts_exec_statement) */
+                    if (rc == -1) {
+                        /* END - stop execution gracefully */
+                        break;
+                    }
+                    /* Error */
                     printf("Error at line %d\n", curr->number);
+                    exec_rc = ERROR;
                     break;
                 }
+                /* rc == 0 is success, continue to next line */
             }
             curr = curr->next;
         }
@@ -256,7 +273,7 @@ int main(int argc, char *argv[]) {
         /* Cleanup */
         free(g_state);
         g_state = NULL;
-        return SUCCESS;
+        return exec_rc;
     }
 
     /* Run the interpreter (interactive mode) */
