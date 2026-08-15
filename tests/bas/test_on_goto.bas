@@ -1,0 +1,15 @@
+' Test: ON GOTO and ON GOSUB
+10 FOR I = 1 TO 3
+20 ON I GOTO 100, 200, 300
+30 PRINT "Default case for I = "; I
+40 NEXT I
+50 END
+100 PRINT "Branch 1: I = 1"
+110 NEXT I
+120 END
+200 PRINT "Branch 2: I = 2"
+210 NEXT I
+220 END
+300 PRINT "Branch 3: I = 3"
+310 NEXT I
+320 END

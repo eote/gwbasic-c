@@ -1,0 +1,8 @@
+' Test: IF/THEN/ELSE statements
+10 A = 5
+20 IF A > 3 THEN PRINT "A > 3"
+30 IF A < 10 THEN PRINT "A < 10" ELSE PRINT "A >= 10"
+40 IF A = 5 THEN PRINT "A = 5" ELSE PRINT "A != 5"
+50 B$ = "YES"
+60 IF B$ = "YES" THEN PRINT "B$ is YES"
+70 END

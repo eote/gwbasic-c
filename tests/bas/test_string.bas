@@ -1,0 +1,15 @@
+' Test: String functions
+10 A$ = "Hello, World!"
+20 PRINT "LEN: "; LEN(A$)
+30 PRINT "LEFT$: "; LEFT$(A$, 5)
+40 PRINT "RIGHT$: "; RIGHT$(A$, 6)
+50 PRINT "MID$: "; MID$(A$, 8, 5)
+60 PRINT "UCASE$: "; UCASE$(A$)
+70 PRINT "LCASE$: "; LCASE$(A$)
+80 PRINT "STR$: "; STR$(123.45)
+90 PRINT "VAL: "; VAL("456.78")
+100 PRINT "CHR$: "; CHR$(65)
+110 PRINT "ASC: "; ASC("A")
+120 PRINT "SPACE$: "; SPACE$(5);"END"
+130 PRINT "STRING$: "; STRING$(10, "*")
+140 END

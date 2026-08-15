@@ -1,0 +1,11 @@
+' Test: GOTO and GOSUB/RETURN
+10 PRINT "Start"
+20 GOTO 50
+30 PRINT "This should not print"
+40 END
+50 PRINT "After GOTO"
+60 GOSUB 100
+70 PRINT "Back from GOSUB"
+80 END
+100 PRINT "In subroutine"
+110 RETURN

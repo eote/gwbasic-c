@@ -1,0 +1,8 @@
+' Test: READ/DATA/RESTORE
+10 READ A, B, C
+20 PRINT "First read: "; A; B; C
+30 RESTORE
+40 READ X, Y, Z
+60 PRINT "After RESTORE: "; X; Y; Z
+70 DATA 10, 20, 30
+80 END
