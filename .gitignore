@@ -16,6 +16,11 @@ tests/*.dat
 */*.exe
 */*.obj
 
+# Root directory test artifacts
+*.DAT
+build.log
+test_output.log
+
 # IDE/Editor
 .vscode/
 .idea/
