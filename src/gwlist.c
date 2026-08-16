@@ -95,18 +95,6 @@ struct program_line *gwlist_get_first_line(void) {
     return g_program_head;
 }
 
-/* Find line by text pointer (for FOR/NEXT loop continuation) */
-struct program_line *gwlist_find_line_by_text_ptr(WORD text_ptr) {
-    struct program_line *curr = g_program_head;
-    while (curr) {
-        if (curr->text && (WORD)(uintptr_t)curr->text == text_ptr) {
-            return curr;
-        }
-        curr = curr->next;
-    }
-    return NULL;
-}
-
 /* Clear all program lines - free linked list nodes */
 void gwlist_clear(void) {
     struct program_line *curr = g_program_head;

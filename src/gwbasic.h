@@ -226,7 +226,6 @@ struct program_line *gwlist_find_line(int number);
 void gwlist_delete_line(int number);
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
-struct program_line *gwlist_find_line_by_text_ptr(WORD text_ptr);
 void gwlist_clear(void);
 int gwlist_load_file(const char *filename);
 

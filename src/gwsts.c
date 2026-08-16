@@ -151,9 +151,14 @@ int gwsts_exec_statement(const char *stmt) {
         result = -2;  /* Distinct from ERROR (-1) */
     }
     /* PRINT statement */
-    else if (starts_with(trimmed, "PRINT ")) {
+    else if (starts_with(trimmed, "PRINT")) {
+        /* Check for bare PRINT (no arguments) - outputs newline */
+        if (trimmed[5] == '\0') {
+            printf("\n");
+            result = SUCCESS;
+        }
         /* Check for PRINT #filenum, (file output) */
-        if (trimmed[6] == '#') {
+        else if (trimmed[5] == '#') {
             char *rest = trimmed + 7;
             int filenum = (int)gweval_eval_numeric(rest);
             
@@ -564,9 +569,14 @@ int gwsts_exec_statement(const char *stmt) {
             if (var_ref) gwram_free(var_ref);
             if (expr) gwram_free(expr);
         } else {
-            /* Unrecognized statement - report error */
-            printf("Syntax error: %s\n", trimmed);
-            result = ERROR;
+            /* Empty/whitespace-only statement is a no-op (GW-BASIC semantics) */
+            if (!*trimmed) {
+                result = SUCCESS;
+            } else {
+                /* Unrecognized statement - report error */
+                printf("Syntax error: %s\n", trimmed);
+                result = ERROR;
+            }
         }
     }
     
