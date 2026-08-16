@@ -157,37 +157,41 @@ int gwsts_exec_statement(const char *stmt) {
             printf("\n");
             result = SUCCESS;
         }
-        /* Check for PRINT #filenum, (file output) */
-        else if (trimmed[5] == '#') {
-            char *rest = trimmed + 7;
-            int filenum = (int)gweval_eval_numeric(rest);
-            
-            /* Find comma - make a copy to avoid modifying original */
-            char *rest_copy = strdup_trim(rest);
-            if (rest_copy) {
-                char *comma = strchr(rest_copy, ',');
-                if (comma && filenum > 0) {
-                    *comma = '\0';
-                    char *expr = strdup_trim(comma + 1);
-                    if (expr) {
-                        char *str_val = gweval_eval_string(expr);
-                        if (str_val) {
-                            result = dskcom_print(filenum, str_val);
-                        } else {
-                            float val = gweval_eval_numeric(expr);
-                            char buf[64];
-                            snprintf(buf, sizeof(buf), "%g", val);
-                            result = dskcom_print(filenum, buf);
+        /* Check for PRINT #filenum, (file output) - handle optional space after PRINT */
+        else {
+            char *p = trimmed + 5;  /* After "PRINT" */
+            while (*p == ' ') p++;  /* Skip optional spaces */
+            if (*p == '#') {
+                /* File output: PRINT #filenum, expr */
+                char *rest = p + 1;  /* After '#' */
+                int filenum = (int)gweval_eval_numeric(rest);
+
+                /* Find comma - make a copy to avoid modifying original */
+                char *rest_copy = strdup_trim(rest);
+                if (rest_copy) {
+                    char *comma = strchr(rest_copy, ',');
+                    if (comma && filenum > 0) {
+                        *comma = '\0';
+                        char *expr = strdup_trim(comma + 1);
+                        if (expr) {
+                            char *str_val = gweval_eval_string(expr);
+                            if (str_val) {
+                                result = dskcom_print(filenum, str_val);
+                            } else {
+                                float val = gweval_eval_numeric(expr);
+                                char buf[64];
+                                snprintf(buf, sizeof(buf), "%g", val);
+                                result = dskcom_print(filenum, buf);
+                            }
+                            gwram_free(expr);
                         }
-                        gwram_free(expr);
                     }
+                    gwram_free(rest_copy);
                 }
-                gwram_free(rest_copy);
-            }
-        } else {
-            /* Regular PRINT to console */
-            char *expr = strdup_trim(trimmed + 6);
-            if (expr) {
+            } else {
+                /* Regular PRINT to console */
+                char *expr = strdup_trim(trimmed + 5);  /* After "PRINT" */
+                if (expr) {
                 /* Handle multiple expressions separated by commas/semicolons */
                 char *text = expr;
                 bool trailing_comma = false;
@@ -264,7 +268,8 @@ int gwsts_exec_statement(const char *stmt) {
                 result = SUCCESS;
             }
         }
-    }
+    }  /* close else (console output) */
+}  /* close else (non-bare PRINT) */
     /* IF statement (simplified: IF <expr> THEN <stmt>) */
     else if (starts_with(trimmed, "IF ")) {
         char *then_pos = strstr(trimmed + 3, " THEN ");
