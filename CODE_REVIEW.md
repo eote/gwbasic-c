@@ -1,35 +1,41 @@
-# GW-BASIC C Port - Code Review v53
+# GW-BASIC C Port - Code Review v54
 
-**日期**: 2026-08-16
-**审查范围**: commit `3667ebe` → `df7b504` — fix: .bas file execution + DEBUG_PRINT macro
-**测试状态**: 1084/1084 全部通过 ✅
+**日期**: 2026-08-17
+**审查范围**: commit `df7b504` → `d2f8e08` — feat: FOR/NEXT, GOTO/GOSUB/RETURN, PRINT semicolon/comma support
+**测试状态**: 1084/1084 单元测试全部通过 ✅ | .bas 集成测试部分通过 ⚠️
 **编译状态**: 无错误 ✅
-**运行验证**: `test_hello.bas` 成功输出 "Hello, World" ✅
 **进度**: 44/44 模块 (100%)
-**总体评分**: A- (优秀) — 功能重做第一步成功落地，但存在若干代码卫生问题
+**总体评分**: C+ (及格) — 功能方向正确但跳转机制存在严重缺陷，未识别语句静默终止
 
 ---
 
 ## 一、概述
 
-本次提交 `df7b504` 是 v52 记录的**功能重做第一步**：实现 .bas 文件加载与执行。这是自 v50 大规模功能开发被还原后的重新开工。
+本次提交 `d2f8e08` 是功能重做第二次迭代（v53 → FOR/NEXT + GOTO/GOSUB/RETURN + PRINT 分隔符）：
 
-| 变更 | 文件 | 说明 |
+| 文件 | 变更 | 内容 |
 |------|------|------|
-| main() 添加 .bas 加载执行 | `src/gwmain.c` | +61 行：识别 argv[1]，加载后逐行执行 |
-| 新增 `gwlist_load_file()` | `src/gwlist.c` | +50 行：fopen/fgets 解析 .bas 源码为程序行链表 |
-| DEBUG_PRINT 宏 | `src/gwbasic.h` | +10 行：`#ifdef DEBUG` 条件编译 |
-| 移除递归 main() 调用 | `src/biboot.c` | -4 行：biboot_init 变空函数 |
-| init 顺序修复 | `src/gwmain.c` | gwdata_init/gwram_init 提前到最前 |
-| debug Makefile target | `Makefile` | +3 行：`-DDEBUG` 编译 |
-| 误提交工具文件 | `.qwen/*` `err.txt` `output.txt` | ⚠️ 不应入库（用户正在处理） |
+| `src/next86.c` | +291 | FOR/NEXT 完整实现（FOR 栈、int/float 分支）、GOTO/GOSUB/RETURN 处理器 |
+| `src/gwsts.c` | +113 | PRINT 多表达式/逗号分号分隔、END 语句、OPEN 文件、IF 简化 |
+| `src/gwlist.c` | +120 | `gwlist_find_line_by_text_ptr()`、load_file 动态缓冲+strtol ✅ |
+| `src/gwmain.c` | +55/-27 | 跳转处理循环（rc>0 跳转）、exec_rc、RUN 块缩进修复 |
+| `src/gwbasic.h` | +21 | `struct for_entry` 提为公共结构、next86 API 变更 |
+| `tests/bas/` | +23 | 新增 11 个 test_let*.bas + test_simple.bas |
+| `.qwen/*` `err.txt` | 删除 | ✅ v53 MEDIUM-4 清理完成 |
 
-**验证结果:**
-- ✅ 1084/1084 单元测试全部通过
-- ✅ `gwbasic.exe tests/bas/test_hello.bas` → 输出 "Hello, World"，exit 0
-- ✅ 实测确认（用户澄清）：其他 .bas（FOR/WHILE/GOTO/文件 I/O）**尚未覆盖** — 属预期，后续迭代实现
+**测试声明 vs 实测:**
+- ✅ 1084/1084 单元测试通过
+- ✅ commit message 声称 "9 .bas integration tests pass" — **与实测不符**（见下方）
 
-**核心架构变化**: `.bas 文件执行` = 命令行加载 (gwlist_load_file) → 顺序执行 (gwsts_exec_statement 逐行)。gwsts_exec_statement（601 行）此前已存在，支持 DIM/LET/PRINT(控制台+文件)/IF 简化版。
+**实测结果（本审查独立验证）:**
+
+| .bas 测试 | commit 声称 | 实测 | 说明 |
+|-----------|------------|------|------|
+| test_hello.bas | 通过 | ✅ 通过 | PRINT |
+| test_for.bas | 通过 | ✅ 通过 | 5 次 "Hello, World" 循环 |
+| test_if.bas | 通过 | ✅ 通过 | A>3 / A<10 / A=5 |
+| **test_goto_gosub.bas** | **通过** | **❌ 失败** | "Error at line 20"（GOTO 50 跳转失败）|
+| 未识别语句测试 (自建) | — | ❌ 静默终止 | 无输出，exit 0，后续行不执行 |
 
 ---
 
@@ -37,139 +43,169 @@
 
 ### 🟥 CRITICAL
 
-无。
+| # | 描述 | 文件 | 行号 |
+|---|------|------|------|
+| 1 | 指针截断跳转机制 — GOTO/GOSUB/FOR 跳转不可靠 | `src/next86.c` `src/gwlist.c` `src/gwmain.c` | 355/360, 99-104, 250 |
+| 2 | 未识别语句被当作 END 静默终止程序 | `src/gwsts.c` `src/gwmain.c` | 35, 258-263 |
+
+**详情:**
+
+#### CRITICAL-1: 指针截断跳转机制（实测 test_goto_gosub.bas 失败）
+
+```c
+/* next86.c GOTO 处理 */
+return (int)(uintptr_t)target->text;        /* ① 64位指针截断为32位int */
+
+/* gwmain.c 跳转处理 */
+if (rc > 0) {
+    curr = gwlist_find_line_by_text_ptr((WORD)rc);   /* ② 再截断为16位 */
+
+/* gwlist.c 匹配 */
+if (curr->text && (WORD)(uintptr_t)curr->text == text_ptr)  /* ③ 16位截断比较 */
+```
+
+**问题链:**
+1. **① (int) 截断**: 64 位进程堆地址 > 4GB 的指针低 32 位最高位为 1 时 → 负数 → main `rc > 0` 判定失败 → **明明成功的 GOTO 被当作错误**
+2. **②③ WORD 16 位截断**: 两个不同行 text 指针的低 16 位碰撞 → 跳到错误行
+3. **实测证据**: `test_goto_gosub.bas` line 20 (`GOTO 50`) 输出 "Error at line 20"，exit code 4294967295(-1) — **commit message 声称该测试通过，与实际不符**
+
+**修复建议（正确设计）:** 跳转目标用**行号**传递，main 用 `gwlist_find_line(int)` 查找：
+```c
+/* next86_goto 返回目标行号 */
+return target->number;        /* 或定义跳转约定：正数=行号 */
+
+/* main 中 */
+if (rc > 0) {
+    curr = gwlist_find_line(rc);   /* 按行号查找，无指针截断 */
+    continue;
+}
+```
+或定义显式跳转结构（{type: GOTO/FOR/GOSUB, line: N}）。
+
+---
+
+#### CRITICAL-2: 未识别语句被当作 END 静默终止
+
+```c
+/* gwsts.c — 无匹配分支的语句返回 ERROR(-1) */
+int result = ERROR;   /* line 35: 默认值，未识别语句保持 -1 */
+
+/* gwmain.c — ERROR(-1) 被当作 END */
+if (rc == -1) {
+    /* END - stop execution gracefully */
+    break;            /* ← 未识别语句在这里被静默吞掉！ */
+}
+```
+
+**实测证据:** 自建 `t_unknown.bas`：
+```
+10 XXYYZZ
+20 PRINT "SHOULD NOT REACH"
+```
+运行结果：**无任何输出、exit 0**。line 10 未识别 → ERROR(-1) → 被当 END 静默终止，line 20 从未执行。
+
+**影响:** 任何拼写错误、未实现语句、语法错误都会导致程序**静默终止且退出码为 0 (成功)** — 用户和 CI 都无法察觉执行失败。同时与 CRITICAL-1 的 GOTO 负值错误互斥混淆。
+
+**根因:** END 用 `ERROR`(-1) 作为"停止信号"与真实错误共享同一返回值，无区分。
+
+**修复建议:**
+```c
+/* gwsts.c — END 返回专属值 */
+else if (starts_with(trimmed, "END")) {
+    result = -2;   /* 专属 END 信号，与 ERROR(-1) 区分 */
+}
+/* 未识别语句：打印错误并返回 ERROR */
+/* == 在所有 if/else if 之后 == */
+else {
+    printf("Syntax error: %s\n", trimmed);   /* 至少输出错误 */
+    result = ERROR;
+}
+
+/* gwmain.c — 区分处理 */
+if (rc == -2) { break; }        /* END */
+if (rc < 0) { printf(...); exec_rc = ERROR; break; }  /* 真实错误 */
+```
+
+---
 
 ### 🟧 HIGH
 
-无。
+| # | 描述 | 文件 | 行号 |
+|---|------|------|------|
+| 1 | NEXT 省略变量名（纯 "NEXT"）不支持 — 静默终止 | `src/gwsts.c` `src/next86.c` | 134, 121 |
+
+**详情:**
+
+#### HIGH-1: "NEXT"（无变量名）无法工作
+
+GW-BASIC 允许 `NEXT` 省略变量名（匹配最近的 FOR，是常用惯用法）。当前实现：
+
+```c
+/* gwsts.c — 只匹配 "NEXT "（带空格），纯 "NEXT" 走默认分支 */
+else if (starts_with(trimmed, "NEXT ")) { ... }
+
+/* next86.c — "NEXT " + 空变量名 → find_for("") 无匹配 → -1 */
+struct for_entry *entry = next86_find_for(var_name, g_nxttxt);
+if (!entry) {
+    return -1;  /* NEXT without FOR error */
+}
+```
+
+两条路径都返回 -1 → 被 CRITICAL-2 的 END 逻辑吞掉 → **程序静默终止**。
+
+**修复建议:** `starts_with(trimmed, "NEXT")`（含无空格），`find_for` 对空变量名匹配栈顶 entry。
+
+---
 
 ### 🟨 MEDIUM
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | .bas 执行失败时仍返回 SUCCESS 退出码 | `src/gwmain.c` | 239-248 |
-| 2 | `[MAIN] Starting GWBASIC` 调试输出残留 | `src/gwmain.c` | 214 |
-| 3 | RUN 命令块缩进错乱（v45 LOW-4 重现） | `src/gwmain.c` | 157-173 |
-| 4 | 误提交工具/临时文件入 git | `.qwen/*` `err.txt` `output.txt` | — |
+| 1 | FOR 初值/步长 WORD 截断 (`g_fvalsv = (WORD)start`, `(WORD)entry->step`) | `src/next86.c` | 327, 151, 168 |
+| 2 | PRINT 字符串泄漏 — v50 HIGH-1 重现（未释放） | `src/gwsts.c` | 195, 213 |
+| 3 | PRINT 用 printf 绕过 giocon — v50 MEDIUM 重现 | `src/gwsts.c` | 184, 213, 240 |
+| 4 | `strcasecmp` 平台依赖（MSVC 无此函数） | `src/next86.c` | 118 |
+| 5 | main() 函数内内联 `extern WORD g_curlin` | `src/gwmain.c` | 242 |
+| 6 | `gwlist_find_line_by_text_ptr` 作为跳转 API — 设计随 CRITICAL-1 废弃 | `src/gwlist.c` | 99 |
 
 **详情:**
 
-#### MEDIUM-1: .bas 执行失败时仍返回 SUCCESS 退出码
+#### MEDIUM-1: FOR 初值/步长 WORD 截断
 
 ```c
-/* src/gwmain.c, line 239-248 */
-while (curr) {
-    if (curr->text) {
-        DEBUG_PRINT("Executing line %d: '%s'", curr->number, curr->text);
-        int rc = gwsts_exec_statement(curr->text);
-        DEBUG_PRINT("Statement returned %d", rc);
-        if (rc != 0) {
-            printf("Error at line %d\n", curr->number);
-            break;          /* ← 打印错误后 break */
-        }
-    }
-    curr = curr->next;
+g_fvalsv = (WORD)start;          /* FOR X=1.5 → g_fvalsv=1（截断）*/
+v->value.i += (WORD)entry->step; /* STEP 1.5 → +1（截断）*/
+```
+
+浮点 FOR 循环（`FOR X=1 TO 2 STEP 0.5`）的初值和整数步长处理会截断丢失精度。float 分支 `next86_float_next` 用 `entry->step`（float）✅ 正确，但 `g_nxtflg==0` 分支 `v->value.f = (float)g_fvalsv` 仍用截断初值。
+
+#### MEDIUM-2: PRINT 字符串泄漏（v50 HIGH-1 重现）
+
+```c
+/* gwsts.c — console 路径 (line 195) */
+char *str_val = gweval_eval_string(trim_start);
+if (str_val) {
+    printf("%s", str_val);   /* ← 未释放 */
 }
-
-/* Cleanup */
-free(g_state);
-g_state = NULL;
-return SUCCESS;             /* ← 但函数返回 SUCCESS！ */
+/* 文件路径 (line 213) — 同样未释放 */
 ```
 
-**影响:** 脚本/CI 调用 `gwbasic.exe test.bas` 时，即使程序执行报错（如未定义语句），进程退出码仍是 0（成功）。调用方无法感知执行失败。
+`gweval_eval_string` 返回 `gwdata_alloc_string` 的 bump 分配（16KB str_heap，free 为 no-op）。连续字符串 PRINT 会耗尽字符串堆 → 之后字符串输出静默变 "0"。**v50 已报告此问题（HIGH-1），本次提交重现。**
 
-**修复建议:**
-```c
-int exec_rc = SUCCESS;
-while (curr) {
-    ...
-    if (rc != 0) {
-        printf("Error at line %d\n", curr->number);
-        exec_rc = ERROR;    /* 记录失败 */
-        break;
-    }
-    ...
-}
-...
-return exec_rc;             /* 返回实际执行结果 */
-```
+#### MEDIUM-4: strcasecmp 平台依赖
 
----
-
-#### MEDIUM-2: `[MAIN] Starting GWBASIC` 调试输出残留
-
-```c
-/* src/gwmain.c, line 214 */
-printf("[MAIN] Starting GWBASIC\n");
-fflush(stdout);
-```
-
-每次运行（含交互模式）都输出该调试消息。交互模式的 banner（line 106-108 的 "GW-BASIC C Port" 等）和该消息重复。建议删除或改用 DEBUG_PRINT。
-
----
-
-#### MEDIUM-3: RUN 命令块缩进错乱（v45 LOW-4 重现）
-
-```c
-/* src/gwmain.c, line 157-173 */
-        /* Check for RUN command */
-                if (strcasecmp(trimmed, "RUN") == 0) {       /* ← 12 空格 */
-                    /* Execute all program lines in order */
-                    struct program_line *curr = gwlist_get_first_line();
-                    while (curr) {
-                        if (curr->text) {                    /* ← 24 空格 */
-```
-
-RUN 命令块的缩进从 8 空格跳到 12/24 空格（该块是 v45 时代遗留的旧代码被带入新 diff）。代码风格问题，不影响功能但影响可读性。
-
----
-
-#### MEDIUM-4: 误提交工具/临时文件入 git
-
-commit `df7b504` 包含以下不应入库的文件：
-
-| 文件 | 问题 |
-|------|------|
-| `.qwen/settings.json` | 工具配置（.gitignore 有 `.qwen/` 规则，被 -f 强制添加） |
-| `.qwen/tmp/s-e49cc5f5...txt` | 工具临时文件 |
-| `err.txt` | 空文件（测试输出捕获） |
-| `output.txt` | 空文件 |
-
-当前用户已在工作区处理（staged 删除）。**后续提交请避免 `git add -f` 或 `git add .`**，明确只添加源码与测试文件。
+FOR 变量匹配用 `strcasecmp`（line 118）— MSVC（cl.exe）不提供此函数（只有 `_stricmp`），仅 MinGW 可用。项目应保持跨编译器兼容（v50 曾实现 `strcasecmp_ascii` 正是原因）。当前用 MinGW 编译不报错，但锁定了编译器选择。
 
 ---
 
 ### 🟩 LOW
 
-| # | 描述 | 文件 | 行号 |
-|---|------|------|------|
-| 1 | `gwlist_load_file` 的 line[256] 固定缓冲区（v48 LOW-2 在新函数重现） | `src/gwlist.c` | 126 |
-| 2 | `gwlist_load_file` 行号解析 `num*10` 无溢出检查（v48 LOW-1 重现） | `src/gwlist.c` | 140 |
-| 3 | `gwlist.c` 末尾无换行符（v47 修复后因新增函数丢失） | `src/gwlist.c` | EOF |
-| 4 | CODE_REVIEW.md 在 .gitignore 中却又被 -f 跟踪（配置矛盾） | `.gitignore` | — |
-| 5 | 空 .bas 文件加载返回 SUCCESS 无错误提示 | `src/gwlist.c` | 158 |
-
-**详情:**
-
-#### LOW-1/LOW-2: v48 已修问题在新函数中重现
-
-`gwlist_load_file` 使用了与 v48 修复前相同的模式：
-```c
-char line[256];                        /* LOW-1: 固定 256 缓冲区 */
-while (fgets(line, sizeof(line), fp)) { ... }
-num = num * 10 + (*p - '0');           /* LOW-2: 无溢出检查 */
-```
-
-v48 在 `fiveo_chain()` 中修复了同样的两个问题（动态分配 + strtol），但新函数 `gwlist_load_file` 重蹈覆辙。建议复用相同的修复模式（动态缓冲 + strtol + 上限检查）。
-
-#### LOW-3: gwlist.c 末尾无换行符
-
-Python 验证 `open('src/gwlist.c').read().endswith('\n')` → False。v47 曾修复过 gwlist.c 的末尾换行，但新增 `gwlist_load_file` 时再次丢失。
-
-#### LOW-4: CODE_REVIEW.md 配置矛盾
-
-`.gitignore` 包含 `CODE_REVIEW.md`，但 `git ls-files` 显示它被跟踪（需 `git add -f` 强制添加）。将审查文档纳入 git 跟踪实际上是**合理的**（保存审查历史），建议从 .gitignore 中移除 `CODE_REVIEW.md` 条目以消除矛盾。
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | gwlist.c / next86.c / gwsts.c 三个文件末尾均无换行符 | 三个文件 EOF |
+| 2 | `struct for_entry` 注释 "FOR token in high byte" 与实际不符（token 是 BYTE 值 0x81） | `src/gwbasic.h` 482 |
+| 3 | `for_text_ptr` 实际存 FOR 行**下一行**的 text ptr，注释却写 "text pointer into FOR statement" | `src/next86.c` 316-322 |
+| 4 | 空 .bas 文件返回 SUCCESS 无提示 | `src/gwlist.c` 158 |
 
 ---
 
@@ -177,99 +213,96 @@ Python 验证 `open('src/gwlist.c').read().endswith('\n')` → False。v47 曾�
 
 ### 文件组织
 
-| 操作 | 文件 | 变更量 |
-|------|------|--------|
-| 修改 | `src/gwmain.c` | +61/-15 |
-| 修改 | `src/gwlist.c` | +50 |
-| 修改 | `src/gwbasic.h` | +10 |
-| 修改 | `src/biboot.c` | -4 |
-| 修改 | `Makefile` | +4 |
-| 修改 | `CODE_REVIEW.md` | v52 文档入库 |
-| ⚠️ 误提交 | `.qwen/settings.json`、`.qwen/tmp/*`、`err.txt`、`output.txt` | +13 |
+功能迭代新增/修改 5 个核心源文件 + 12 个 .bas 测试，628 行净增。
 
 ### 设计决策评价
 
 | 决策 | 评价 |
 |------|------|
-| main() 识别 argv[1] 加载执行 .bas | ✅ 正确 — 标准 CLI 模式 |
-| gwlist_load_file 用 stdio 解析文本源码 | ✅ 合理 — .bas 源码是文本，无需走 BASIC 文件抽象 |
-| 移除 biboot_init 递归 main() | ✅ 正确 — 修复严重 bug（递归调用） |
-| gwdata/gwram init 提前 | ✅ 正确 — 依赖顺序修复 |
-| DEBUG_PRINT 条件编译 | ✅ 正确 — 采纳 v50 合理设计 |
-| 线性顺序执行模型 | ⚠️ 已知局限 — 无流程控制（GOTO/FOR），下一阶段实现 |
-| 误提交工具文件 | ❌ 应避免 |
+| FOR 栈 (MAX_FOR_DEPTH=16) | ✅ 合理 — 嵌套循环用栈天然匹配 |
+| NEXT 跳回 FOR 行下一行（不重执行 FOR）| ✅ 正确 — 避免重复 push（**但依赖指针截断，见 CRITICAL-1**）|
+| 返回值编码跳转 (rc>0=指针) | ❌ 错误 — 指针截断不可靠，应传行号 |
+| END 用 ERROR 值标记 | ❌ 错误 — 与真实错误冲突（CRITICAL-2）|
+| exec_rc 错误传播 | ✅ 正确（实测 exit -1 传播成功）|
+| gwlist_load_file 动态缓冲 + strtol | ✅ 正确（v53 LOW-1/2 修复）|
+| .qwen 误提交清理 | ✅ 正确 |
+| RUN 块缩进修复 | ✅ 正确 |
+| PRINT 逗号→tab / 分号→无分隔 | ✅ 语义正确 |
+| getline_windows 动态扩容 | ✅ 正确 |
 
 ### 测试覆盖分析
 
-| 功能 | 覆盖情况 |
-|------|----------|
+| 指标 | 值 |
+|------|-----|
 | 单元测试 | ✅ 1084/1084 |
-| test_hello.bas (PRINT) | ✅ 实测通过 |
-| test_let.bas (赋值) | ✅ gwsts_exec_statement 支持 LET（未实测） |
-| test_if.bas | ✅ 简化 IF/THEN 支持（未实测，无 ELSE 处理） |
-| test_for.bas / whil\_wend | ❌ 未实现（用户确认） |
-| test_goto_gosub.bas | ❌ 未实现（用户确认） |
-| 文件 I/O .bas (6 个) | ❌ 未实现（用户确认） |
-| test_input.bas | ❌ 未实现（交互阻塞风险） |
+| .bas: hello / for / if | ✅ 实测通过 |
+| .bas: goto_gosub | ❌ **实测失败**（commit 声称通过）|
+| .bas: 错误路径（未识别语句）| ❌ 静默终止（无错误输出）|
+| .bas: NEXT 无变量 | ❌ 静默终止 |
+| .bas: 浮点 FOR (for3.bas STEP 0.5) | ⚠️ 未实测（MEDIUM-1 截断风险）|
 
-**测试全面性评分: B** — 单元测试健康，.bas 集成测试仅首个（hello）通过，其余待功能迭代。
+**测试全面性评分: C+** — 成功路径部分可用，但关键错误路径（未识别语句、GOTO 跳转、NEXT 省略）无保护，且 .bas 验收声明与实际不符。
 
 ---
 
 ## 四、改进建议
 
-### 短期 (当前 sprint)
+### 短期 (当前 sprint) — 提交前必须修复
 
-1. **🟨 修复 MEDIUM-1**: .bas 执行失败返回 ERROR 退出码（一行修改）
-2. **🟨 修复 MEDIUM-2**: 删除 `[MAIN] Starting GWBASIC` 调试输出
-3. **🟨 修复 MEDIUM-4**: 清理误提交文件，为 .qwen/ 配置 .gitignore（已有规则）避免再次误加
-4. **🟩 修复 LOW-1/2**: gwlist_load_file 改动态缓冲 + strtol（复用 v48 修复模式）
-5. **🟩 修复 LOW-3**: gwlist.c 末尾补换行
+1. **🟥 CRITICAL-2 优先**: 修复 END 与 ERROR 返回值冲突 — 未识别语句必须报错而非静默停止（END 用 -2 专属值；未识别语句打印错误）
+2. **🟥 CRITICAL-1**: 跳转改为行号传递（`return target->number` + `gwlist_find_line`），废弃指针截断机制
+3. **🟧 HIGH-1**: 支持 `NEXT` 无变量名（匹配栈顶）
 
-### 中期 (下个 sprint) — 功能迭代（按 TEST_PLAN.md）
+### 中期 (下个 sprint)
 
-6. **实现 FOR/NEXT 循环**（next86.c 已有 FOR 栈基础）→ 验收 test_for*.bas
-7. **实现 GOTO/GOSUB/RETURN** → 验收 test_goto_gosub.bas
-8. **实现 WHILE/WEND** → 验收 test_while_wend.bas
-9. **实现文件 I/O 语句**（OPEN/CLOSE/INPUT#/PRINT#/LINE INPUT/EOF）→ 验收 test_file_seq.bas
-10. **实现 IF/ELSE 完整语义**（当前仅单行 THEN）
+4. **🟨 MEDIUM-2**: PRINT 字符串释放（修复 v50 遗留的字符串堆耗尽）
+5. **🟨 MEDIUM-1**: FOR 初值/步长用 float 全程（消除 WORD 截断）
+6. **🟨 MEDIUM-3**: PRINT 改用 giocon_print_str/print_num
+7. **🟨 MEDIUM-4**: 用 strcasecmp_ascii 替换 strcasecmp
+8. 修正 commit message 的 .bas 测试声明与实测一致
 
 ### 长期
 
-11. 将 .bas 集成测试接入自动化测试框架
-12. 统一 .gitattributes 管控行尾符
+9. 将 .bas 集成测试接入自动化（含错误路径断言）
+10. 统一行尾符与文件末尾换行（.gitattributes + 自动化检查）
 
 ---
 
 ## 五、总结
 
-**总体评价**: `df7b504` 成功实现功能重做的第一步 — .bas 文件可以从命令行加载并执行（test_hello.bas 实测输出 "Hello, World"）。修复了 init 顺序和 biboot 递归调用两个真实 bug，采用 v50 验证过的 DEBUG_PRINT 设计。当前 1084 个单元测试全部通过。
+**总体评价**: 本次提交实现了解释器核心功能（FOR/NEXT、GOTO/GOSUB、PRINT 分隔符），方向正确，单元测试全部通过，test_for.bas / test_if.bas 实测通过。**但跳转机制（指针截断）和错误处理（END 与 ERROR 冲突）存在 CRITICAL 缺陷**，且 commit message 声称的 "9 .bas tests pass" 与实测不符（test_goto_gosub.bas 实际失败）。
 
 **关键发现**:
-- 🟥 CRITICAL: 0
-- 🟧 HIGH: 0
-- 🟨 MEDIUM: 4（退出码错误、调试残留、缩进错乱、误提交文件）
-- 🟩 LOW: 5（固定缓冲区、溢出、换行、ignore 矛盾、空文件处理）
-
-**功能状态（功能重做进度）**:
-
-| 功能 | 状态 |
-|------|------|
-| 命令行 .bas 加载执行 | ✅ 已实现（本提交） |
-| PRINT / LET / DIM / IF(简化) | ✅ gwsts_exec_statement 已有 |
-| FOR/NEXT、WHILE/WEND、GOTO/GOSUB | ❌ 下一迭代 |
-| 文件 I/O、INPUT | ❌ 下一迭代 |
+- 🟥 CRITICAL: 2 (指针截断跳转、未识别语句静默终止)
+- 🟧 HIGH: 1 (NEXT 无变量不支持)
+- 🟨 MEDIUM: 6 (截断、字符串泄漏重现、giocon 绕过重现、strcasecmp、extern、API 设计)
+- 🟩 LOW: 4
 
 **编译与测试**:
-- ✅ `mingw32-make` 编译成功，无错误
 - ✅ 1084/1084 单元测试通过
-- ✅ `gwbasic.exe tests/bas/test_hello.bas` → "Hello, World" (exit 0)
-- ⚠️ 其他 .bas 未覆盖（预期内）
+- ✅ test_for.bas: 5 次循环正确，exit 0
+- ✅ test_if.bas: 条件分支正确
+- ❌ test_goto_gosub.bas: "Error at line 20"（GOTO 跳转失败）
+- ❌ 未识别语句: 静默终止（无错误、exit 0）
+- ✅ exec_rc 错误传播实际工作（exit -1）
 
-**建议**: 修复 4 个 MEDIUM 后提交下一批功能迭代。MEDIUM-1（退出码）虽小但影响 CI 语义，建议优先。
+**v50→v54 问题追踪**:
+
+| 问题 | v50 | v53 | v54 |
+|------|-----|-----|-----|
+| PRINT 字符串泄漏 (HIGH-1) | 报告 | 代码还原 | **重现** (MEDIUM-2) |
+| printf 绕过 giocon | 报告 | 代码还原 | **重现** (MEDIUM-3) |
+| 跳转机制 | — | — | **CRITICAL-1 (新)** |
+| 未识别语句静默 | — | — | **CRITICAL-2 (新)** |
+| 退出码错误 | — | ✅ 修复 | — |
+| 调试输出残留 | — | ✅ 修复 | — |
+| RUN 块缩进 | — | ✅ 修复 | — |
+| 误提交文件 | — | ✅ 修复 | — |
+
+**建议**: 先修复 CRITICAL-2（错误静默吞掉 — 最危险的隐蔽性缺陷）和 CRITICAL-1（跳转不可靠），再提交下一批功能迭代。当前状态不建议合并到 master 作为稳定基线（但若作为开发分支继续迭代可接受）。
 
 ---
 
 **审查员**: AI Code Reviewer (gwbasic-code-review skill)
-**审查日期**: 2026-08-16
-**审查版本**: v53 — fix: .bas file execution + DEBUG_PRINT macro
+**审查日期**: 2026-08-17
+**审查版本**: v54 — feat: FOR/NEXT, GOTO/GOSUB/RETURN, PRINT semicolon/comma support

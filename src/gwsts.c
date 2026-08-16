@@ -121,9 +121,10 @@ int gwsts_exec_statement(const char *stmt) {
         result = next86_for(&text_ptr);
     }
     /* NEXT statement: NEXT [var] */
-    else if (starts_with(trimmed, "NEXT ")) {
+    else if (starts_with(trimmed, "NEXT")) {
         extern int next86_next(const char **text);
-        const char *text_ptr = trimmed + 5;  /* Skip "NEXT " */
+        const char *text_ptr = trimmed + 4;  /* Skip "NEXT" */
+        if (*text_ptr == ' ') text_ptr++;  /* Skip optional space */
         result = next86_next(&text_ptr);
     }
     /* GOTO statement */
@@ -146,8 +147,8 @@ int gwsts_exec_statement(const char *stmt) {
     }
     /* END statement */
     else if (starts_with(trimmed, "END")) {
-        /* END - stop execution */
-        result = ERROR;  /* Signal to stop execution */
+        /* END - stop execution with special return code */
+        result = -2;  /* Distinct from ERROR (-1) */
     }
     /* PRINT statement */
     else if (starts_with(trimmed, "PRINT ")) {
@@ -562,6 +563,10 @@ int gwsts_exec_statement(const char *stmt) {
             
             if (var_ref) gwram_free(var_ref);
             if (expr) gwram_free(expr);
+        } else {
+            /* Unrecognized statement - report error */
+            printf("Syntax error: %s\n", trimmed);
+            result = ERROR;
         }
     }
     

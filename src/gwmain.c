@@ -235,7 +235,7 @@ int main(int argc, char *argv[]) {
         
         DEBUG_PRINT("Program loaded, executing...");
         
-        /* Execute all program lines in order - with jump handling for FOR/GOTO/GOSUB */
+        /* Execute all program lines in order - with jump handling for FOR/GOTO/GOSUB/RETURN */
         struct program_line *curr = gwlist_get_first_line();
         int exec_rc = SUCCESS;
         
@@ -251,12 +251,12 @@ int main(int argc, char *argv[]) {
                 DEBUG_PRINT("Statement returned %d", rc);
                 
                 if (rc > 0) {
-                    /* FOR/GOTO/GOSUB/RETURN continuation - rc is the text pointer to jump to */
-                    curr = gwlist_find_line_by_text_ptr((WORD)rc);
+                    /* FOR/GOTO/GOSUB/RETURN continuation - rc is the line number to jump to */
+                    curr = gwlist_find_line((WORD)rc);
                     continue;
                 } else if (rc < 0) {
-                    /* Check if it's END statement (-1 from gwsts_exec_statement) */
-                    if (rc == -1) {
+                    /* Check if it's END statement (-2 from gwsts_exec_statement) */
+                    if (rc == -2) {
                         /* END - stop execution gracefully */
                         break;
                     }

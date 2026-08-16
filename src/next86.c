@@ -52,7 +52,7 @@ void next86_init(void) {
         g_for_stack[i].step = 0.0f;
         g_for_stack[i].limit = 0.0f;
         g_for_stack[i].for_line = 0;
-        g_for_stack[i].for_text_ptr = 0;
+        g_for_stack[i].for_next_line = 0;
     }
 }
 
@@ -63,7 +63,7 @@ static int next86_float_next(struct for_entry *entry);
 /* Push a FOR entry onto the stack */
 int next86_push_for(BYTE token, intptr_t var_ptr, WORD next_text_ptr, 
                     BYTE step_sign, BYTE var_type, float step, float limit,
-                    WORD for_line, WORD for_text_ptr, const char *var_name) {
+                    WORD for_line, WORD for_next_line, const char *var_name) {
     if (g_for_sp >= MAX_FOR_DEPTH) {
         return -1;  /* Stack overflow */
     }
@@ -77,7 +77,7 @@ int next86_push_for(BYTE token, intptr_t var_ptr, WORD next_text_ptr,
     entry->step = step;
     entry->limit = limit;
     entry->for_line = for_line;
-    entry->for_text_ptr = for_text_ptr;
+    entry->for_next_line = for_next_line;
     if (var_name) {
         strncpy(entry->var_name, var_name, sizeof(entry->var_name) - 1);
         entry->var_name[sizeof(entry->var_name) - 1] = '\0';
@@ -110,17 +110,9 @@ struct for_entry* next86_find_for(const char *var_name, WORD next_text_ptr) {
 
 /* Process NEXT statement */
 int next86_next(const char **text) {
-    int nxtflg_value = 0;
-    
-    /* Check if FOR is using NEXT code */
-    if (**text != '\0') {
-        nxtflg_value = 1;
-    }
-    g_nxtflg = nxtflg_value;
-    
     g_nxttxt = (WORD)(uintptr_t)*text;
     
-    /* Parse variable name */
+    /* Parse variable name (optional) */
     char var_name[41] = {0};
     int var_name_len = 0;
     while (**text && isalpha((unsigned char)**text) && var_name_len < 40) {
@@ -129,8 +121,17 @@ int next86_next(const char **text) {
     }
     var_name[var_name_len] = '\0';
     
-    /* Find matching FOR entry */
-    struct for_entry *entry = next86_find_for(var_name, g_nxttxt);
+    /* Find matching FOR entry - if var_name is empty, match top of stack */
+    struct for_entry *entry = NULL;
+    if (var_name[0] == '\0') {
+        /* NEXT without variable name - match top of stack (most recent FOR) */
+        if (g_for_sp > 0) {
+            entry = &g_for_stack[g_for_sp - 1];
+        }
+    } else {
+        entry = next86_find_for(var_name, g_nxttxt);
+    }
+    
     if (!entry) {
         return -1;  /* NEXT without FOR error */
     }
@@ -151,15 +152,9 @@ int next86_next(const char **text) {
 /* Integer NEXT processing */
 int next86_int_next(struct for_entry *entry) {
     struct variable *v = (struct variable*)entry->var_ptr;
-    WORD step = (WORD)entry->step;
     
-    if (g_nxtflg == 0) {
-        /* First iteration check */
-        v->value.i = g_fvalsv;
-    } else {
-        /* Add step to variable */
-        v->value.i += (WORD)entry->step;
-    }
+    /* Add step to variable */
+    v->value.i += (WORD)entry->step;
     
     /* Compare with limit */
     int cmp = 0;
@@ -170,14 +165,12 @@ int next86_int_next(struct for_entry *entry) {
     }
     
     if (cmp == 0) {
-        /* Loop continues */
-        g_curlin = entry->for_line;
-        /* Continue execution at FOR text pointer */
-        return (int)entry->for_text_ptr;
+        /* Loop continues - return FOR next line number to continue from */
+        return entry->for_next_line;
     } else {
         /* Loop done - pop FOR entry */
         g_for_sp--;
-        return 0;  /* Continue after NEXT */
+        return 0;
     }
 }
 
@@ -185,13 +178,8 @@ int next86_int_next(struct for_entry *entry) {
 int next86_float_next(struct for_entry *entry) {
     struct variable *v = (struct variable*)entry->var_ptr;
     
-    if (g_nxtflg == 0) {
-        /* First iteration - use initial value */
-        v->value.f = (float)g_fvalsv;
-    } else {
-        /* Add step to variable */
-        v->value.f += entry->step;
-    }
+    /* Add step to variable */
+    v->value.f += entry->step;
     
     /* Compare with limit */
     int cmp = 0;
@@ -202,9 +190,8 @@ int next86_float_next(struct for_entry *entry) {
     }
     
     if (cmp == 0) {
-        /* Loop continues */
-        g_curlin = entry->for_line;
-        return (int)entry->for_text_ptr;
+        /* Loop continues - return FOR next line number to continue from */
+        return entry->for_next_line;
     } else {
         /* Loop done - pop FOR entry */
         g_for_sp--;
@@ -296,24 +283,23 @@ int next86_for(const char **text) {
     v->value.f = start;
     intptr_t var_ptr = (intptr_t)v;
     
-    /* Save text pointer AFTER the FOR statement for loop continuation */
+    /* Save line number AFTER the FOR statement for loop continuation */
     /* We need to find the next line in the program after this FOR line */
     struct program_line *for_line_ptr = gwlist_get_first_line();
     while (for_line_ptr && for_line_ptr->number != g_curlin) {
         for_line_ptr = for_line_ptr->next;
     }
-    WORD for_text_ptr = 0;
+    WORD for_next_line = 0;
     if (for_line_ptr && for_line_ptr->next) {
-        for_text_ptr = (WORD)(uintptr_t)for_line_ptr->next->text;
+        for_next_line = for_line_ptr->next->number;
     }
     
     /* Push FOR entry */
     next86_push_for(0x81, var_ptr, g_nxttxt, step_sign, var_type, 
-                    step, limit, g_curlin, for_text_ptr, var_name);
+                    step, limit, g_curlin, for_next_line, var_name);
     
     /* Initialize loop variable */
     v->value.f = start;
-    g_fvalsv = (WORD)start;  /* Save initial value for first iteration check */
     
     return 0;
 }
@@ -369,9 +355,9 @@ int next86_goto(const char **text) {
         return -2;  /* Line not found */
     }
     
-    DEBUG_PRINT("GOTO: Jumping to line %d (text_ptr=%p)", line_num, target->text);
-    /* Return the text pointer of the target line */
-    return (int)(uintptr_t)target->text;
+    DEBUG_PRINT("GOTO: Jumping to line %d", line_num);
+    /* Return the line number (positive) for jump */
+    return line_num;
 }
 
 /* GOSUB statement handler */
@@ -395,6 +381,7 @@ int next86_gosub(const char **text) {
     /* Find the target line */
     struct program_line *target = gwlist_find_line(line_num);
     if (!target) {
+        DEBUG_PRINT("GOSUB: Line %d not found", line_num);
         return -2;  /* Line not found */
     }
     
@@ -404,20 +391,21 @@ int next86_gosub(const char **text) {
     }
     
     struct program_line *curr = gwlist_get_first_line();
-    WORD return_text_ptr = 0;
+    WORD return_line = 0;
     while (curr && curr->number != g_curlin) {
         curr = curr->next;
     }
     if (curr && curr->next) {
-        return_text_ptr = (WORD)(uintptr_t)curr->next->text;
+        return_line = curr->next->number;
     }
     
     g_gosub_stack[g_gosub_sp].line = g_curlin;
-    g_gosub_stack[g_gosub_sp].text_ptr = return_text_ptr;
+    g_gosub_stack[g_gosub_sp].text_ptr = return_line;
     g_gosub_sp++;
     
-    /* Return the text pointer of the target line */
-    return (int)(uintptr_t)target->text;
+    DEBUG_PRINT("GOSUB: Jumping to line %d, return to line %d", line_num, return_line);
+    /* Return the line number (positive) for jump */
+    return line_num;
 }
 
 /* RETURN statement handler */
@@ -430,11 +418,14 @@ int next86_return(const char **text) {
     
     /* Pop return address from GOSUB stack */
     g_gosub_sp--;
-    WORD return_text_ptr = g_gosub_stack[g_gosub_sp].text_ptr;
+    WORD return_line = g_gosub_stack[g_gosub_sp].text_ptr;
     
-    if (return_text_ptr == 0) {
+    DEBUG_PRINT("RETURN: Returning to line %d", return_line);
+    
+    if (return_line == 0) {
         return 0;  /* Continue normally */
     }
     
-    return (int)return_text_ptr;
+    /* Return the line number (positive) for jump */
+    return return_line;
 }

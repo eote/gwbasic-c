@@ -489,14 +489,14 @@ struct for_entry {
     float step;           /* Step value */
     float limit;          /* Upper/lower limit value */
     WORD for_line;        /* Line number of FOR statement */
-    WORD for_text_ptr;    /* Text pointer into FOR statement */
+    WORD for_next_line;   /* Line number to continue from after FOR */
     char var_name[41];    /* Variable name for matching with NEXT */
 };
 
 void next86_init(void);
 int next86_push_for(BYTE token, intptr_t var_ptr, WORD next_text_ptr, 
                     BYTE step_sign, BYTE var_type, float step, float limit,
-                    WORD for_line, WORD for_text_ptr, const char *var_name);
+                    WORD for_line, WORD for_next_line, const char *var_name);
 int next86_pop_for(struct for_entry *entry);
 struct for_entry* next86_find_for(const char *var_name, WORD next_text_ptr);
 int next86_next(const char **text);
