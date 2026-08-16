@@ -60,17 +60,17 @@ int gwsts_exec_statement(const char *stmt) {
                 if (var_name) {
                     memcpy(var_name, token, name_len);
                     var_name[name_len] = '\0';
-                
+               
                     /* Trim trailing whitespace from var_name */
                     char *end = var_name + strlen(var_name) - 1;
                     while (end > var_name && isspace((unsigned char)*end)) end--;
                     *(end + 1) = '\0';
-                
+               
                     /* Determine type from $ suffix */
                     if (strlen(var_name) > 0 && var_name[strlen(var_name) - 1] == '$') {
                         type = VT_STRING;
                     }
-                
+               
                     char *close_paren = strchr(paren + 1, ')');
                     if (close_paren) {
                         char *size_str = (char *)gwram_alloc(close_paren - paren);
@@ -192,84 +192,84 @@ int gwsts_exec_statement(const char *stmt) {
                 /* Regular PRINT to console */
                 char *expr = strdup_trim(trimmed + 5);  /* After "PRINT" */
                 if (expr) {
-                /* Handle multiple expressions separated by commas/semicolons */
-                char *text = expr;
-                bool trailing_comma = false;
-                bool trailing_semicolon = false;
-                
-                while (*text) {
-                    /* Find end of expression (next comma, semicolon, or end) - skip commas/semicolons inside quotes */
-                    char *expr_start = text;
-                    char *expr_end = text;
-                    bool in_quotes = false;
-                    while (*expr_end && !(!in_quotes && (*expr_end == ',' || *expr_end == ';'))) {
-                        if (*expr_end == '"') in_quotes = !in_quotes;
-                        expr_end++;
-                    }
-                    
-                    /* Extract expression */
-                    size_t expr_len = expr_end - expr_start;
-                    char *single_expr = (char *)gwram_alloc(expr_len + 1);
-                    if (!single_expr) {
-                        gwram_free(expr);
-                        return ERROR;
-                    }
-                    memcpy(single_expr, expr_start, expr_len);
-                    single_expr[expr_len] = '\0';
-                    
-                    /* Trim whitespace - use a separate pointer to avoid corrupting the allocated pointer */
-                    char *trim_start = single_expr;
-                    char *trim_end = single_expr + strlen(single_expr) - 1;
-                    while (trim_end >= trim_start && isspace((unsigned char)*trim_end)) {
-                        *trim_end = '\0';
-                        trim_end--;
-                    }
-                    while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
-                    
-                    if (*trim_start) {
-                        /* Try string evaluation first, then numeric */
-                        char *str_val = gweval_eval_string(trim_start);
-                        if (str_val) {
-                            printf("%s", str_val);
-                        } else {
-                            float val = gweval_eval_numeric(trim_start);
-                            printf("%g", val);
+                    /* Handle multiple expressions separated by commas/semicolons */
+                    char *text = expr;
+                    bool trailing_comma = false;
+                    bool trailing_semicolon = false;
+
+                    while (*text) {
+                        /* Find end of expression (next comma, semicolon, or end) - skip commas/semicolons inside quotes */
+                        char *expr_start = text;
+                        char *expr_end = text;
+                        bool in_quotes = false;
+                        while (*expr_end && !(!in_quotes && (*expr_end == ',' || *expr_end == ';'))) {
+                            if (*expr_end == '"') in_quotes = !in_quotes;
+                            expr_end++;
                         }
+
+                        /* Extract expression */
+                        size_t expr_len = expr_end - expr_start;
+                        char *single_expr = (char *)gwram_alloc(expr_len + 1);
+                        if (!single_expr) {
+                            gwram_free(expr);
+                            return ERROR;
+                        }
+                        memcpy(single_expr, expr_start, expr_len);
+                        single_expr[expr_len] = '\0';
+
+                        /* Trim whitespace - use a separate pointer to avoid corrupting the allocated pointer */
+                        char *trim_start = single_expr;
+                        char *trim_end = single_expr + strlen(single_expr) - 1;
+                        while (trim_end >= trim_start && isspace((unsigned char)*trim_end)) {
+                            *trim_end = '\0';
+                            trim_end--;
+                        }
+                        while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
+
+                        if (*trim_start) {
+                            /* Try string evaluation first, then numeric */
+                            char *str_val = gweval_eval_string(trim_start);
+                            if (str_val) {
+                                printf("%s", str_val);
+                            } else {
+                                float val = gweval_eval_numeric(trim_start);
+                                printf("%g", val);
+                            }
+                        }
+
+                        gwram_free(single_expr);
+
+                        /* Handle separator */
+                        if (*expr_end == ',') {
+                            trailing_comma = true;
+                            trailing_semicolon = false;
+                            /* Zone separator - add tab */
+                            printf("\t");
+                        } else if (*expr_end == ';') {
+                            trailing_semicolon = true;
+                            trailing_comma = false;
+                            /* No separator */
+                        } else {
+                            trailing_comma = false;
+                            trailing_semicolon = false;
+                        }
+
+                        text = expr_end;
+                        if (*text) text++;
                     }
-                    
-                    gwram_free(single_expr);
-                    
-                    /* Handle separator */
-                    if (*expr_end == ',') {
-                        trailing_comma = true;
-                        trailing_semicolon = false;
-                        /* Zone separator - add tab */
-                        printf("\t");
-                    } else if (*expr_end == ';') {
-                        trailing_semicolon = true;
-                        trailing_comma = false;
-                        /* No separator */
-                    } else {
-                        trailing_comma = false;
-                        trailing_semicolon = false;
+
+                    gwram_free(expr);
+
+                    /* Print newline unless last expression ended with comma or semicolon */
+                    if (!trailing_comma && !trailing_semicolon) {
+                        printf("\n");
                     }
-                    
-                    text = expr_end;
-                    if (*text) text++;
+
+                    result = SUCCESS;
                 }
-                
-                gwram_free(expr);
-                
-                /* Print newline unless last expression ended with comma or semicolon */
-                if (!trailing_comma && !trailing_semicolon) {
-                    printf("\n");
-                }
-                
-                result = SUCCESS;
             }
         }
-    }  /* close else (console output) */
-}  /* close else (non-bare PRINT) */
+    }
     /* IF statement (simplified: IF <expr> THEN <stmt>) */
     else if (starts_with(trimmed, "IF ")) {
         char *then_pos = strstr(trimmed + 3, " THEN ");
@@ -525,38 +525,47 @@ int gwsts_exec_statement(const char *stmt) {
         
         var_ref = strdup_trim(rest);
         if (var_ref && filenum > 0) {
+            /* Determine buffer size based on variable type */
             struct variable *v = gwdata_find_variable(var_ref);
+            int buflen = 0;
             if (v) {
-                int buflen = 0;
-                char *buffer = NULL;
-                
                 if (v->type == VT_STRING) {
+                    /* For strings, use a reasonable buffer */
                     buflen = 256;
-                    buffer = (char *)gwram_alloc(buflen);
-                    if (buffer && v->value.s) {
-                        strncpy(buffer, v->value.s, buflen - 1);
-                        buffer[buflen - 1] = '\0';
-                    }
                 } else if (v->type == VT_INTEGER) {
                     buflen = sizeof(int32_t);
-                    buffer = (char *)gwram_alloc(buflen);
-                    if (buffer) *(int32_t *)buffer = v->value.i;
                 } else if (v->type == VT_DOUBLE) {
                     buflen = sizeof(double);
-                    buffer = (char *)gwram_alloc(buflen);
-                    if (buffer) *(double *)buffer = v->value.d;
+                } else {
+                    buflen = sizeof(float);  /* Default to single precision */
+                }
+            } else {
+                /* Default to float size for new variables */
+                buflen = sizeof(float);
+            }
+            
+            char *buffer = (char *)gwram_alloc(buflen);
+            if (buffer) {
+                if (v && v->type == VT_STRING) {
+                    /* Null-terminate and copy string */
+                    size_t len = strlen(v->value.s ? v->value.s : "");
+                    if (len >= (size_t)buflen) len = buflen - 1;
+                    memcpy(buffer, v->value.s ? v->value.s : "", len);
+                    buffer[len] = '\0';
+                } else if (v && v->type == VT_INTEGER) {
+                    *(int32_t *)buffer = v->value.i;
+                } else if (v && v->type == VT_DOUBLE) {
+                    *(double *)buffer = v->value.d;
                 } else {
                     /* Default to float */
-                    buflen = sizeof(float);
-                    buffer = (char *)gwram_alloc(buflen);
-                    if (buffer) *(float *)buffer = v->value.f;
+                    *(float *)buffer = v->value.f;
                 }
                 
-                if (buffer) {
-                    int rc = dskcom_put(filenum, record, buffer, buflen);
-                    if (rc == SUCCESS) result = SUCCESS;
-                    gwram_free(buffer);
+                int rc = dskcom_put(filenum, record, buffer, buflen);
+                if (rc == SUCCESS) {
+                    result = SUCCESS;
                 }
+                gwram_free(buffer);
             }
             if (var_ref) gwram_free(var_ref);
         }
@@ -634,6 +643,7 @@ static int assign_value(const char *var_ref, const char *expr) {
                     }
                 }
             } else {
+                /* Numeric variable (integer or float) */
                 struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
                 if (v) {
                     v->value.f = gweval_eval_numeric(expr);
@@ -642,79 +652,76 @@ static int assign_value(const char *var_ref, const char *expr) {
             }
         }
     }
+    
     if (base_name) gwram_free(base_name);
     return result;
 }
 
-/* Simple statement parser and executor helpers */
+/* Trim leading/trailing whitespace - returns newly allocated string */
 static char *strdup_trim(const char *s) {
-    while (*s && isspace((unsigned char)*s)) s++;
-    char *end = (char *)s + strlen(s) - 1;
-    while (end > s && isspace((unsigned char)*end)) end--;
-    size_t len = end - s + 1;
+    if (!s) return NULL;
+    
+    /* Find start (skip leading whitespace) */
+    const char *start = s;
+    while (*start && isspace((unsigned char)*start)) start++;
+    
+    if (!*start) {
+        char *empty = (char *)gwram_alloc(1);
+        if (empty) *empty = '\0';
+        return empty;
+    }
+    
+    /* Find end (skip trailing whitespace) */
+    const char *end = start + strlen(start) - 1;
+    while (end >= start && isspace((unsigned char)*end)) end--;
+    
+    size_t len = end - start + 1;
     char *result = (char *)gwram_alloc(len + 1);
     if (result) {
-        memcpy(result, s, len);
+        memcpy(result, start, len);
         result[len] = '\0';
     }
     return result;
 }
 
+/* Case-insensitive prefix match */
 static bool starts_with(const char *s, const char *prefix) {
-    return strncasecmp(s, prefix, strlen(prefix)) == 0;
+    if (!s || !prefix) return false;
+    size_t len = strlen(prefix);
+    return strncasecmp(s, prefix, len) == 0;
 }
 
-/* Parse variable name with optional array index: A or A(5)
- * Caller must free *var_name when done
- */
+/* Parse variable reference: varname or varname(index) */
 static bool parse_var_ref(const char *str, char **var_name, int *index) {
+    if (!str || !var_name || !index) return false;
+    
     *var_name = NULL;
     *index = -1;
     
-    if (!str) return false;
-    
-    /* Find opening parenthesis */
     const char *paren = strchr(str, '(');
-    if (!paren) {
-        /* Simple variable */
-        *var_name = (char *)gwram_alloc(strlen(str) + 1);
-        if (*var_name) strcpy(*var_name, str);
-        return true;
+    if (paren) {
+        const char *close_paren = strchr(paren, ')');
+        if (close_paren) {
+            size_t name_len = paren - str;
+            *var_name = (char *)gwram_alloc(name_len + 1);
+            if (*var_name) {
+                memcpy(*var_name, str, name_len);
+                (*var_name)[name_len] = '\0';
+                
+                char *size_str = (char *)gwram_alloc(close_paren - paren);
+                if (size_str) {
+                    memcpy(size_str, paren + 1, close_paren - paren - 1);
+                    size_str[close_paren - paren - 1] = '\0';
+                    *index = (int)gweval_eval_numeric(size_str);
+                    gwram_free(size_str);
+                }
+            }
+            return true;
+        }
+    } else {
+        *var_name = strdup_trim(str);
+        return *var_name != NULL;
     }
     
-    /* Array reference: A(5) */
-    size_t name_len = paren - str;
-    *var_name = (char *)gwram_alloc(name_len + 1);
-    if (!*var_name) return false;
-    memcpy(*var_name, str, name_len);
-    (*var_name)[name_len] = '\0';
-    
-    /* Trim trailing whitespace from var_name */
-    char *end = *var_name + strlen(*var_name) - 1;
-    while (end > *var_name && isspace((unsigned char)*end)) end--;
-    *(end + 1) = '\0';
-    
-    /* Parse index */
-    const char *index_str = paren + 1;
-    const char *close_paren = strchr(index_str, ')');
-    if (!close_paren) return false;
-    
-    char *index_buf = (char *)gwram_alloc(close_paren - index_str + 1);
-    if (!index_buf) return false;
-    memcpy(index_buf, index_str, close_paren - index_str);
-    index_buf[close_paren - index_str] = '\0';
-    
-    /* Use strtol with validation instead of atoi */
-    char *endptr = NULL;
-    long idx = strtol(index_buf, &endptr, 10);
-    if (endptr == index_buf || *endptr != '\0') {
-        /* Invalid number */
-        gwram_free(index_buf);
-        return false;
-    }
-    *index = (int)idx;
-    /* GW-BASIC: negative index treated as 0 */
-    if (*index < 0) *index = 0;
-    gwram_free(index_buf);
-    return true;
+    return false;
 }
