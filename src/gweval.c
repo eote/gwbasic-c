@@ -136,16 +136,40 @@ static float parse_factor(parser_t *p) {
             }
         }
         
-        /* Check for array reference: A(5) or A$(5) */
+        /* Check for array reference: A(5) or A$(5) or A(5, 3) */
         if (parser_peek(p) == '(') {
             parser_get(p);  /* consume '(' */
             
-            /* Parse index expression */
-            float index_val = parse_expression(p);
-            int index = (int)index_val;
+            /* Parse indices - support multi-dimensional */
+            int indices[8];
+            int num_indices = 0;
             
-            /* GW-BASIC: negative index treated as 0 */
-            if (index < 0) index = 0;
+            while (parser_peek(p) != ')' && parser_peek(p) != '\0' && num_indices < 8) {
+                /* Skip whitespace */
+                while (parser_peek(p) == ' ' || parser_peek(p) == '\t') parser_get(p);
+                if (parser_peek(p) == ')') break;
+                
+                /* Parse index expression */
+                float index_val = parse_expression(p);
+                int index = (int)index_val;
+                
+                /* GW-BASIC: negative index treated as 0 */
+                if (index < 0) index = 0;
+                
+                indices[num_indices] = index;
+                num_indices++;
+                
+                /* Skip whitespace */
+                while (parser_peek(p) == ' ' || parser_peek(p) == '\t') parser_get(p);
+                
+                /* Check for comma or closing paren */
+                if (parser_peek(p) == ',') {
+                    parser_get(p);  /* consume ',' */
+                    continue;
+                } else if (parser_peek(p) == ')') {
+                    break;
+                }
+            }
             
             if (parser_match(p, ')')) {
                 /* Check if it's a string array (name ends with $) */
@@ -154,7 +178,11 @@ static float parse_factor(parser_t *p) {
                     /* String array - return 0 for numeric evaluation */
                     return 0.0f;
                 }
-                return biptrg_get_array_element(name, index);
+                if (num_indices == 1) {
+                    return biptrg_get_array_element(name, indices[0]);
+                } else {
+                    return biptrg_get_array_element_multi(name, indices);
+                }
             }
         }
         
@@ -226,7 +254,7 @@ static float parse_expression(parser_t *p) {
             op[1] = parser_get(p);  /* consume second char */
         }
         
-        float right = parse_term(p);
+        float right = parse_expression(p);
         
         if (strcmp(op, "<>") == 0) {
             left = (left != right) ? -1.0f : 0.0f;  /* GW-BASIC true = -1, false = 0 */

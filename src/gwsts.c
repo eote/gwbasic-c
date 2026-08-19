@@ -21,7 +21,7 @@ extern int dskcom_line_input(int filenum, char *buffer, int maxlen);
 /* Forward declarations for static functions */
 static char *strdup_trim(const char *s);
 static bool starts_with(const char *s, const char *prefix);
-static bool parse_var_ref(const char *str, char **var_name, int *index);
+static bool parse_var_ref(const char *str, char **var_name, int *index, int *indices, int *num_indices);
 static int assign_value(const char *var_ref, const char *expr);
 
 void gwsts_init(void) {
@@ -38,68 +38,99 @@ int gwsts_exec_statement(const char *stmt) {
     
     /* DIM statement */
     if (starts_with(trimmed, "DIM ")) {
-        char *rest = trimmed + 4;
-        while (*rest && isspace((unsigned char)*rest)) rest++;
+            char *rest = trimmed + 4;
+            while (*rest && isspace((unsigned char)*rest)) rest++;
         
-        /* Parse: DIM A(10) or DIM A(10), B(5) */
-        char *token = rest;
-        while (*token) {
-            /* Skip leading whitespace */
-            while (*token && isspace((unsigned char)*token)) token++;
-            if (!*token) break;
+            /* Parse: DIM A(10) or DIM A(10, 5) or DIM A(10), B(5) */
+            char *token = rest;
+            while (*token) {
+                /* Skip leading whitespace */
+                while (*token && isspace((unsigned char)*token)) token++;
+                if (!*token) break;
             
-            /* Find variable name */
-            char *var_name = NULL;
-            int size = 0;
-            var_type_t type = VT_SINGLE;  /* Moved outside inner block */
+                /* Find variable name */
+                char *var_name = NULL;
+                int dimensions = 0;
+                int dim_sizes[8];  /* Max 8 dimensions */
+                var_type_t type = VT_SINGLE;
             
-            char *paren = strchr(token, '(');
-            if (paren) {
-                size_t name_len = paren - token;
-                var_name = (char *)gwram_alloc(name_len + 1);
-                if (var_name) {
-                    memcpy(var_name, token, name_len);
-                    var_name[name_len] = '\0';
-               
-                    /* Trim trailing whitespace from var_name */
-                    char *end = var_name + strlen(var_name) - 1;
-                    while (end > var_name && isspace((unsigned char)*end)) end--;
-                    *(end + 1) = '\0';
-               
-                    /* Determine type from $ suffix */
-                    if (strlen(var_name) > 0 && var_name[strlen(var_name) - 1] == '$') {
-                        type = VT_STRING;
-                    }
-               
-                    char *close_paren = strchr(paren + 1, ')');
-                    if (close_paren) {
-                        char *size_str = (char *)gwram_alloc(close_paren - paren);
-                        if (size_str) {
-                            memcpy(size_str, paren + 1, close_paren - paren - 1);
-                            size_str[close_paren - paren - 1] = '\0';
-                            /* Use expression evaluation instead of atoi */
-                            size = (int)gweval_eval_numeric(size_str);
-                            gwram_free(size_str);
+                char *paren = strchr(token, '(');
+                if (paren) {
+                    size_t name_len = paren - token;
+                    var_name = (char *)gwram_alloc(name_len + 1);
+                    if (var_name) {
+                        memcpy(var_name, token, name_len);
+                        var_name[name_len] = '\0';
+              
+                        /* Trim trailing whitespace from var_name */
+                        char *end = var_name + strlen(var_name) - 1;
+                        while (end > var_name && isspace((unsigned char)*end)) end--;
+                        *(end + 1) = '\0';
+              
+                        /* Determine type from $ suffix */
+                        if (strlen(var_name) > 0 && var_name[strlen(var_name) - 1] == '$') {
+                            type = VT_STRING;
+                        }
+              
+                        /* Parse dimensions inside parentheses */
+                        char *dim_start = paren + 1;
+                        char *dim_ptr = dim_start;
+                        dimensions = 0;
+                        while (dim_ptr && *dim_ptr && *dim_ptr != ')') {
+                            /* Skip whitespace */
+                            while (*dim_ptr && isspace((unsigned char)*dim_ptr)) dim_ptr++;
+                            if (*dim_ptr == ')') break;
+                        
+                            char *dim_end = dim_ptr;
+                            while (*dim_end && *dim_end != ',' && *dim_end != ')') dim_end++;
+                        
+                            size_t dim_len = dim_end - dim_ptr;
+                            char *dim_str = (char *)gwram_alloc(dim_len + 1);
+                            if (dim_str) {
+                                memcpy(dim_str, dim_ptr, dim_len);
+                                dim_str[dim_len] = '\0';
+                                int size = (int)gweval_eval_numeric(dim_str);
+                                gwram_free(dim_str);
+                            
+                                if (dimensions < 8) {
+                                    dim_sizes[dimensions] = size;
+                                    dimensions++;
+                                }
+                            }
+                        
+                            if (*dim_end == ',') {
+                                dim_ptr = dim_end + 1;
+                            } else if (*dim_end == ')') {
+                                dim_ptr = dim_end;
+                                break;
+                            } else {
+                                dim_ptr = dim_end;
+                            }
                         }
                     }
                 }
-            }
             
-            if (var_name && size > 0) {
-                biptrg_dim_array(var_name, size, type);
-                result = SUCCESS;
-                gwram_free(var_name);
-            }
+                if (var_name && dimensions > 0) {
+                    if (dimensions == 1) {
+                        biptrg_dim_array(var_name, dim_sizes[0], type);
+                    } else {
+                        DEBUG_PRINT("DIM: calling biptrg_dim_array_multi('%s', dims=[%d, %d], dimensions=%d, type=%d)", var_name, dim_sizes[0], dim_sizes[1], dimensions, type);
+                        biptrg_dim_array_multi(var_name, dim_sizes, dimensions, type);
+                    }
+                    result = SUCCESS;
+                    gwram_free(var_name);
+                }
             
-            /* Move to next token after comma */
-            token = strchr(token, ',');
-            if (token) {
-                token++;
-                continue;  /* Continue loop to parse next array */
+                /* Move to next token after comma (separating multiple DIM declarations) */
+                token = strchr(token, ')');
+                if (token) token = strchr(token + 1, ',');
+                if (token) {
+                    token++;
+                    continue;  /* Continue loop to parse next array */
+                }
+                break;
             }
-            break;
         }
-    }
     /* LET statement (optional LET keyword) */
     else if (starts_with(trimmed, "LET ")) {
         char *eq = strchr(trimmed + 4, '=');
@@ -604,15 +635,17 @@ static int assign_value(const char *var_ref, const char *expr) {
     
     char *base_name = NULL;
     int array_index = -1;
-    parse_var_ref(var_ref, &base_name, &array_index);
+    int indices[8];
+    int num_indices = 0;
+    parse_var_ref(var_ref, &base_name, &array_index, indices, &num_indices);
     
-    DEBUG_PRINT("assign_value: var_ref='%s', base_name='%s', array_index=%d, expr='%s'", 
-                var_ref, base_name ? base_name : "NULL", array_index, expr);
+    DEBUG_PRINT("assign_value: var_ref='%s', base_name='%s', array_index=%d, num_indices=%d, expr='%s'", 
+                var_ref, base_name ? base_name : "NULL", array_index, num_indices, expr);
     
     int result = ERROR;
     if (base_name && expr) {
-        if (array_index >= 0) {
-            /* Array element assignment */
+        if (num_indices > 0) {
+            /* Array element assignment (multi-dimensional) */
             /* Check if this is a string array (name ends with $) */
             size_t name_len = strlen(base_name);
             bool is_string_array = (name_len > 0 && base_name[name_len - 1] == '$');
@@ -621,16 +654,20 @@ static int assign_value(const char *var_ref, const char *expr) {
                 /* String array: evaluate string expression and use biptrg_set_array_string */
                 char *str_val = gweval_eval_string(expr);
                 if (str_val) {
-                    result = biptrg_set_array_string(base_name, array_index, str_val);
+                    result = biptrg_set_array_string(base_name, indices[0], str_val);  /* String arrays use single index */
                 } else {
                     result = ERROR;
                 }
             } else {
-                /* Numeric array: use biptrg_set_array_element */
+                /* Numeric array: use multi or single interface */
                 float val = gweval_eval_numeric(expr);
-                DEBUG_PRINT("assign_value: calling biptrg_set_array_element('%s', %d, %f)", base_name, array_index, val);
-                result = biptrg_set_array_element(base_name, array_index, val);
-                DEBUG_PRINT("assign_value: biptrg_set_array_element returned %d", result);
+                DEBUG_PRINT("assign_value: calling biptrg_set_array_element_multi('%s', indices, %f)", base_name, val);
+                if (num_indices == 1) {
+                    result = biptrg_set_array_element(base_name, indices[0], val);
+                } else {
+                    result = biptrg_set_array_element_multi(base_name, indices, val);
+                }
+                DEBUG_PRINT("assign_value: biptrg_set_array_element_multi returned %d", result);
             }
         } else {
             /* Simple variable assignment */
@@ -697,11 +734,12 @@ static bool starts_with(const char *s, const char *prefix) {
 }
 
 /* Parse variable reference: varname or varname(index) */
-static bool parse_var_ref(const char *str, char **var_name, int *index) {
+static bool parse_var_ref(const char *str, char **var_name, int *index, int *indices, int *num_indices) {
     if (!str || !var_name || !index) return false;
     
     *var_name = NULL;
     *index = -1;
+    if (indices) *num_indices = 0;
     
     const char *paren = strchr(str, '(');
     if (paren) {
@@ -713,12 +751,39 @@ static bool parse_var_ref(const char *str, char **var_name, int *index) {
                 memcpy(*var_name, str, name_len);
                 (*var_name)[name_len] = '\0';
                 
-                char *size_str = (char *)gwram_alloc(close_paren - paren);
-                if (size_str) {
-                    memcpy(size_str, paren + 1, close_paren - paren - 1);
-                    size_str[close_paren - paren - 1] = '\0';
-                    *index = (int)gweval_eval_numeric(size_str);
-                    gwram_free(size_str);
+                /* Parse indices */
+                if (indices) {
+                    const char *idx_ptr = paren + 1;
+                    *num_indices = 0;
+                    while (idx_ptr < close_paren && *num_indices < 8) {
+                        /* Skip whitespace */
+                        while (idx_ptr < close_paren && isspace((unsigned char)*idx_ptr)) idx_ptr++;
+                        if (idx_ptr >= close_paren) break;
+                        
+                        const char *idx_end = idx_ptr;
+                        while (idx_end < close_paren && *idx_end != ',' && *idx_end != ')') idx_end++;
+                        
+                        size_t idx_len = idx_end - idx_ptr;
+                        char *idx_str = (char *)gwram_alloc(idx_len + 1);
+                        if (idx_str) {
+                            memcpy(idx_str, idx_ptr, idx_len);
+                            idx_str[idx_len] = '\0';
+                            indices[*num_indices] = (int)gweval_eval_numeric(idx_str);
+                            gwram_free(idx_str);
+                            (*num_indices)++;
+                        }
+                        
+                        if (idx_end < close_paren && *idx_end == ',') {
+                            idx_ptr = idx_end + 1;
+                        } else {
+                            idx_ptr = idx_end;
+                        }
+                    }
+                }
+                
+                /* For backward compatibility, also set single index if only one dimension */
+                if (indices && *num_indices > 0) {
+                    *index = indices[0];
                 }
             }
             return true;

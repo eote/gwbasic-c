@@ -138,6 +138,8 @@ static int compute_flat_index(const array_desc_t *desc, const int *indices) {
 int biptrg_set_array_element_multi(const char *name, const int *indices, float val) {
     if (!name || !indices) return ERROR;
     
+    DEBUG_PRINT("biptrg_set_array_element_multi: name='%s', indices=[%d, %d], val=%f", name, indices[0], indices[1], val);
+    
     struct variable *v = gwdata_find_variable(name);
     if (!v) return ERROR;
     
@@ -148,6 +150,7 @@ int biptrg_set_array_element_multi(const char *name, const int *indices, float v
     if (desc->type == VT_STRING) return ERROR;
     
     int flat_index = compute_flat_index(desc, indices);
+    DEBUG_PRINT("biptrg_set_array_element_multi: flat_index=%d, dim_sizes=[%d, %d], val=%f", flat_index, desc->dim_sizes[0], desc->dim_sizes[1], val);
     
     if (desc->type == VT_INTEGER) {
         int32_t *data = (int32_t *)desc->data;
@@ -169,6 +172,8 @@ int biptrg_set_array_element_multi(const char *name, const int *indices, float v
 float biptrg_get_array_element_multi(const char *name, const int *indices) {
     if (!name || !indices) return 0.0f;
     
+    DEBUG_PRINT("biptrg_get_array_element_multi: name='%s', indices=[%d, %d]", name, indices[0], indices[1]);
+    
     struct variable *v = gwdata_find_variable(name);
     if (!v) return 0.0f;
     
@@ -180,16 +185,23 @@ float biptrg_get_array_element_multi(const char *name, const int *indices) {
     if (!desc->data) return 0.0f;
     
     int flat_index = compute_flat_index(desc, indices);
+    DEBUG_PRINT("biptrg_get_array_element_multi: flat_index=%d, dim_sizes=[%d, %d]", flat_index, desc->dim_sizes[0], desc->dim_sizes[1]);
     
     if (desc->type == VT_INTEGER) {
         int32_t *data = (int32_t *)desc->data;
-        return (float)data[flat_index];
+        float result = (float)data[flat_index];
+        DEBUG_PRINT("biptrg_get_array_element_multi: returning %f (int)", result);
+        return result;
     } else if (desc->type == VT_SINGLE) {
         float *data = (float *)desc->data;
-        return data[flat_index];
+        float result = data[flat_index];
+        DEBUG_PRINT("biptrg_get_array_element_multi: returning %f (float)", result);
+        return result;
     } else if (desc->type == VT_DOUBLE) {
         double *data = (double *)desc->data;
-        return (float)data[flat_index];
+        float result = (float)data[flat_index];
+        DEBUG_PRINT("biptrg_get_array_element_multi: returning %f (double)", result);
+        return result;
     }
     
     return 0.0f;
