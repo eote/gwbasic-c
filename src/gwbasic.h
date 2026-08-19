@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 
 /* Include windows.h on Windows to control ERROR macro */
 #ifdef _WIN32
@@ -293,8 +294,11 @@ void biprtu_print_using_str(const char *fmt, const char *str);
 /* BIPTRG module functions */
 void biptrg_init(void);
 int biptrg_dim_array(const char *name, int size, var_type_t type);
+int biptrg_dim_array_multi(const char *name, const int *dim_sizes, int dimensions, var_type_t type);
 int biptrg_set_array_element(const char *name, int index, float val);
+int biptrg_set_array_element_multi(const char *name, const int *indices, float val);
 float biptrg_get_array_element(const char *name, int index);
+float biptrg_get_array_element_multi(const char *name, const int *indices);
 int biptrg_set_array_string(const char *name, int index, const char *str);
 char *biptrg_get_array_string(const char *name, int index);
 void biptrg_free_array(struct variable *v);

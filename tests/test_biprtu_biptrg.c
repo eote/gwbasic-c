@@ -138,10 +138,16 @@ void test_array_bounds(void) {
     TEST_ASSERT_EQ_INT((int)val, 3, "A(-1) -> A(0)");
     
     /* Index >= size clamped to size-1 */
-    rc = biptrg_set_array_element("A", 10, 4.0f);
-    TEST_ASSERT_EQ_INT(rc, 0, "set A(10) clamped");
-    val = biptrg_get_array_element("A", 9);
-    TEST_ASSERT_EQ_INT((int)val, 4, "A(10) -> A(9)");
+    rc = biptrg_set_array_element("A", 10, 4.0f);  /* 10 is now valid (DIM A(10) creates 0..10) */
+    TEST_ASSERT_EQ_INT(rc, 0, "set A(10) - valid index");
+    val = biptrg_get_array_element("A", 10);
+    TEST_ASSERT_EQ_INT((int)val, 4, "A(10) stored at 10");
+    
+    /* Index > size clamped to size-1 */
+    rc = biptrg_set_array_element("A", 11, 5.0f);
+    TEST_ASSERT_EQ_INT(rc, 0, "set A(11) clamped");
+    val = biptrg_get_array_element("A", 10);
+    TEST_ASSERT_EQ_INT((int)val, 5, "A(11) -> A(10)");
     
     TEST_PASS("array bounds clamp");
 }

@@ -606,6 +606,9 @@ static int assign_value(const char *var_ref, const char *expr) {
     int array_index = -1;
     parse_var_ref(var_ref, &base_name, &array_index);
     
+    DEBUG_PRINT("assign_value: var_ref='%s', base_name='%s', array_index=%d, expr='%s'", 
+                var_ref, base_name ? base_name : "NULL", array_index, expr);
+    
     int result = ERROR;
     if (base_name && expr) {
         if (array_index >= 0) {
@@ -625,7 +628,9 @@ static int assign_value(const char *var_ref, const char *expr) {
             } else {
                 /* Numeric array: use biptrg_set_array_element */
                 float val = gweval_eval_numeric(expr);
+                DEBUG_PRINT("assign_value: calling biptrg_set_array_element('%s', %d, %f)", base_name, array_index, val);
                 result = biptrg_set_array_element(base_name, array_index, val);
+                DEBUG_PRINT("assign_value: biptrg_set_array_element returned %d", result);
             }
         } else {
             /* Simple variable assignment */

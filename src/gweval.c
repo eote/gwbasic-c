@@ -95,7 +95,7 @@ static float parse_factor(parser_t *p) {
         }
         name[i] = '\0';
         
-        /* Check for function call: SIN(, COS(, etc. */
+        /* Check for function call: SIN(, COS(, etc. - BEFORE array reference check */
         if (parser_peek(p) == '(') {
             parser_get(p);  /* consume '(' */
             
@@ -195,6 +195,34 @@ static float parse_expression(parser_t *p) {
             left -= parse_term(p);
         } else {
             break;
+        }
+    }
+    
+    /* Handle comparison operators: <>, ==, <, >, <=, >= */
+    /* Note: we check multi-char operators first */
+    char c = parser_peek(p);
+    if (c == '<' || c == '>' || c == '=') {
+        char op[3] = {0, 0, 0};
+        op[0] = parser_get(p);  /* consume first char */
+        c = parser_peek(p);
+        if ((c == '=' || c == '>') && (op[0] == '<' || op[0] == '>' || op[0] == '=')) {
+            op[1] = parser_get(p);  /* consume second char */
+        }
+        
+        float right = parse_term(p);
+        
+        if (strcmp(op, "<>") == 0) {
+            left = (left != right) ? -1.0f : 0.0f;  /* GW-BASIC true = -1, false = 0 */
+        } else if (strcmp(op, "==") == 0 || strcmp(op, "=") == 0) {
+            left = (left == right) ? -1.0f : 0.0f;
+        } else if (strcmp(op, "<") == 0) {
+            left = (left < right) ? -1.0f : 0.0f;
+        } else if (strcmp(op, ">") == 0) {
+            left = (left > right) ? -1.0f : 0.0f;
+        } else if (strcmp(op, "<=") == 0) {
+            left = (left <= right) ? -1.0f : 0.0f;
+        } else if (strcmp(op, ">=") == 0) {
+            left = (left >= right) ? -1.0f : 0.0f;
         }
     }
     

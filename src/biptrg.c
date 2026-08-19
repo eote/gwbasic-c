@@ -34,21 +34,21 @@ int biptrg_dim_array(const char *name, int size, var_type_t type) {
     
     desc->magic = ARRAY_MAGIC;
     desc->type = type;
-    desc->size = size;
+    desc->size = size + 1;  /* GW-BASIC: DIM A(n) creates indices 0..n (n+1 elements) */
     desc->dimensions = 1;
     desc->dim_sizes = (int *)gwram_alloc(sizeof(int));
     if (!desc->dim_sizes) {
         gwram_free(desc);
         return ERROR;
     }
-    desc->dim_sizes[0] = size;
+    desc->dim_sizes[0] = size + 1;  /* Store actual allocated size */
     
     /* Allocate array data */
     size_t element_size = (type == VT_STRING) ? sizeof(char *) : 
                           (type == VT_INTEGER) ? sizeof(int32_t) :
                           (type == VT_DOUBLE) ? sizeof(double) : sizeof(float);
     
-    desc->data = gwram_calloc(size, element_size);
+    desc->data = gwram_calloc(size + 1, element_size);
     if (!desc->data) {
         gwram_free(desc->dim_sizes);
         gwram_free(desc);
@@ -63,9 +63,80 @@ int biptrg_dim_array(const char *name, int size, var_type_t type) {
     return SUCCESS;
 }
 
-/* Set numeric array element */
-int biptrg_set_array_element(const char *name, int index, float val) {
-    if (!name) return ERROR;
+/* DIM statement - create multi-dimensional array */
+int biptrg_dim_array_multi(const char *name, const int *dim_sizes, int dimensions, var_type_t type) {
+    if (!name || !dim_sizes || dimensions <= 0 || dimensions > 8) return ERROR;
+    
+    struct variable *v = gwdata_alloc_variable(name, type);
+    if (!v) return ERROR;
+    
+    /* Calculate total size - GW-BASIC: DIM A(m,n) creates indices 0..m, 0..n (m+1)*(n+1) elements */
+    int total_size = 1;
+    for (int i = 0; i < dimensions; i++) {
+        if (dim_sizes[i] < 0) {
+            gwram_free(v);
+            return ERROR;
+        }
+        total_size *= (dim_sizes[i] + 1);
+    }
+    
+    /* Create array descriptor */
+    array_desc_t *desc = (array_desc_t *)gwram_alloc(sizeof(array_desc_t));
+    if (!desc) return ERROR;
+    
+    desc->magic = ARRAY_MAGIC;
+    desc->type = type;
+    desc->size = total_size;
+    desc->dimensions = dimensions;
+    desc->dim_sizes = (int *)gwram_alloc(dimensions * sizeof(int));
+    if (!desc->dim_sizes) {
+        gwram_free(desc);
+        return ERROR;
+    }
+    for (int i = 0; i < dimensions; i++) {
+        desc->dim_sizes[i] = dim_sizes[i] + 1;  /* Store actual allocated size per dimension */
+    }
+    
+    /* Allocate array data */
+    size_t element_size = (type == VT_STRING) ? sizeof(char *) : 
+                          (type == VT_INTEGER) ? sizeof(int32_t) :
+                          (type == VT_DOUBLE) ? sizeof(double) : sizeof(float);
+    
+    desc->data = gwram_calloc(total_size, element_size);
+    if (!desc->data) {
+        gwram_free(desc->dim_sizes);
+        gwram_free(desc);
+        return ERROR;
+    }
+    
+    /* Store descriptor in variable's string pointer (reuse for array) */
+    v->value.s = (char *)desc;
+    v->type = type;
+    v->is_array = true;
+    
+    return SUCCESS;
+}
+
+/* Helper: compute flat index from multi-dimensional indices */
+static int compute_flat_index(const array_desc_t *desc, const int *indices) {
+    int flat_index = 0;
+    int stride = 1;
+    
+    /* Row-major order: last dimension varies fastest */
+    for (int i = desc->dimensions - 1; i >= 0; i--) {
+        int idx = indices[i];
+        if (idx < 0) idx = 0;
+        if (idx >= desc->dim_sizes[i]) idx = desc->dim_sizes[i] - 1;
+        flat_index += idx * stride;
+        stride *= desc->dim_sizes[i];
+    }
+    
+    return flat_index;
+}
+
+/* Set numeric array element (multi-dimensional) */
+int biptrg_set_array_element_multi(const char *name, const int *indices, float val) {
+    if (!name || !indices) return ERROR;
     
     struct variable *v = gwdata_find_variable(name);
     if (!v) return ERROR;
@@ -73,13 +144,92 @@ int biptrg_set_array_element(const char *name, int index, float val) {
     array_desc_t *desc = (array_desc_t *)v->value.s;
     if (!desc) return ERROR;
     
-    /* Validate magic number and type */
     if (desc->magic != ARRAY_MAGIC) return ERROR;
-    if (desc->type == VT_STRING) return ERROR;  /* String arrays cannot be written as numeric */
+    if (desc->type == VT_STRING) return ERROR;
+    
+    int flat_index = compute_flat_index(desc, indices);
+    
+    if (desc->type == VT_INTEGER) {
+        int32_t *data = (int32_t *)desc->data;
+        data[flat_index] = (int32_t)val;
+    } else if (desc->type == VT_SINGLE) {
+        float *data = (float *)desc->data;
+        data[flat_index] = val;
+    } else if (desc->type == VT_DOUBLE) {
+        double *data = (double *)desc->data;
+        data[flat_index] = (double)val;
+    } else {
+        return ERROR;
+    }
+    
+    return SUCCESS;
+}
+
+/* Get numeric array element (multi-dimensional) */
+float biptrg_get_array_element_multi(const char *name, const int *indices) {
+    if (!name || !indices) return 0.0f;
+    
+    struct variable *v = gwdata_find_variable(name);
+    if (!v) return 0.0f;
+    
+    array_desc_t *desc = (array_desc_t *)v->value.s;
+    if (!desc) return 0.0f;
+    
+    if (desc->magic != ARRAY_MAGIC) return 0.0f;
+    if (desc->type == VT_STRING) return 0.0f;
+    if (!desc->data) return 0.0f;
+    
+    int flat_index = compute_flat_index(desc, indices);
+    
+    if (desc->type == VT_INTEGER) {
+        int32_t *data = (int32_t *)desc->data;
+        return (float)data[flat_index];
+    } else if (desc->type == VT_SINGLE) {
+        float *data = (float *)desc->data;
+        return data[flat_index];
+    } else if (desc->type == VT_DOUBLE) {
+        double *data = (double *)desc->data;
+        return (float)data[flat_index];
+    }
+    
+    return 0.0f;
+}
+
+/* Set numeric array element */
+int biptrg_set_array_element(const char *name, int index, float val) {
+    if (!name) return ERROR;
+    
+    DEBUG_PRINT("biptrg_set_array_element: name='%s', index=%d, val=%f", name, index, val);
+    
+    struct variable *v = gwdata_find_variable(name);
+    if (!v) {
+        DEBUG_PRINT("biptrg_set_array_element: variable not found");
+        return ERROR;
+    }
+    
+    array_desc_t *desc = (array_desc_t *)v->value.s;
+    if (!desc) {
+        DEBUG_PRINT("biptrg_set_array_element: no descriptor");
+        return ERROR;
+    }
+    
+    /* Validate magic number and type */
+    if (desc->magic != ARRAY_MAGIC) {
+        DEBUG_PRINT("biptrg_set_array_element: magic mismatch");
+        return ERROR;
+    }
+    if (desc->type == VT_STRING) {
+        DEBUG_PRINT("biptrg_set_array_element: string array");
+        return ERROR;  /* String arrays cannot be written as numeric */
+    }
+    
+    DEBUG_PRINT("biptrg_set_array_element: desc->size=%d, desc->dimensions=%d", desc->size, desc->dimensions);
     
     /* GW-BASIC: clamp index to valid range */
     if (index < 0) index = 0;
     if (index >= desc->size) index = desc->size - 1;
+    
+    DEBUG_PRINT("biptrg_set_array_element: final index=%d", index);
     
     if (desc->type == VT_INTEGER) {
         int32_t *data = (int32_t *)desc->data;

@@ -115,12 +115,17 @@ void test_biptrg_default_zero(void) {
 /* Test array bounds (indices clamp) */
 void test_biptrg_index_clamp_high(void) {
     setup();
-    biptrg_dim_array("ARR", 5, VT_SINGLE);
+    biptrg_dim_array("ARR", 5, VT_SINGLE);  /* Creates 0..5 (6 elements) */
+    
+    /* Index 5 is valid, index 6+ clamps to 5 */
+    biptrg_set_array_element("ARR", 5, 77.0f);  /* valid index */
+    float val = biptrg_get_array_element("ARR", 5);
+    TEST_ASSERT_EQ_INT((int)val, 77, "index 5 is valid");
     
     /* Out of bounds high - should clamp to last */
-    biptrg_set_array_element("ARR", 100, 77.0f);
-    float val = biptrg_get_array_element("ARR", 100);
-    TEST_ASSERT_EQ_INT((int)val, 77, "clamped to last element");
+    biptrg_set_array_element("ARR", 100, 88.0f);
+    val = biptrg_get_array_element("ARR", 100);
+    TEST_ASSERT_EQ_INT((int)val, 88, "clamped to last element (5)");
     TEST_PASS("index clamp high");
 }
 

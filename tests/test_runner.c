@@ -669,6 +669,11 @@ void test_biptrg_multiple_arrays(void);
 void test_biptrg_set_null_name(void);
 void test_biptrg_get_null_name(void);
 void test_biptrg_large_array(void);
+void test_biptrg_dim_multi(void);
+void test_biptrg_multi_set_get(void);
+void test_biptrg_dim_3d(void);
+void test_gwsts_dim_then_set(void);
+void test_math_debug(void);
 void test_giocom_loc(void);
 void test_giocom_lof(void);
 void test_giocom_gps(void);
@@ -1411,10 +1416,15 @@ int main(void) {
     failed += run_test("biptrg_free_non_array", test_biptrg_free_non_array);
     failed += run_test("biptrg_multiple_arrays", test_biptrg_multiple_arrays);
     failed += run_test("biptrg_set_null_name", test_biptrg_set_null_name);
-    failed += run_test("biptrg_get_null_name", test_biptrg_get_null_name);
-    failed += run_test("biptrg_large_array", test_biptrg_large_array);
+        failed += run_test("biptrg_get_null_name", test_biptrg_get_null_name);
+        failed += run_test("biptrg_large_array", test_biptrg_large_array);
+            failed += run_test("biptrg_dim_multi", test_biptrg_dim_multi);
+            failed += run_test("biptrg_multi_set_get", test_biptrg_multi_set_get);
+            failed += run_test("biptrg_dim_3d", test_biptrg_dim_3d);
+            failed += run_test("gwsts_dim_then_set", test_gwsts_dim_then_set);
+            failed += run_test("math_debug", test_math_debug);
 
-    /* FIVEO tests */
+            /* FIVEO tests */
     failed += run_test("fiveo_init", test_fiveo_init);
     failed += run_test("fiveo_init_multiple", test_fiveo_init_multiple);
     failed += run_test("fiveo_init_clears_while_stack", test_fiveo_init_clears_while_stack);
