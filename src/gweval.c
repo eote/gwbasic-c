@@ -96,27 +96,44 @@ static float parse_factor(parser_t *p) {
         name[i] = '\0';
         
         /* Check for function call: SIN(, COS(, etc. - BEFORE array reference check */
+        /* Only consume '(' if it's a known function name */
         if (parser_peek(p) == '(') {
-            parser_get(p);  /* consume '(' */
+            /* Check if name matches a known math function BEFORE consuming '(' */
+            bool is_math_func = (strcasecmp_ascii(name, "SIN") == 0 ||
+                                 strcasecmp_ascii(name, "COS") == 0 ||
+                                 strcasecmp_ascii(name, "TAN") == 0 ||
+                                 strcasecmp_ascii(name, "ATN") == 0 ||
+                                 strcasecmp_ascii(name, "EXP") == 0 ||
+                                 strcasecmp_ascii(name, "LOG") == 0 ||
+                                 strcasecmp_ascii(name, "SQR") == 0 ||
+                                 strcasecmp_ascii(name, "ABS") == 0 ||
+                                 strcasecmp_ascii(name, "SGN") == 0 ||
+                                 strcasecmp_ascii(name, "RND") == 0 ||
+                                 strcasecmp_ascii(name, "INT") == 0 ||
+                                 strcasecmp_ascii(name, "FIX") == 0);
             
-            /* Parse argument expression */
-            float arg = parse_expression(p);
-            
-            if (parser_match(p, ')')) {
-                        /* Math functions */
-                        if (strcasecmp_ascii(name, "SIN") == 0) return math1_sin(arg);
-                        if (strcasecmp_ascii(name, "COS") == 0) return math1_cos(arg);
-                        if (strcasecmp_ascii(name, "TAN") == 0) return math1_tan(arg);
-                        if (strcasecmp_ascii(name, "ATN") == 0) return math1_atn(arg);
-                        if (strcasecmp_ascii(name, "EXP") == 0) return math1_exp(arg);
-                        if (strcasecmp_ascii(name, "LOG") == 0) return math1_log(arg);
-                        if (strcasecmp_ascii(name, "SQR") == 0) return math2_sqr(arg);
-                        if (strcasecmp_ascii(name, "ABS") == 0) return math2_abs(arg);
-                        if (strcasecmp_ascii(name, "SGN") == 0) return math2_sgn(arg);
-                        if (strcasecmp_ascii(name, "RND") == 0) return math2_rnd(arg);
-                        if (strcasecmp_ascii(name, "INT") == 0) return math2_int(arg);
-                        if (strcasecmp_ascii(name, "FIX") == 0) return math2_fix(arg);
-                    }
+            if (is_math_func) {
+                parser_get(p);  /* consume '(' */
+                
+                /* Parse argument expression */
+                float arg = parse_expression(p);
+                
+                if (parser_match(p, ')')) {
+                            /* Math functions */
+                            if (strcasecmp_ascii(name, "SIN") == 0) return math1_sin(arg);
+                            if (strcasecmp_ascii(name, "COS") == 0) return math1_cos(arg);
+                            if (strcasecmp_ascii(name, "TAN") == 0) return math1_tan(arg);
+                            if (strcasecmp_ascii(name, "ATN") == 0) return math1_atn(arg);
+                            if (strcasecmp_ascii(name, "EXP") == 0) return math1_exp(arg);
+                            if (strcasecmp_ascii(name, "LOG") == 0) return math1_log(arg);
+                            if (strcasecmp_ascii(name, "SQR") == 0) return math2_sqr(arg);
+                            if (strcasecmp_ascii(name, "ABS") == 0) return math2_abs(arg);
+                            if (strcasecmp_ascii(name, "SGN") == 0) return math2_sgn(arg);
+                            if (strcasecmp_ascii(name, "RND") == 0) return math2_rnd(arg);
+                            if (strcasecmp_ascii(name, "INT") == 0) return math2_int(arg);
+                            if (strcasecmp_ascii(name, "FIX") == 0) return math2_fix(arg);
+                        }
+            }
         }
         
         /* Check for array reference: A(5) or A$(5) */

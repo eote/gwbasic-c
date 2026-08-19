@@ -251,20 +251,41 @@ int biptrg_set_array_element(const char *name, int index, float val) {
 float biptrg_get_array_element(const char *name, int index) {
     if (!name) return 0.0f;
     
+    DEBUG_PRINT("biptrg_get_array_element: name='%s', index=%d", name, index);
+    
     struct variable *v = gwdata_find_variable(name);
-    if (!v) return 0.0f;
+    if (!v) {
+        DEBUG_PRINT("biptrg_get_array_element: variable not found");
+        return 0.0f;
+    }
     
     array_desc_t *desc = (array_desc_t *)v->value.s;
-    if (!desc) return 0.0f;
+    if (!desc) {
+        DEBUG_PRINT("biptrg_get_array_element: no descriptor");
+        return 0.0f;
+    }
     
     /* Validate magic number and type */
-    if (desc->magic != ARRAY_MAGIC) return 0.0f;
-    if (desc->type == VT_STRING) return 0.0f;  /* String arrays cannot be read as numeric */
-    if (!desc->data) return 0.0f;  /* Defensive check */
+    if (desc->magic != ARRAY_MAGIC) {
+        DEBUG_PRINT("biptrg_get_array_element: magic mismatch");
+        return 0.0f;
+    }
+    if (desc->type == VT_STRING) {
+        DEBUG_PRINT("biptrg_get_array_element: string array");
+        return 0.0f;  /* String arrays cannot be read as numeric */
+    }
+    if (!desc->data) {
+        DEBUG_PRINT("biptrg_get_array_element: no data");
+        return 0.0f;  /* Defensive check */
+    }
+    
+    DEBUG_PRINT("biptrg_get_array_element: desc->size=%d, desc->dimensions=%d", desc->size, desc->dimensions);
     
     /* GW-BASIC: clamp index to valid range */
     if (index < 0) index = 0;
     if (index >= desc->size) index = desc->size - 1;
+    
+    DEBUG_PRINT("biptrg_get_array_element: final index=%d", index);
     
     if (desc->type == VT_INTEGER) {
         int32_t *data = (int32_t *)desc->data;
