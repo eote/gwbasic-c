@@ -1,30 +1,36 @@
-# GW-BASIC C Port - Code Review v59
+# GW-BASIC C Port - Code Review v64
 
-**日期**: 2026-08-17
-**审查范围**: commit `0f91836` → `992cae1` — fix: CODE_REVIEW.md v58 MEDIUM issues
-**测试状态**: 1084/1084 单元测试通过 ✅ | 13/13 .bas 集成测试通过 ✅
+**日期**: 2026-08-20
+**审查范围**: 工作区状态确认（src 还原至 v60 基线 33c0f1d）+ 遗留测试资产审查
+**测试状态**: 1084/1084 单元测试通过 ✅（干净重建）
 **编译状态**: 无错误 ✅
 **进度**: 44/44 模块 (100%)
-**总体评分**: A- (优秀) — v58 三个 MEDIUM 全部实际修复且实测验证，仅剩小瑕疵
+**总体评分**: B (良好) — 测试套件健康；遗留资产需决策去留
 
 ---
 
 ## 一、概述
 
-本次提交 `992cae1` **实际修复**了 v58 报告的全部 3 个 MEDIUM（上轮声称与实际的差距被纠正）：
+本次审查覆盖**代码还原后的状态**：v61-v63 期间的源码功能开发（WHILE/WEND、比较运算符、数学函数、多维数组修复，约 800+ 行）已被还原，src/ 恢复至 v60 基线（`33c0f1d`）。
 
-| v58 问题 | 声称状态 | 实际状态 |
-|----------|----------|----------|
-| 🟨 MEDIUM-1: gwsts.c LR→CRLF 行尾符 | ✅ 已修复 | ✅ **实测确认**：转为 LF（CRLF: 0, LF: 726） |
-| 🟨 MEDIUM-2: gwsts.c.patch 误提交 | ✅ 已修复 | ✅ **实测确认**：文件已删除（-123），.gitignore 添加 `*.patch` |
-| 🟨 MEDIUM-3: test_print_file.bas 无效 | ✅ 已修复 | ✅ **实测确认**：增强为 LINE INPUT 回读校验，输出 "PASS" |
+**审查期间用户正在还原文件** — 初始 git status 显示 test_biprtu_biptrg.c / test_fiveo_ext.c / test_runner.c 为 modified，审查过程中被还原（干净重建后确认）。
 
-**验证:**
-- ✅ 1084/1084 单元测试通过
-- ✅ 9 个关键 .bas 抽查全部通过（含 test_print_file.bas → **"PASS"**）
-- ✅ test_print_file.bas 现在是**有效回归测试**（OPEN → PRINT# → CLOSE → OPEN INPUT → LINE INPUT 回读 → 断言 → PASS/FAIL）
+**当前真实状态:**
 
-**本轮提交的修复质量评估:** 三个 MEDIUM 全部真正落地（非声称未做），且都有独立实测验证。
+| 区域 | 状态 |
+|------|------|
+| `src/` | ✅ 与 HEAD (33c0f1d) 完全一致，无未提交变更 |
+| `tests/test_*.c` | ✅ 已还原（biprtu/fiveo/runner） |
+| `tests/bas/test_arrays.bas` | ⚠️ modified（+PASS 输出，无条件打印） |
+| `tests/bas/test_while_wend.bas` | ⚠️ modified（-1 删除注释） |
+| 37 个 .bas 调试测试 | ❓ 未跟踪（v61-v63 功能测试，依赖已还原功能） |
+| `.reviewer.md` + `AGENTS.md` | ❓ 未跟踪（审查契约文档 — 建议入库） |
+
+**验证（干净重建）:**
+- ✅ 1084/1084 单元测试通过 — **之前的链接错误是陈旧 .o 产物**（v63 编译的 test_biprtu_biptrg.o 引用已还原的 `biptrg_dim_array_multi` 等符号），clean 重建后消失
+- ✅ 解释器基线功能正常：test_print_file (PASS)、test_for (5 次)、test_goto_gosub（完整）、test_hello/print_bare/empty_stmt
+- ❌ test_while_wend.bas: "Syntax error: WEND"（WHILE 已还原 — 预期失败）
+- ❌ test_arrays.bas: "A(1) = -3.86422e-32"（数组损坏回归 v60 基线 — 预期，v63 修复被还原）
 
 ---
 
@@ -36,32 +42,65 @@
 
 ### 🟧 HIGH
 
-无。
-
-### 🟨 MEDIUM
-
-| # | 描述 | 文件 | 行号 |
+| # | 描述 | 文件 | 说明 |
 |---|------|------|------|
-| 1 | gwsts.c 末尾换行在 CRLF→LF 转换中再次丢失 | `src/gwsts.c` | EOF |
+| 1 | 37 个未跟踪 .bas 调试测试资产 — 状态未决策 | `tests/bas/` | 依赖已还原功能，当前解释器运行全部失败 |
 
 **详情:**
 
-#### MEDIUM-1: gwsts.c 末尾换行再次丢失
+#### HIGH-1: 37 个 .bas 测试资产归属未决策
 
-```bash
-# 实测
-gwsts.c CRLF: 0, LF: 726, endswith('\n'): False
+工作区有 37 个未跟踪 .bas 文件（v61-v63 期间为验证 WHILE/数组/字符串/LEFT$/LEN/PRINT USING 等功能编写的调试测试）：
+
+| 类别 | 文件示例 | 依赖功能 | 当前状态 |
+|------|----------|----------|----------|
+| WHILE | test_while_debug.bas | WHILE/WEND | ❌ 已还原 |
+| 数组 | test_array_debug/simple/zero/scalar.bas | 数组修复 | ❌ 已还原（v60 数组损坏）|
+| 赋值/表达式 | test_assign/cross_assign/expr*.bas | 赋值/表达式 | ⚠️ 部分可用 |
+| 字符串 | test_left*/test_len*/test_string_*.bas | 字符串函数 | ❌ 未实现（v60 无）|
+| PRINT USING | test_using_*.bas | USING 格式 | ❌ 未实现 |
+| 基础 | test_basic.bas / test_print_hello.bas | 基础 PRINT | ✅ 可用 |
+
+**影响/建议（三选一，需用户决策）:**
+1. **跟踪保留**：`git add tests/bas/*.bas` — 作为未来功能重做的验收资产（2026-08-16 先例：tests/bas 26 文件曾先入库后实现）
+2. **部分跟踪**：仅保留与当前基线功能匹配的（test_basic/print_hello 等）
+3. **忽略**：加入 .gitignore 或删除 — 若不再计划重做这些功能
+
+> ⚠️ 注意：这些 .bas 大多**无断言**（只 PRINT 结果）— 即使未来功能实现，也需要 test_print_file.bas 的断言模式改造。
+
+---
+
+### 🟨 MEDIUM
+
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | test_arrays.bas 的 "PASS" 无条件打印（无断言逻辑 — 数组错时也 PASS）| `tests/bas/test_arrays.bas` |
+| 2 | test_arrays.bas / test_while_wend.bas 修改与当前 src 不匹配（引用已还原功能）| `tests/bas/` |
+| 3 | 数组数据损坏在 v60 基线存在（A(1) = -3.86422e-32）— 曾有修复（v63）被还原 | `src/biptrg.c`/`src/gweval.c` |
+| 4 | 工作区大量未跟踪文件（39 个 .bas + 2 个 md）— .gitignore 未覆盖 | 根目录 |
+
+**详情：**
+
+#### MEDIUM-1: test_arrays.bas 无条件 PASS
+
+```basic
+70 NEXT I
+80 PRINT "PASS"      ← 无条件执行（无论 A(I) 值正确与否）
+90 END
 ```
 
-v55 曾补上 gwsts.c 末尾换行（v56 验证 ✅）。本次 v58 修复（CRLF→LF 反向转换）时**末尾 \n 又丢失** — 这是换行丢失模式的第 4 次发生（v47 gwlist.c → v57 补 4 文件 → v59 gwsts.c 复发）。转换为 LF 时 `}\r\n` → `}`（若简单 replace 会保留 \n，实际是转换工具直接改写了文件尾）。
+本次修改新增 "PASS" 输出，但**无校验** — 数组输出错误（-3.86e-32 垃圾值）时也打印 PASS，误导测试结果。应改为断言模式（test_print_file.bas 的 LINE INPUT 回读比对先例）：
 
-**影响:** 低（不影响编译，GCC 对无结尾换行仅个别警告），但持续反复出现说明**缺少自动检查**。
-
-**修复建议:**
-```bash
-python -c "d=open('src/gwsts.c','rb').read().rstrip(b'\n')+b'\n'; open('src/gwsts.c','wb').write(d)"
+```basic
+80 IF A(1) = 2 AND A(2) = 4 THEN PRINT "PASS" ELSE PRINT "FAIL": END
 ```
-并考虑添加 tooling（如 git pre-commit hook 检查 `grep -L $'\\n$' src/*.c`）。
+
+#### MEDIUM-3: 数组损坏（v60 基线遗留 + 曾被修复后还原）
+
+- v60 基线：数组损坏（v61 报告 HIGH-1：A(1)=1.35426e+07）
+- v61-v63 修复：calloc 清零 + multi 接口（实测正确）
+- 现状态：修复被还原，回到损坏（-3.86422e-32）
+- **功能重做时需重新实施** — 这是已记录在案的已知问题
 
 ---
 
@@ -69,60 +108,34 @@ python -c "d=open('src/gwsts.c','rb').read().rstrip(b'\n')+b'\n'; open('src/gwst
 
 | # | 描述 | 文件 |
 |---|------|------|
-| 1 | test_print_file.bas 无 KILL 清理 — 运行后 T1.DAT 残留 | `tests/bas/test_print_file.bas` |
-| 2 | line 60 冒号复合语句 `PRINT "FAIL": END` 的失败路径可靠性未验证 | `tests/bas/test_print_file.bas` |
-| 3 | main() 内联 `extern WORD g_curlin` 未清理 | `src/gwmain.c` |
-| 4 | `strcasecmp` 平台依赖 | `src/next86.c` |
-
-**详情:**
-
-#### LOW-1: test_print_file.bas 无 KILL 清理
-
-增强后的测试（10 行）没有 `KILL "T1.DAT"` — 实测运行后 `T1.DAT exists: True`。test_file_seq.bas 有 `120 KILL "TESTSEQ.DAT"` 的先例。虽然 `.gitignore` 有 `/*.DAT` 不影响 git，但工作区被测试残留污染。
-
-**修复建议:** 在 `80 PRINT "PASS"` 后加 `KILL "T1.DAT"`（需确认 KILL 语句已实现；未实现则应放最后一行或接受残留）。
-
-#### LOW-2: FAIL 分支使用冒号复合语句
-
-```basic
-60 IF A$ <> "HELLO" THEN PRINT "FAIL": END
-```
-
-冒号复合语句（`PRINT "FAIL": END`）的支持未确认。当前正常路径（A$="HELLO"）不触发该行，测试通过。但若实现缺陷导致回读失败，该行可能自身解析失败 — **失败路径本身不可靠**，可能掩盖真实的回归。
+| 1 | .reviewer.md / AGENTS.md 审查契约未跟踪（建议入库，供后续审查者遵循）| 根目录 |
+| 2 | test_arrays.bas & test_while_wend.bas 均无末尾换行（`\ No newline` — 模式持续）| `tests/bas/` |
+| 3 | tests/bas 现有 26 个已跟踪 .bas 中 test_while_wend.bas 将永远失败（WHILE 已还原）— 应标记"待重做"或移除跟踪 | `tests/bas/` |
 
 ---
 
 ## 三、架构评估
 
-### 文件组织
-
-| 操作 | 文件 | 变更 |
-|------|------|------|
-| 修改 | `src/gwsts.c` | +726/-726 (CRLF→LF 转换) |
-| 删除 | `src/gwsts.c.patch` | -123 ✅ |
-| 修改 | `.gitignore` | +1 (`*.patch`) ✅ |
-| 修改 | `tests/bas/test_print_file.bas` | +6 (回读校验) ✅ |
-| 修改 | `CODE_REVIEW.md` | 文档 |
-
 ### 设计决策评价
 
 | 决策 | 评价 |
 |------|------|
-| CRLF→LF 反向转换 | ✅ 方向正确（消除 v58 引入的不一致）|
-| .gitignore 添加 *.patch | ✅ 正确（防复发）|
-| test_print_file.bas 回读校验 | ✅ 优秀 — 真正验证文件内容 |
-| 删除 patch 文件 | ✅ 正确 |
-| gwsts.c 末尾换行丢失 | ⚠️ 转换副作用（应保留）|
+| src 还原至 v60 基线 | ✅ 用户有意为之（功能开发重新组织/重做）|
+| tests/ 同步还原 | ✅ 测试套件恢复可构建（1084 通过）|
+| 保留 37 个 .bas 调试测试未跟踪 | ⚠️ 状态未决 — 建议决策 |
+| 新增 .reviewer.md / AGENTS.md | ✅ 审查契约 — 规范后续协作（含 Git 规则：未经"批准合并"不得 commit/restore）|
 
 ### 测试覆盖分析
 
 | 指标 | 值 |
 |------|-----|
-| 单元测试 | ✅ 1084/1084 |
-| .bas 集成测试 | ✅ 13/13（test_print_file 输出 PASS）|
-| PRINT# 文件内容验证 | ✅ **自动化覆盖**（回读断言）|
+| 单元测试 | ✅ 1084/1084（干净重建）|
+| 解释器基线功能 | ✅ PRINT#/FOR/GOTO/GOSUB/裸 PRINT/空语句（实测）|
+| 数组 | ❌ 损坏（v60 基线，曾修复后还原）|
+| WHILE | ❌ 已还原（test_while_wend.bas 报 Syntax error）|
+| 字符串/数学函数/比较 | ❌ 已还原 |
 
-**测试全面性评分: A-** — v50 以来首个真正的内容断言类 .bas 测试落地。
+**测试全面性评分: B** — 基线测试健康；还原的功能无测试（等待重做）。
 
 ---
 
@@ -130,57 +143,60 @@ python -c "d=open('src/gwsts.c','rb').read().rstrip(b'\n')+b'\n'; open('src/gwst
 
 ### 短期 (当前 sprint)
 
-1. **🟨 MEDIUM-1**: gwsts.c 补末尾换行（一行命令）
-2. **🟩 LOW-1**: test_print_file.bas 添加 KILL 清理（若 KILL 未实现则记录残留）
-3. **🟩 LOW-2**: 简化 FAIL 分支（`PRINT "FAIL"` 加单独 END 行，避免复合语句不确定性）
+1. **🟧 HIGH-1 决策**: 37 个 .bas 的去留（跟踪 / 部分跟踪 / 忽略）— 需用户明确
+2. **🟨 MEDIUM-1**: test_arrays.bas 改断言模式（无条件 PASS → 条件 PASS/FAIL）
+3. **🟩 LOW-1**: AGENTS.md + .reviewer.md 入库跟踪（审查契约价值高）
+4. **🟩 LOW-2**: 补测试文件末尾换行
 
 ### 中期 (下个 sprint)
 
-4. **遗留**: FOR int 步长 WORD 截断（next86.c:151）
-5. **遗留**: PRINT 字符串泄漏（v50 起）— gweval_eval_string 返回值未释放
-6. **遗留**: printf → giocon、strcasecmp → strcasecmp_ascii、main 内联 extern
-7. **工具**：添加 pre-commit 检查（文件末尾换行、行尾符一致性、禁止 *.patch/*.tmp 提交）— 终结反复出现的流程问题
+5. **功能重做路线（还原内容重新实施）**: 数组（calloc 清零）→ WHILE/WEND → 比较运算符（-1/0 布尔）→ 数学函数 → 字符串函数链路（LEN=0 问题 + PRINT 泄漏同源）→ PRINT USING
+6. 2026-08-16 的先例模式：先测试资产入库 + TEST_PLAN 分阶段，后实现
 
 ### 长期
 
-8. WHILE/WEND → test_while_wend.bas 验收
-9. 文件 I/O 完整（INPUT#/EOF）→ test_file_seq.bas 验收
-10. 冒号复合语句支持（LOW-2 依赖项 — GW-BASIC 核心语法）
+7. .bas 断言机制标准化（PASS/FAIL 模式推广到所有测试）
+8. pre-commit 工具（换行/行尾符/误提交 — 多轮遗留）
+9. 明确"还原"策略的文档化（避免 v51/v64 这类状态反复）
 
 ---
 
 ## 五、总结
 
-**总体评价**: `992cae1` 是 v58 以来第一个"声称与实际完全一致"的修复提交 — 三个 MEDIUM 全部真正修复并有独立实测验证（尤其 test_print_file.bas 从无效测试变成真正的回读断言测试，输出 PASS）。剩余问题均为小瑕疵。
+**总体评价**: 当前工作区是干净的 v60 基线 + 测试资产遗留状态。单元测试套件 1084/1084 健康（还原后干净重建验证）；解释器基线功能（PRINT#/FOR/GOTO/PRINT 变体）实测正常。**待决策项**：37 个未跟踪 .bas 调试测试的归属，以及审查契约文档（AGENTS.md/.reviewer.md）是否入库。之前的链接错误为陈旧 .o 产物，已随 clean 重建消失。
 
 **关键发现**:
 - 🟥 CRITICAL: 0
-- 🟧 HIGH: 0
-- 🟨 MEDIUM: 1（gwsts.c 末尾换行复发 — 模式第 4 次）
-- 🟩 LOW: 4
+- 🟧 HIGH: 1（37 个 .bas 状态未决）
+- 🟨 MEDIUM: 4（PASS 无条件、测试与 src 不匹配、数组损坏遗留、未跟踪泛滥）
+- 🟩 LOW: 3
 
 **编译与测试**:
-- ✅ 1084/1084 单元测试通过
-- ✅ 13/13 .bas 通过（test_print_file → PASS）
-- ✅ gwsts.c 已为 LF（v58 修复确认）
-- ✅ gwsts.c.patch 已删除、*.patch 已入 .gitignore
-- ⚠️ gwsts.c 末尾换行又丢（CRLF→LF 转换副作用）
+- ✅ 1084/1084 单元测试通过（clean 重建）
+- ✅ 基线 .bas: print_file/for/goto_gosub/hello/print_bare/empty_stmt 全部正确
+- ❌ test_while_wend.bas: "Syntax error: WEND"（预期）
+- ❌ test_arrays.bas: 数组垃圾值 -3.86e-32（v60 基线遗留，曾修复后还原）
 
-**问题追踪 (v50→v59)**:
+**跨版本状态追踪（v60→v64）**:
 
-| 问题 | 首次报告 | v59 状态 |
-|------|----------|----------|
-| 行尾符转换噪音 | v51 / v58 | ✅ v59 修复（gwsts.c 转回 LF）|
-| patch 误提交 | v58 | ✅ 删除 + ignore |
-| test_print_file 无效 | v57 | ✅ 有效回读断言 |
-| 末尾换行丢失 | v47 起 | **复发第 4 次**（gwsts.c）|
-| FOR 步长截断 | v54 | **遗留** |
-| PRINT 字符串泄漏 | v50 | **遗留** |
+| 版本 | 状态 |
+|------|------|
+| v60 | 基线（33c0f1d 提交）|
+| v61-v63 | 功能开发（未提交，WHILE/数组/数学）|
+| **v64** | **功能还原回 v60 基线；测试资产遗留** |
 
-**建议**: 本提交可合并。下次迭代建议：① 补 gwsts.c 末尾换行；② 处理 v50 起遗留的 PRINT 字符串泄漏（这是最老的遗留项，且会实际导致字符串堆耗尽）；③ 添加 pre-commit 工具检查终结换行/行尾符/误提交的反复出现。
+**已知问题清单（重做路线参考）**:
+1. 数组损坏（原修复：calloc + multi 接口）
+2. WHILE/WEND 缺失
+3. 布尔 1/0（应 -1/0）
+4. 字符串函数链路 LEN=0（与 PRINT 字符串泄漏同源）
+5. PRINT USING 格式
+6. 未实现语句：KILL/FIELD/READ/DATA/INPUT/ON GOTO
+
+**建议**: 请决策 37 个 .bas 和 2 个 md 文件归属；随后按"测试资产先入库 → 按 TEST_PLAN 分阶段重做功能"的既定模式推进。
 
 ---
 
 **审查员**: AI Code Reviewer (gwbasic-code-review skill)
-**审查日期**: 2026-08-17
-**审查版本**: v59 — fix: CODE_REVIEW.md v58 MEDIUM issues
+**审查日期**: 2026-08-20
+**审查版本**: v64 — 代码还原后状态确认 + 遗留测试资产审查

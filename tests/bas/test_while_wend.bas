@@ -1,4 +1,4 @@
-' Test: WHILE/WEND loops
+' Test: WHILE/WEND loop - FUTURE FEATURE (WHILE not yet implemented in v60 baseline)
 10 I = 1
 20 WHILE I <= 5
 30 PRINT "I = "; I
