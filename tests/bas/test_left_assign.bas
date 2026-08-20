@@ -1,0 +1,3 @@
+10 A$ = LEFT$("HELLO", 2)
+20 PRINT A$
+30 END

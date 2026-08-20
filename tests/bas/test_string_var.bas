@@ -1,0 +1,4 @@
+10 A$ = "HELLO"
+20 PRINT "A$ = "; A$
+30 PRINT "LEN: "; LEN(A$)
+40 END

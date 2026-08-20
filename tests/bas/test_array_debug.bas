@@ -1,0 +1,6 @@
+10 DIM A(5)
+20 PRINT "After DIM"
+30 A(0) = 42
+40 PRINT "After assign"
+50 PRINT A(0)
+60 END

@@ -1,0 +1,5 @@
+10 FOR I = 1 TO 5
+20 PRINT "I = "; I
+30 NEXT I
+40 PRINT "Done"
+50 END

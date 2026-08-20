@@ -1,0 +1,2 @@
+10 PRINT USING "###"; 123
+20 END

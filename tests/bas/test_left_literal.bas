@@ -1,0 +1,3 @@
+10 A$ = "HELLO"
+20 PRINT "LEFT$: "; LEFT$("HELLO", 2); ","; LEFT$("HELLO", 5)
+30 END
