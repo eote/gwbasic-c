@@ -267,6 +267,8 @@ char *bistrs_str(double val);
 double bistrs_val(const char *str);
 char *bistrs_string(int n, char ch);
 char *bistrs_space(int n);
+char *bistrs_ucase(const char *str);
+char *bistrs_lcase(const char *str);
 
 /* MATH1 module functions - Transcendental math */
 void math1_init(void);

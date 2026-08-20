@@ -28,115 +28,144 @@ void gwsts_init(void) {
     /* No initialization needed */
 }
 
-int gwsts_exec_statement(const char *stmt) {
-    if (!stmt || !g_state) return ERROR;
+int gwsts_exec_statement(const char *text) {
+    if (!text) return ERROR;
     
-    char *trimmed = strdup_trim(stmt);
+    /* Trim leading/trailing whitespace */
+    char *trimmed = strdup_trim(text);
     if (!trimmed) return ERROR;
     
     int result = ERROR;
     
+    /* Skip empty lines */
+    if (strlen(trimmed) == 0) {
+        gwram_free(trimmed);
+        return SUCCESS;
+    }
+    
+    /* REM statement - skip */
+    if (starts_with(trimmed, "REM")) {
+        result = SUCCESS;
+    }
     /* DIM statement */
-    if (starts_with(trimmed, "DIM ")) {
-            char *rest = trimmed + 4;
-            while (*rest && isspace((unsigned char)*rest)) rest++;
+    else if (starts_with(trimmed, "DIM ")) {
+        char *rest = trimmed + 4;
+        while (*rest && isspace((unsigned char)*rest)) rest++;
         
-            /* Parse: DIM A(10) or DIM A(10, 5) or DIM A(10), B(5) */
-            char *token = rest;
-            while (*token) {
-                /* Skip leading whitespace */
-                while (*token && isspace((unsigned char)*token)) token++;
-                if (!*token) break;
+        /* Parse: DIM A(10) or DIM A(10, 5) or DIM A(10), B(5) */
+        char *token = rest;
+        while (*token) {
+            /* Skip leading whitespace */
+            while (*token && isspace((unsigned char)*token)) token++;
+            if (!*token) break;
             
-                /* Find variable name */
-                char *var_name = NULL;
-                int dimensions = 0;
-                int dim_sizes[8];  /* Max 8 dimensions */
-                var_type_t type = VT_SINGLE;
+            /* Find variable name */
+            char *var_name = NULL;
+            int dimensions = 0;
+            int dim_sizes[8];  /* Max 8 dimensions */
+            var_type_t type = VT_SINGLE;
             
-                char *paren = strchr(token, '(');
-                if (paren) {
-                    size_t name_len = paren - token;
-                    var_name = (char *)gwram_alloc(name_len + 1);
-                    if (var_name) {
-                        memcpy(var_name, token, name_len);
-                        var_name[name_len] = '\0';
+            char *paren = strchr(token, '(');
+            if (paren) {
+                size_t name_len = paren - token;
+                var_name = (char *)gwram_alloc(name_len + 1);
+                if (var_name) {
+                    memcpy(var_name, token, name_len);
+                    var_name[name_len] = '\0';
               
-                        /* Trim trailing whitespace from var_name */
-                        char *end = var_name + strlen(var_name) - 1;
-                        while (end > var_name && isspace((unsigned char)*end)) end--;
-                        *(end + 1) = '\0';
+                    /* Trim trailing whitespace from var_name */
+                    char *end = var_name + strlen(var_name) - 1;
+                    while (end > var_name && isspace((unsigned char)*end)) end--;
+                    *(end + 1) = '\0';
               
-                        /* Determine type from $ suffix */
-                        if (strlen(var_name) > 0 && var_name[strlen(var_name) - 1] == '$') {
-                            type = VT_STRING;
-                        }
+                    /* Determine type from $ suffix */
+                    if (strlen(var_name) > 0 && var_name[strlen(var_name) - 1] == '$') {
+                        type = VT_STRING;
+                    }
               
-                        /* Parse dimensions inside parentheses */
-                        char *dim_start = paren + 1;
-                        char *dim_ptr = dim_start;
-                        dimensions = 0;
-                        while (dim_ptr && *dim_ptr && *dim_ptr != ')') {
-                            /* Skip whitespace */
-                            while (*dim_ptr && isspace((unsigned char)*dim_ptr)) dim_ptr++;
-                            if (*dim_ptr == ')') break;
+                    /* Parse dimensions inside parentheses */
+                    char *dim_start = paren + 1;
+                    char *dim_ptr = dim_start;
+                    dimensions = 0;
+                    while (dim_ptr && *dim_ptr && *dim_ptr != ')') {
+                        /* Skip whitespace */
+                        while (*dim_ptr && isspace((unsigned char)*dim_ptr)) dim_ptr++;
+                        if (*dim_ptr == ')') break;
                         
-                            char *dim_end = dim_ptr;
-                            while (*dim_end && *dim_end != ',' && *dim_end != ')') dim_end++;
+                        char *dim_end = dim_ptr;
+                        while (*dim_end && *dim_end != ',' && *dim_end != ')') dim_end++;
                         
-                            size_t dim_len = dim_end - dim_ptr;
-                            char *dim_str = (char *)gwram_alloc(dim_len + 1);
-                            if (dim_str) {
-                                memcpy(dim_str, dim_ptr, dim_len);
-                                dim_str[dim_len] = '\0';
-                                int size = (int)gweval_eval_numeric(dim_str);
-                                gwram_free(dim_str);
+                        size_t dim_len = dim_end - dim_ptr;
+                        char *dim_str = (char *)gwram_alloc(dim_len + 1);
+                        if (dim_str) {
+                            memcpy(dim_str, dim_ptr, dim_len);
+                            dim_str[dim_len] = '\0';
+                            int size = (int)gweval_eval_numeric(dim_str);
+                            gwram_free(dim_str);
                             
-                                if (dimensions < 8) {
-                                    dim_sizes[dimensions] = size;
-                                    dimensions++;
-                                }
+                            if (dimensions < 8) {
+                                dim_sizes[dimensions] = size;
+                                dimensions++;
                             }
+                        }
                         
-                            if (*dim_end == ',') {
-                                dim_ptr = dim_end + 1;
-                            } else if (*dim_end == ')') {
-                                dim_ptr = dim_end;
-                                break;
-                            } else {
-                                dim_ptr = dim_end;
-                            }
+                        if (*dim_end == ',') {
+                            dim_ptr = dim_end + 1;
+                        } else if (*dim_end == ')') {
+                            dim_ptr = dim_end;
+                            break;
+                        } else {
+                            dim_ptr = dim_end;
                         }
                     }
                 }
-            
-                if (var_name && dimensions > 0) {
-                    if (dimensions == 1) {
-                        biptrg_dim_array(var_name, dim_sizes[0], type);
-                    } else {
-                        DEBUG_PRINT("DIM: calling biptrg_dim_array_multi('%s', dims=[%d, %d], dimensions=%d, type=%d)", var_name, dim_sizes[0], dim_sizes[1], dimensions, type);
-                        biptrg_dim_array_multi(var_name, dim_sizes, dimensions, type);
-                    }
-                    result = SUCCESS;
-                    gwram_free(var_name);
-                }
-            
-                /* Move to next token after comma (separating multiple DIM declarations) */
-                token = strchr(token, ')');
-                if (token) token = strchr(token + 1, ',');
-                if (token) {
-                    token++;
-                    continue;  /* Continue loop to parse next array */
-                }
-                break;
             }
+            
+            if (var_name && dimensions > 0) {
+                if (dimensions == 1) {
+                    biptrg_dim_array(var_name, dim_sizes[0], type);
+                } else {
+                    biptrg_dim_array_multi(var_name, dim_sizes, dimensions, type);
+                }
+                result = SUCCESS;
+                gwram_free(var_name);
+            }
+            
+            /* Move to next token after comma (separating multiple DIM declarations) */
+            token = strchr(token, ')');
+            if (token) token = strchr(token + 1, ',');
+            if (token) {
+                token++;
+                continue;  /* Continue loop to parse next array */
+            }
+            break;
         }
+    }
     /* LET statement (optional LET keyword) */
     else if (starts_with(trimmed, "LET ")) {
         char *eq = strchr(trimmed + 4, '=');
         if (eq) {
             *eq = '\0';
             char *var_ref = strdup_trim(trimmed + 4);
+            char *expr = strdup_trim(eq + 1);
+            
+            result = assign_value(var_ref, expr);
+            
+            if (var_ref) gwram_free(var_ref);
+            if (expr) gwram_free(expr);
+        }
+    }
+    /* Direct assignment (without LET): var = expr (only if not a known statement) */
+    else if (strchr(trimmed, '=') && 
+             !starts_with(trimmed, "PRINT ") &&
+             !starts_with(trimmed, "IF ") &&
+             !starts_with(trimmed, "INPUT ") &&
+             !starts_with(trimmed, "LINE INPUT ") &&
+             !starts_with(trimmed, "FOR ")) {
+        char *eq = strchr(trimmed, '=');
+        if (eq) {
+            *eq = '\0';
+            char *var_ref = strdup_trim(trimmed);
             char *expr = strdup_trim(eq + 1);
             
             result = assign_value(var_ref, expr);
@@ -196,7 +225,7 @@ int gwsts_exec_statement(const char *stmt) {
                 /* File output: PRINT #filenum, expr */
                 char *rest = p + 1;  /* After '#' */
                 int filenum = (int)gweval_eval_numeric(rest);
-
+                
                 /* Find comma - make a copy to avoid modifying original */
                 char *rest_copy = strdup_trim(rest);
                 if (rest_copy) {
@@ -227,17 +256,23 @@ int gwsts_exec_statement(const char *stmt) {
                     char *text = expr;
                     bool trailing_comma = false;
                     bool trailing_semicolon = false;
-
+                    
                     while (*text) {
-                        /* Find end of expression (next comma, semicolon, or end) - skip commas/semicolons inside quotes */
+                        /* Find end of expression (next comma, semicolon, or end) - skip commas/semicolons inside quotes or parentheses */
                         char *expr_start = text;
                         char *expr_end = text;
                         bool in_quotes = false;
-                        while (*expr_end && !(!in_quotes && (*expr_end == ',' || *expr_end == ';'))) {
-                            if (*expr_end == '"') in_quotes = !in_quotes;
+                        int paren_depth = 0;
+                        while (*expr_end && !(!in_quotes && paren_depth == 0 && (*expr_end == ',' || *expr_end == ';'))) {
+                            if (*expr_end == '\"') {
+                                in_quotes = !in_quotes;
+                            } else if (!in_quotes) {
+                                if (*expr_end == '(') paren_depth++;
+                                else if (*expr_end == ')') paren_depth--;
+                            }
                             expr_end++;
                         }
-
+                        
                         /* Extract expression */
                         size_t expr_len = expr_end - expr_start;
                         char *single_expr = (char *)gwram_alloc(expr_len + 1);
@@ -247,7 +282,7 @@ int gwsts_exec_statement(const char *stmt) {
                         }
                         memcpy(single_expr, expr_start, expr_len);
                         single_expr[expr_len] = '\0';
-
+                        
                         /* Trim whitespace - use a separate pointer to avoid corrupting the allocated pointer */
                         char *trim_start = single_expr;
                         char *trim_end = single_expr + strlen(single_expr) - 1;
@@ -256,7 +291,7 @@ int gwsts_exec_statement(const char *stmt) {
                             trim_end--;
                         }
                         while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
-
+                        
                         if (*trim_start) {
                             /* Try string evaluation first, then numeric */
                             char *str_val = gweval_eval_string(trim_start);
@@ -267,9 +302,9 @@ int gwsts_exec_statement(const char *stmt) {
                                 printf("%g", val);
                             }
                         }
-
+                        
                         gwram_free(single_expr);
-
+                        
                         /* Handle separator */
                         if (*expr_end == ',') {
                             trailing_comma = true;
@@ -284,18 +319,18 @@ int gwsts_exec_statement(const char *stmt) {
                             trailing_comma = false;
                             trailing_semicolon = false;
                         }
-
+                        
                         text = expr_end;
                         if (*text) text++;
                     }
-
+                    
                     gwram_free(expr);
-
+                    
                     /* Print newline unless last expression ended with comma or semicolon */
                     if (!trailing_comma && !trailing_semicolon) {
                         printf("\n");
                     }
-
+                    
                     result = SUCCESS;
                 }
             }
@@ -327,9 +362,9 @@ int gwsts_exec_statement(const char *stmt) {
         while (*rest && isspace((unsigned char)*rest)) rest++;
         
         /* Extract filename (quoted string) */
-        if (*rest == '"') {
+        if (*rest == '\"') {
             rest++;
-            char *filename_end = strchr(rest, '"');
+            char *filename_end = strchr(rest, '\"');
             if (filename_end) {
                 size_t fn_len = filename_end - rest;
                 char *filename = (char *)gwram_alloc(fn_len + 1);
@@ -340,41 +375,44 @@ int gwsts_exec_statement(const char *stmt) {
                     rest = filename_end + 1;
                     while (*rest && isspace((unsigned char)*rest)) rest++;
                     
-                    /* Parse FOR mode */
-                    int mode = FM_INPUT;
-                    if (starts_with(rest, "FOR INPUT")) {
-                        mode = FM_INPUT;
-                        rest += 9;
-                    } else if (starts_with(rest, "FOR OUTPUT")) {
-                        mode = FM_OUTPUT;
-                        rest += 10;
-                    } else if (starts_with(rest, "FOR APPEND")) {
-                        mode = FM_APPEND;
-                        rest += 10;
-                    } else if (starts_with(rest, "FOR RANDOM")) {
-                        mode = FM_RANDOM;
-                        rest += 10;
+                    /* Parse mode */
+                    int mode = 0;  /* 0=INPUT, 1=OUTPUT, 2=APPEND, 3=RANDOM */
+                    int filenum = 1;
+                    int reclen = 128;
+                    
+                    if (starts_with(rest, "FOR ")) {
+                        rest += 4;
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                        if (starts_with(rest, "INPUT")) {
+                            mode = 0;
+                            rest += 5;
+                        } else if (starts_with(rest, "OUTPUT")) {
+                            mode = 1;
+                            rest += 6;
+                        } else if (starts_with(rest, "APPEND")) {
+                            mode = 2;
+                            rest += 6;
+                        } else if (starts_with(rest, "RANDOM")) {
+                            mode = 3;
+                            rest += 6;
+                        }
                     }
                     
                     while (*rest && isspace((unsigned char)*rest)) rest++;
-                    
-                    /* Parse AS #filenum */
-                    int filenum = 0;
-                    if (starts_with(rest, "AS #")) {
-                        rest += 4;
+                    if (starts_with(rest, "AS ")) {
+                        rest += 3;
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                        if (*rest == '#') rest++;
                         filenum = (int)gweval_eval_numeric(rest);
                     }
                     
-                    /* Parse optional LEN=reclen */
-                    int reclen = 0;
-                    char *len_pos = strstr(rest, "LEN=");
-                    if (len_pos) {
-                        reclen = (int)gweval_eval_numeric(len_pos + 4);
+                    while (*rest && isspace((unsigned char)*rest)) rest++;
+                    if (starts_with(rest, "LEN=")) {
+                        rest += 4;
+                        reclen = (int)gweval_eval_numeric(rest);
                     }
                     
-                    if (filenum > 0) {
-                        result = dskcom_open(filename, filenum, mode, reclen);
-                    }
+                    result = dskcom_open(filename, filenum, mode, reclen);
                     gwram_free(filename);
                 }
             }
@@ -385,317 +423,110 @@ int gwsts_exec_statement(const char *stmt) {
         char *rest = trimmed + 5;
         while (*rest && isspace((unsigned char)*rest)) rest++;
         
-        if (*rest == '\0' || *rest == '#') {
+        if (*rest == '\0') {
+            result = dskcom_close_all();
+        } else {
             if (*rest == '#') rest++;
             int filenum = (int)gweval_eval_numeric(rest);
-            if (filenum > 0) {
-                result = dskcom_close(filenum);
-            } else {
-                /* CLOSE without filenum - close all open files */
-                result = dskcom_close_all();
+            result = dskcom_close(filenum);
+        }
+    }
+    /* INPUT statement */
+    else if (starts_with(trimmed, "INPUT ")) {
+        char *rest = trimmed + 6;
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        char *prompt = NULL;
+        if (*rest == '\"') {
+            /* Extract prompt string */
+            char *prompt_end = strchr(rest + 1, '\"');
+            if (prompt_end) {
+                size_t prompt_len = prompt_end - rest - 1;
+                prompt = (char *)gwram_alloc(prompt_len + 1);
+                if (prompt) {
+                    memcpy(prompt, rest + 1, prompt_len);
+                    prompt[prompt_len] = '\0';
+                    rest = prompt_end + 1;
+                }
+            }
+        }
+        
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        /* Variable list */
+        char *var_name = rest;
+        if (*var_name) {
+            char *comma = strchr(var_name, ',');
+            if (comma) *comma = '\0';
+            
+            char *var_ref = strdup_trim(var_name);
+            if (var_ref) {
+                printf("%s", prompt ? prompt : "? ");
+                char input_buf[256];
+                if (fgets(input_buf, sizeof(input_buf), stdin)) {
+                    input_buf[strcspn(input_buf, "\n")] = '\0';
+                    assign_value(var_ref, input_buf);
+                    result = SUCCESS;
+                }
+                gwram_free(var_ref);
             }
         }
     }
-    /* LINE INPUT statement: LINE INPUT #filenum, var$ or LINE INPUT var$ */
+    /* LINE INPUT statement */
     else if (starts_with(trimmed, "LINE INPUT ")) {
         char *rest = trimmed + 11;
         while (*rest && isspace((unsigned char)*rest)) rest++;
         
-        int filenum = 0;
-        /* Check for #filenum */
-        if (*rest == '#') {
-            rest++;
-            filenum = (int)gweval_eval_numeric(rest);
-            char *comma = strchr(rest, ',');
-            if (comma) rest = comma + 1;
+        char *prompt = NULL;
+        if (*rest == '\"') {
+            char *prompt_end = strchr(rest + 1, '\"');
+            if (prompt_end) {
+                size_t prompt_len = prompt_end - rest - 1;
+                prompt = (char *)gwram_alloc(prompt_len + 1);
+                if (prompt) {
+                    memcpy(prompt, rest + 1, prompt_len);
+                    prompt[prompt_len] = '\0';
+                    rest = prompt_end + 1;
+                }
+            }
         }
         
-        char *var_ref = strdup_trim(rest);
-        if (var_ref) {
-            if (filenum > 0) {
-                /* LINE INPUT #filenum, var$ */
-                char buf[256];
-                int rc = dskcom_line_input(filenum, buf, sizeof(buf));
-                if (rc == SUCCESS) {
-                    /* Assign to variable */
-                    char *expr = (char *)gwram_alloc(strlen(buf) + 3);
-                    if (expr) {
-                        expr[0] = '"';
-                        strcpy(expr + 1, buf);
-                        strcat(expr, "\"");
-                        result = assign_value(var_ref, expr);
-                        gwram_free(expr);
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        if (*rest == '#') {
+            /* LINE INPUT #filenum, var */
+            rest++;
+            int filenum = (int)gweval_eval_numeric(rest);
+            char *comma = strchr(rest, ',');
+            if (comma) {
+                *comma = '\0';
+                char *var_ref = strdup_trim(comma + 1);
+                if (var_ref) {
+                    char input_buf[256];
+                    result = dskcom_line_input(filenum, input_buf, sizeof(input_buf));
+                    if (result == SUCCESS) {
+                        assign_value(var_ref, input_buf);
                     }
+                    gwram_free(var_ref);
                 }
-            } else {
-                /* LINE INPUT var$ - from console (not implemented yet) */
-                result = SUCCESS;
             }
-            gwram_free(var_ref);
-        }
-    }
-    /* GET statement: GET #filenum, [record], variable */
-    else if (starts_with(trimmed, "GET ")) {
-        char *rest = trimmed + 4;
-        while (*rest && isspace((unsigned char)*rest)) rest++;
-        
-        int filenum = 0;
-        long record = 0;
-        char *var_ref = NULL;
-        
-        /* Parse #filenum */
-        if (*rest == '#') {
-            rest++;
-            filenum = (int)gweval_eval_numeric(rest);
-            char *comma = strchr(rest, ',');
-            if (comma) rest = comma + 1;
-        }
-        
-        /* Skip whitespace */
-        while (*rest && isspace((unsigned char)*rest)) rest++;
-        
-        /* Parse optional record number */
-        if (*rest && isdigit((unsigned char)*rest)) {
-            record = (int)gweval_eval_numeric(rest);
-            char *comma = strchr(rest, ',');
-            if (comma) rest = comma + 1;
-        }
-        
-        /* Skip whitespace */
-        while (*rest && isspace((unsigned char)*rest)) rest++;
-        
-        var_ref = strdup_trim(rest);
-        if (var_ref && filenum > 0) {
-            /* Determine buffer size based on variable type */
-            struct variable *v = gwdata_find_variable(var_ref);
-            int buflen = 0;
-            if (v) {
-                if (v->type == VT_STRING) {
-                    /* For strings, use a reasonable buffer */
-                    buflen = 256;
-                } else if (v->type == VT_INTEGER) {
-                    buflen = sizeof(int32_t);
-                } else if (v->type == VT_DOUBLE) {
-                    buflen = sizeof(double);
-                } else {
-                    buflen = sizeof(float);  /* Default to single precision */
-                }
-            } else {
-                /* Default to float size for new variables */
-                buflen = sizeof(float);
-            }
-            
-            char *buffer = (char *)gwram_alloc(buflen);
-            if (buffer) {
-                int rc = dskcom_get(filenum, record, buffer, buflen);
-                if (rc == SUCCESS) {
-                    /* Assign to variable based on type */
-                    if (v && v->type == VT_STRING) {
-                        /* Null-terminate and assign */
-                        buffer[buflen - 1] = '\0';
-                        char *expr = (char *)gwram_alloc(buflen + 3);
-                        if (expr) {
-                            expr[0] = '"';
-                            strcpy(expr + 1, buffer);
-                            strcat(expr, "\"");
-                            result = assign_value(var_ref, expr);
-                            gwram_free(expr);
-                        }
-                    } else if (v && v->type == VT_INTEGER) {
-                        int32_t val = *(int32_t *)buffer;
-                        char buf[64];
-                        snprintf(buf, sizeof(buf), "%d", val);
-                        result = assign_value(var_ref, buf);
-                    } else if (v && v->type == VT_DOUBLE) {
-                        double val = *(double *)buffer;
-                        char buf[64];
-                        snprintf(buf, sizeof(buf), "%g", val);
-                        result = assign_value(var_ref, buf);
-                    } else {
-                        /* Default to float */
-                        float val = *(float *)buffer;
-                        char buf[64];
-                        snprintf(buf, sizeof(buf), "%g", val);
-                        result = assign_value(var_ref, buf);
-                    }
-                }
-                gwram_free(buffer);
-            }
-            if (var_ref) gwram_free(var_ref);
-        }
-    }
-    /* PUT statement: PUT #filenum, [record], variable */
-    else if (starts_with(trimmed, "PUT ")) {
-        char *rest = trimmed + 4;
-        while (*rest && isspace((unsigned char)*rest)) rest++;
-        
-        int filenum = 0;
-        long record = 0;
-        char *var_ref = NULL;
-        
-        /* Parse #filenum */
-        if (*rest == '#') {
-            rest++;
-            filenum = (int)gweval_eval_numeric(rest);
-            char *comma = strchr(rest, ',');
-            if (comma) rest = comma + 1;
-        }
-        
-        /* Skip whitespace */
-        while (*rest && isspace((unsigned char)*rest)) rest++;
-        
-        /* Parse optional record number */
-        if (*rest && isdigit((unsigned char)*rest)) {
-            record = (int)gweval_eval_numeric(rest);
-            char *comma = strchr(rest, ',');
-            if (comma) rest = comma + 1;
-        }
-        
-        /* Skip whitespace */
-        while (*rest && isspace((unsigned char)*rest)) rest++;
-        
-        var_ref = strdup_trim(rest);
-        if (var_ref && filenum > 0) {
-            /* Determine buffer size based on variable type */
-            struct variable *v = gwdata_find_variable(var_ref);
-            int buflen = 0;
-            if (v) {
-                if (v->type == VT_STRING) {
-                    /* For strings, use a reasonable buffer */
-                    buflen = 256;
-                } else if (v->type == VT_INTEGER) {
-                    buflen = sizeof(int32_t);
-                } else if (v->type == VT_DOUBLE) {
-                    buflen = sizeof(double);
-                } else {
-                    buflen = sizeof(float);  /* Default to single precision */
-                }
-            } else {
-                /* Default to float size for new variables */
-                buflen = sizeof(float);
-            }
-            
-            char *buffer = (char *)gwram_alloc(buflen);
-            if (buffer) {
-                if (v && v->type == VT_STRING) {
-                    /* Null-terminate and copy string */
-                    size_t len = strlen(v->value.s ? v->value.s : "");
-                    if (len >= (size_t)buflen) len = buflen - 1;
-                    memcpy(buffer, v->value.s ? v->value.s : "", len);
-                    buffer[len] = '\0';
-                } else if (v && v->type == VT_INTEGER) {
-                    *(int32_t *)buffer = v->value.i;
-                } else if (v && v->type == VT_DOUBLE) {
-                    *(double *)buffer = v->value.d;
-                } else {
-                    /* Default to float */
-                    *(float *)buffer = v->value.f;
-                }
-                
-                int rc = dskcom_put(filenum, record, buffer, buflen);
-                if (rc == SUCCESS) {
+        } else {
+            /* LINE INPUT var */
+            char *var_ref = strdup_trim(rest);
+            if (var_ref) {
+                printf("%s", prompt ? prompt : "");
+                char input_buf[256];
+                if (fgets(input_buf, sizeof(input_buf), stdin)) {
+                    input_buf[strcspn(input_buf, "\n")] = '\0';
+                    assign_value(var_ref, input_buf);
                     result = SUCCESS;
                 }
-                gwram_free(buffer);
-            }
-            if (var_ref) gwram_free(var_ref);
-        }
-    }
-    /* Direct assignment (A = 5 or A(5) = 42) */
-    else {
-        char *eq = strchr(trimmed, '=');
-        if (eq) {
-            *eq = '\0';
-            char *var_ref = strdup_trim(trimmed);
-            char *expr = strdup_trim(eq + 1);
-            
-            result = assign_value(var_ref, expr);
-            
-            if (var_ref) gwram_free(var_ref);
-            if (expr) gwram_free(expr);
-        } else {
-            /* Empty/whitespace-only statement is a no-op (GW-BASIC semantics) */
-            if (!*trimmed) {
-                result = SUCCESS;
-            } else {
-                /* Unrecognized statement - report error */
-                printf("Syntax error: %s\n", trimmed);
-                result = ERROR;
+                gwram_free(var_ref);
             }
         }
     }
     
     gwram_free(trimmed);
-    return result;
-}
-
-/* Common assignment function for both LET and direct assignment */
-static int assign_value(const char *var_ref, const char *expr) {
-    if (!var_ref || !expr) return ERROR;
-    
-    char *base_name = NULL;
-    int array_index = -1;
-    int indices[8];
-    int num_indices = 0;
-    parse_var_ref(var_ref, &base_name, &array_index, indices, &num_indices);
-    
-    DEBUG_PRINT("assign_value: var_ref='%s', base_name='%s', array_index=%d, num_indices=%d, expr='%s'", 
-                var_ref, base_name ? base_name : "NULL", array_index, num_indices, expr);
-    
-    int result = ERROR;
-    if (base_name && expr) {
-        if (num_indices > 0) {
-            /* Array element assignment (multi-dimensional) */
-            /* Check if this is a string array (name ends with $) */
-            size_t name_len = strlen(base_name);
-            bool is_string_array = (name_len > 0 && base_name[name_len - 1] == '$');
-            
-            if (is_string_array) {
-                /* String array: evaluate string expression and use biptrg_set_array_string */
-                char *str_val = gweval_eval_string(expr);
-                if (str_val) {
-                    result = biptrg_set_array_string(base_name, indices[0], str_val);  /* String arrays use single index */
-                } else {
-                    result = ERROR;
-                }
-            } else {
-                /* Numeric array: use multi or single interface */
-                float val = gweval_eval_numeric(expr);
-                DEBUG_PRINT("assign_value: calling biptrg_set_array_element_multi('%s', indices, %f)", base_name, val);
-                if (num_indices == 1) {
-                    result = biptrg_set_array_element(base_name, indices[0], val);
-                } else {
-                    result = biptrg_set_array_element_multi(base_name, indices, val);
-                }
-                DEBUG_PRINT("assign_value: biptrg_set_array_element_multi returned %d", result);
-            }
-        } else {
-            /* Simple variable assignment */
-            /* Check if string variable (name ends with $) */
-            size_t name_len = strlen(base_name);
-            bool is_string_var = (name_len > 0 && base_name[name_len - 1] == '$');
-            
-            if (is_string_var) {
-                struct variable *v = gwdata_alloc_variable(base_name, VT_STRING);
-                if (v) {
-                    char *str_val = gweval_eval_string(expr);
-                    if (str_val) {
-                        v->value.s = str_val;
-                        result = SUCCESS;
-                    }
-                }
-            } else {
-                /* Numeric variable (integer or float) */
-                struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
-                if (v) {
-                    v->value.f = gweval_eval_numeric(expr);
-                    result = SUCCESS;
-                }
-            }
-        }
-    }
-    
-    if (base_name) gwram_free(base_name);
     return result;
 }
 
@@ -733,7 +564,7 @@ static bool starts_with(const char *s, const char *prefix) {
     return strncasecmp(s, prefix, len) == 0;
 }
 
-/* Parse variable reference: varname or varname(index) */
+/* Parse variable reference: varname or varname(index) or varname(index, ...) */
 static bool parse_var_ref(const char *str, char **var_name, int *index, int *indices, int *num_indices) {
     if (!str || !var_name || !index) return false;
     
@@ -794,4 +625,74 @@ static bool parse_var_ref(const char *str, char **var_name, int *index, int *ind
     }
     
     return false;
+}
+
+/* Common assignment function for both LET and direct assignment */
+static int assign_value(const char *var_ref, const char *expr) {
+    if (!var_ref || !expr) return ERROR;
+    
+    char *base_name = NULL;
+    int array_index = -1;
+    int indices[8];
+    int num_indices = 0;
+    parse_var_ref(var_ref, &base_name, &array_index, indices, &num_indices);
+    
+    DEBUG_PRINT("assign_value: var_ref='%s', base_name='%s', array_index=%d, num_indices=%d, expr='%s'", 
+                var_ref, base_name ? base_name : "NULL", array_index, num_indices, expr);
+    
+    int result = ERROR;
+    if (base_name && expr) {
+        if (num_indices > 0) {
+            /* Array element assignment (multi-dimensional) */
+            /* Check if this is a string array (name ends with $) */
+            size_t name_len = strlen(base_name);
+            bool is_string_array = (name_len > 0 && base_name[name_len - 1] == '$');
+            
+            if (is_string_array) {
+                /* String array: evaluate string expression and use biptrg_set_array_string */
+                char *str_val = gweval_eval_string(expr);
+                if (str_val) {
+                    result = biptrg_set_array_string(base_name, indices[0], str_val);
+                } else {
+                    result = ERROR;
+                }
+            } else {
+                /* Numeric array: use multi or single interface */
+                float val = gweval_eval_numeric(expr);
+                DEBUG_PRINT("assign_value: calling biptrg_set_array_element_multi('%s', indices, %f)", base_name, val);
+                if (num_indices == 1) {
+                    result = biptrg_set_array_element(base_name, indices[0], val);
+                } else {
+                    result = biptrg_set_array_element_multi(base_name, indices, val);
+                }
+                DEBUG_PRINT("assign_value: biptrg_set_array_element_multi returned %d", result);
+            }
+        } else {
+            /* Simple variable assignment */
+            /* Check if string variable (name ends with $) */
+            size_t name_len = strlen(base_name);
+            bool is_string_var = (name_len > 0 && base_name[name_len - 1] == '$');
+            
+            if (is_string_var) {
+                struct variable *v = gwdata_alloc_variable(base_name, VT_STRING);
+                if (v) {
+                    char *str_val = gweval_eval_string(expr);
+                    if (str_val) {
+                        v->value.s = str_val;
+                        result = SUCCESS;
+                    }
+                }
+            } else {
+                /* Numeric variable (integer or float) */
+                struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
+                if (v) {
+                    v->value.f = gweval_eval_numeric(expr);
+                    result = SUCCESS;
+                }
+            }
+        }
+    }
+    
+    if (base_name) gwram_free(base_name);
+    return result;
 }

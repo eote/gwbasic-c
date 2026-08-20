@@ -132,3 +132,51 @@ char *bistrs_string(int n, char ch) {
 char *bistrs_space(int n) {
     return bistrs_string(n, ' ');
 }
+
+/* UCASE$ - return uppercase version of string */
+char *bistrs_ucase(const char *str) {
+    if (!str) {
+        char *result = (char *)gwram_alloc(1);
+        if (result) result[0] = '\0';
+        return result;
+    }
+    
+    int len = strlen(str);
+    char *result = (char *)gwram_alloc(len + 1);
+    if (!result) return NULL;
+    
+    for (int i = 0; i < len; i++) {
+        char c = str[i];
+        if (c >= 'a' && c <= 'z') {
+            result[i] = c - 'a' + 'A';
+        } else {
+            result[i] = c;
+        }
+    }
+    result[len] = '\0';
+    return result;
+}
+
+/* LCASE$ - return lowercase version of string */
+char *bistrs_lcase(const char *str) {
+    if (!str) {
+        char *result = (char *)gwram_alloc(1);
+        if (result) result[0] = '\0';
+        return result;
+    }
+    
+    int len = strlen(str);
+    char *result = (char *)gwram_alloc(len + 1);
+    if (!result) return NULL;
+    
+    for (int i = 0; i < len; i++) {
+        char c = str[i];
+        if (c >= 'A' && c <= 'Z') {
+            result[i] = c - 'A' + 'a';
+        } else {
+            result[i] = c;
+        }
+    }
+    result[len] = '\0';
+    return result;
+}

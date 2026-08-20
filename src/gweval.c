@@ -54,7 +54,9 @@ static bool parser_match(parser_t *p, char c) {
     return false;
 }
 
+/* Forward declarations */
 static float parse_expression(parser_t *p);
+static char *parse_string_expression(parser_t *p);
 
 static float parse_factor(parser_t *p) {
     char c = parser_peek(p);
@@ -76,7 +78,7 @@ static float parse_factor(parser_t *p) {
         return parse_factor(p);
     }
     
-    /* Number or variable or function */
+    /* Number */
     if (isdigit((unsigned char)c) || c == '.') {
         char buf[64];
         size_t i = 0;
@@ -87,15 +89,23 @@ static float parse_factor(parser_t *p) {
         return (float)atof(buf);
     }
     
+    /* String literal in numeric context = 0 */
+    if (c == '\"') {
+        parser_get(p);  /* consume opening quote */
+        while (p->pos < p->len && p->input[p->pos] != '\"') p->pos++;
+        if (p->pos < p->len && p->input[p->pos] == '\"') p->pos++;
+        return 0.0f;
+    }
+    
     if (isalpha((unsigned char)c)) {
         char name[41];
         size_t i = 0;
-        while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_') && i < sizeof(name) - 1) {
+        while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_' || p->input[p->pos] == '$') && i < sizeof(name) - 1) {
             name[i++] = p->input[p->pos++];
         }
         name[i] = '\0';
         
-        /* Check for function call: SIN(, COS(, etc. - BEFORE array reference check */
+        /* Check for function call - BEFORE array reference check */
         /* Only consume '(' if it's a known function name */
         if (parser_peek(p) == '(') {
             /* Check if name matches a known math function BEFORE consuming '(' */
@@ -116,14 +126,53 @@ static float parse_factor(parser_t *p) {
             bool is_tab_spc = (strcasecmp_ascii(name, "TAB") == 0 ||
                                strcasecmp_ascii(name, "SPC") == 0);
             
-            if (is_math_func || is_tab_spc) {
+            /* Check for string functions that return numeric: LEN, ASC, VAL */
+            bool is_str_numeric = (strcasecmp_ascii(name, "LEN") == 0 ||
+                                   strcasecmp_ascii(name, "ASC") == 0 ||
+                                   strcasecmp_ascii(name, "VAL") == 0);
+            
+            /* Check for string functions that return string: LEFT$, RIGHT$, MID$, UCASE$, LCASE$, STR$, CHR$, SPACE$, STRING$ */
+            bool is_str_func = (strcasecmp_ascii(name, "LEFT") == 0 || strcasecmp_ascii(name, "LEFT$") == 0 ||
+                                strcasecmp_ascii(name, "RIGHT") == 0 || strcasecmp_ascii(name, "RIGHT$") == 0 ||
+                                strcasecmp_ascii(name, "MID") == 0 || strcasecmp_ascii(name, "MID$") == 0 ||
+                                strcasecmp_ascii(name, "UCASE") == 0 || strcasecmp_ascii(name, "UCASE$") == 0 ||
+                                strcasecmp_ascii(name, "LCASE") == 0 || strcasecmp_ascii(name, "LCASE$") == 0 ||
+                                strcasecmp_ascii(name, "STR") == 0 || strcasecmp_ascii(name, "STR$") == 0 ||
+                                strcasecmp_ascii(name, "CHR") == 0 || strcasecmp_ascii(name, "CHR$") == 0 ||
+                                strcasecmp_ascii(name, "SPACE") == 0 || strcasecmp_ascii(name, "SPACE$") == 0 ||
+                                strcasecmp_ascii(name, "STRING") == 0 || strcasecmp_ascii(name, "STRING$") == 0);
+            
+            if (is_math_func || is_tab_spc || is_str_numeric || is_str_func) {
                 parser_get(p);  /* consume '(' */
                 
-                /* Parse argument expression */
+                if (is_str_numeric) {
+                    /* String functions returning numeric: LEN, ASC, VAL - parse string expression */
+                    char *str_val = parse_string_expression(p);
+                    
+                    if (parser_match(p, ')')) {
+                        if (strcasecmp_ascii(name, "LEN") == 0) {
+                            return (float)bistrs_len(str_val);
+                        }
+                        if (strcasecmp_ascii(name, "ASC") == 0) {
+                            return (float)bistrs_asc(str_val);
+                        }
+                        if (strcasecmp_ascii(name, "VAL") == 0) {
+                            return (float)bistrs_val(str_val);
+                        }
+                    }
+                    return 0.0f;
+                }
+                
+                if (is_str_func) {
+                    /* String functions returning string: handle via gweval_eval_string */
+                    p->pos -= 1;  /* Put back '(' so gweval_eval_string can parse it */
+                    return 0.0f;  /* String functions in numeric context = 0 */
+                }
+                
+                /* Math functions / TAB / SPC */
                 float arg = parse_expression(p);
                 
                 if (parser_match(p, ')')) {
-                    /* Math functions */
                     if (strcasecmp_ascii(name, "SIN") == 0) return math1_sin(arg);
                     if (strcasecmp_ascii(name, "COS") == 0) return math1_cos(arg);
                     if (strcasecmp_ascii(name, "TAN") == 0) return math1_tan(arg);
@@ -201,6 +250,162 @@ static float parse_factor(parser_t *p) {
     }
     
     return 0.0f;
+}
+
+/* String expression parser - handles string literals, variables, and string functions.
+   Parses a single string expression and stops at comma or closing paren. */
+static char *parse_string_expression(parser_t *p) {
+    char c = parser_peek(p);
+    
+    /* String literal in quotes */
+    if (c == '\"') {
+        parser_get(p);  /* consume opening quote */
+        char buf[256];
+        size_t i = 0;
+        /* Read until closing quote - do NOT skip whitespace inside string */
+        while (p->pos < p->len && p->input[p->pos] != '\"' && i < sizeof(buf) - 1) {
+            buf[i++] = p->input[p->pos++];
+        }
+        if (p->pos < p->len && p->input[p->pos] == '\"') {
+            p->pos++;  /* consume closing quote */
+        }
+        buf[i] = '\0';
+        char *result = gwdata_alloc_string(strlen(buf) + 1);
+        if (result) strcpy(result, buf);
+        return result;
+    }
+    
+    /* Variable or function call */
+    if (isalpha((unsigned char)c)) {
+        char name[41];
+        size_t i = 0;
+        while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_' || p->input[p->pos] == '$') && i < sizeof(name) - 1) {
+            name[i++] = p->input[p->pos++];
+        }
+        name[i] = '\0';
+        
+        /* Check for function call: LEFT$(, RIGHT$(, MID$(, UCASE$(, LCASE$(, STR$(, CHR$(, SPACE$(, STRING$( */
+        if (parser_peek(p) == '(') {
+            parser_get(p);  /* consume '(' */
+            
+            if (strcasecmp_ascii(name, "LEFT") == 0 || strcasecmp_ascii(name, "LEFT$") == 0) {
+                /* LEFT$(str, n) */
+                char *str_val = parse_string_expression(p);
+                if (str_val) {
+                    if (parser_match(p, ',')) {
+                        float arg2 = parse_expression(p);
+                        if (parser_match(p, ')')) {
+                            return bistrs_left(str_val, (int)arg2);
+                        }
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "RIGHT") == 0 || strcasecmp_ascii(name, "RIGHT$") == 0) {
+                /* RIGHT$(str, n) */
+                char *str_val = parse_string_expression(p);
+                if (str_val) {
+                    if (parser_match(p, ',')) {
+                        float arg2 = parse_expression(p);
+                        if (parser_match(p, ')')) {
+                            return bistrs_right(str_val, (int)arg2);
+                        }
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "MID") == 0 || strcasecmp_ascii(name, "MID$") == 0) {
+                /* MID$(str, start, len) */
+                char *str_val = parse_string_expression(p);
+                if (str_val) {
+                    if (parser_match(p, ',')) {
+                        float arg2 = parse_expression(p);
+                        if (parser_match(p, ',')) {
+                            float arg3 = parse_expression(p);
+                            if (parser_match(p, ')')) {
+                                return bistrs_mid(str_val, (int)arg2, (int)arg3);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "UCASE") == 0 || strcasecmp_ascii(name, "UCASE$") == 0) {
+                /* UCASE$(str) */
+                char *str_val = parse_string_expression(p);
+                if (str_val) {
+                    if (parser_match(p, ')')) {
+                        return bistrs_ucase(str_val);
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "LCASE") == 0 || strcasecmp_ascii(name, "LCASE$") == 0) {
+                /* LCASE$(str) */
+                char *str_val = parse_string_expression(p);
+                if (str_val) {
+                    if (parser_match(p, ')')) {
+                        return bistrs_lcase(str_val);
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "STR") == 0 || strcasecmp_ascii(name, "STR$") == 0) {
+                /* STR$(num) */
+                float arg = parse_expression(p);
+                if (parser_match(p, ')')) {
+                    return bistrs_str(arg);
+                }
+            }
+            else if (strcasecmp_ascii(name, "CHR") == 0 || strcasecmp_ascii(name, "CHR$") == 0) {
+                /* CHR$(num) */
+                float arg = parse_expression(p);
+                if (parser_match(p, ')')) {
+                    return bistrs_chr((int)arg);
+                }
+            }
+            else if (strcasecmp_ascii(name, "SPACE") == 0 || strcasecmp_ascii(name, "SPACE$") == 0) {
+                /* SPACE$(num) */
+                float arg = parse_expression(p);
+                if (parser_match(p, ')')) {
+                    return bistrs_space((int)arg);
+                }
+            }
+            else if (strcasecmp_ascii(name, "STRING") == 0 || strcasecmp_ascii(name, "STRING$") == 0) {
+                /* STRING$(num, char) */
+                float arg1 = parse_expression(p);
+                if (parser_match(p, ',')) {
+                    float arg2 = parse_expression(p);
+                    if (parser_match(p, ')')) {
+                        return bistrs_string((int)arg1, (char)arg2);
+                    }
+                }
+            }
+            
+            /* If we get here, it wasn't a recognized string function - 
+               rewind to handle as array/variable */
+            p->pos -= 1;  /* Put back '(' */
+        }
+        
+        /* Check for array reference: A$(5) */
+        if (parser_peek(p) == '(') {
+            parser_get(p);  /* consume '(' */
+            
+            float index_val = parse_expression(p);
+            int index = (int)index_val;
+            if (index < 0) index = 0;
+            
+            if (parser_match(p, ')')) {
+                return biptrg_get_array_string(name, index);
+            }
+        }
+        
+        /* Scalar string variable */
+        struct variable *v = gwdata_find_variable(name);
+        if (v && v->type == VT_STRING && v->value.s) {
+            return v->value.s;
+        }
+    }
+    
+    /* Default: empty string */
+    char *result = gwdata_alloc_string(1);
+    if (result) result[0] = '\0';
+    return result;
 }
 
 static float parse_power(parser_t *p) {
@@ -304,14 +509,14 @@ char *gweval_eval_string(const char *expr) {
     char c = parser_peek(&parser);
     
     /* String literal in quotes */
-    if (c == '"') {
+    if (c == '\"') {
         parser_get(&parser);  /* consume opening quote */
         char buf[256];
         size_t i = 0;
-        while (parser.pos < parser.len && parser.input[parser.pos] != '"' && i < sizeof(buf) - 1) {
+        while (parser.pos < parser.len && parser.input[parser.pos] != '\"' && i < sizeof(buf) - 1) {
             buf[i++] = parser.input[parser.pos++];
         }
-        if (parser.pos < parser.len && parser.input[parser.pos] == '"') {
+        if (parser.pos < parser.len && parser.input[parser.pos] == '\"') {
             parser.pos++;  /* consume closing quote */
         }
         buf[i] = '\0';
@@ -320,7 +525,7 @@ char *gweval_eval_string(const char *expr) {
         return result;
     }
     
-    /* Variable or array reference */
+    /* Variable or array reference or function call */
     if (isalpha((unsigned char)c)) {
         char name[41];
         size_t i = 0;
@@ -328,6 +533,104 @@ char *gweval_eval_string(const char *expr) {
             name[i++] = parser.input[parser.pos++];
         }
         name[i] = '\0';
+        
+        /* Check for string function call: LEFT$(, RIGHT$(, MID$(, UCASE$(, LCASE$(, STR$(, CHR$(, SPACE$(, STRING$( */
+        if (parser_peek(&parser) == '(') {
+            parser_get(&parser);  /* consume '(' */
+            
+            if (strcasecmp_ascii(name, "LEFT") == 0 || strcasecmp_ascii(name, "LEFT$") == 0) {
+                /* LEFT$(str, n) */
+                char *str_val = parse_string_expression(&parser);
+                if (str_val) {
+                    if (parser_match(&parser, ',')) {
+                        float arg2 = parse_expression(&parser);
+                        if (parser_match(&parser, ')')) {
+                            return bistrs_left(str_val, (int)arg2);
+                        }
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "RIGHT") == 0 || strcasecmp_ascii(name, "RIGHT$") == 0) {
+                /* RIGHT$(str, n) */
+                char *str_val = parse_string_expression(&parser);
+                if (str_val) {
+                    if (parser_match(&parser, ',')) {
+                        float arg2 = parse_expression(&parser);
+                        if (parser_match(&parser, ')')) {
+                            return bistrs_right(str_val, (int)arg2);
+                        }
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "MID") == 0 || strcasecmp_ascii(name, "MID$") == 0) {
+                /* MID$(str, start, len) */
+                char *str_val = parse_string_expression(&parser);
+                if (str_val) {
+                    if (parser_match(&parser, ',')) {
+                        float arg2 = parse_expression(&parser);
+                        if (parser_match(&parser, ',')) {
+                            float arg3 = parse_expression(&parser);
+                            if (parser_match(&parser, ')')) {
+                                return bistrs_mid(str_val, (int)arg2, (int)arg3);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "UCASE") == 0 || strcasecmp_ascii(name, "UCASE$") == 0) {
+                /* UCASE$(str) */
+                char *str_val = parse_string_expression(&parser);
+                if (str_val) {
+                    if (parser_match(&parser, ')')) {
+                        return bistrs_ucase(str_val);
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "LCASE") == 0 || strcasecmp_ascii(name, "LCASE$") == 0) {
+                /* LCASE$(str) */
+                char *str_val = parse_string_expression(&parser);
+                if (str_val) {
+                    if (parser_match(&parser, ')')) {
+                        return bistrs_lcase(str_val);
+                    }
+                }
+            }
+            else if (strcasecmp_ascii(name, "STR") == 0 || strcasecmp_ascii(name, "STR$") == 0) {
+                /* STR$(num) */
+                float arg = parse_expression(&parser);
+                if (parser_match(&parser, ')')) {
+                    return bistrs_str(arg);
+                }
+            }
+            else if (strcasecmp_ascii(name, "CHR") == 0 || strcasecmp_ascii(name, "CHR$") == 0) {
+                /* CHR$(num) */
+                float arg = parse_expression(&parser);
+                if (parser_match(&parser, ')')) {
+                    return bistrs_chr((int)arg);
+                }
+            }
+            else if (strcasecmp_ascii(name, "SPACE") == 0 || strcasecmp_ascii(name, "SPACE$") == 0) {
+                /* SPACE$(num) */
+                float arg = parse_expression(&parser);
+                if (parser_match(&parser, ')')) {
+                    return bistrs_space((int)arg);
+                }
+            }
+            else if (strcasecmp_ascii(name, "STRING") == 0 || strcasecmp_ascii(name, "STRING$") == 0) {
+                /* STRING$(num, char) */
+                float arg1 = parse_expression(&parser);
+                if (parser_match(&parser, ',')) {
+                    float arg2 = parse_expression(&parser);
+                    if (parser_match(&parser, ')')) {
+                        return bistrs_string((int)arg1, (char)arg2);
+                    }
+                }
+            }
+            
+            /* If we get here, it wasn't a recognized string function - 
+               rewind to handle as array/variable */
+            parser.pos -= 1;  /* Put back '(' */
+        }
         
         /* Check for array reference: A$(5) */
         if (parser_peek(&parser) == '(') {
@@ -349,7 +652,10 @@ char *gweval_eval_string(const char *expr) {
         }
     }
     
-    return NULL;
+    /* Default: empty string */
+    char *result = gwdata_alloc_string(1);
+    if (result) result[0] = '\0';
+    return result;
 }
 
 /* Scan variable name from text */
