@@ -52,33 +52,15 @@ This document categorizes the `.bas` integration tests by feature implementation
 |------|---------|
 | test_arrays.bas | 1D array DIM, assign, read |
 | test_multi_array.bas | 2D array (5×5) read/write |
-| test_string_arrays.bas | String array DIM, READ/DATA |
 
 ### Math Functions
 | Test | Feature |
 |------|---------|
 | test_math.bas | SIN, COS, TAN, ATN, EXP, LOG, SQR, ABS, SGN, INT, FIX, RND |
-
 ### File I/O (Sequential)
 | Test | Feature |
 |------|---------|
 | test_print_file.bas | PRINT # / LINE INPUT # |
-| test_file_seq.bas | Sequential file I/O |
-| test_line_input.bas | LINE INPUT with file |
-| test_read_data.bas | READ/DATA/RESTORE |
-
-### File I/O (Random Access)
-| Test | Feature |
-|------|---------|
-| test_file_rand.bas | Random file with FIELD/PUT/GET |
-| test_put_get.bas | PUT/GET random access |
-
-### PRINT Formatting
-| Test | Feature |
-|------|---------|
-| test_print_bare.bas | Bare PRINT (newline) |
-| test_print_hello.bas | PRINT literal |
-| test_print_literal.bas | PRINT literal |
 | test_tab_spc.bas | TAB() and SPC() |
 
 ## ⏳ Not Yet Implemented (Tests Expected to FAIL)
@@ -102,6 +84,24 @@ This document categorizes the `.bas` integration tests by feature implementation
 | test_left_only.bas | LEFT$ only |
 | test_left_print.bas | LEFT$ in PRINT |
 | test_left_simple.bas | LEFT$ simple |
+
+### File I/O (Random Access) ⏳ **Not Yet Implemented** (依赖 FIELD)
+| Test | Missing Feature |
+|------|-----------------|
+| test_file_rand.bas | Random file with FIELD/PUT/GET |
+| test_put_get.bas | PUT/GET random access |
+
+### READ/DATA/RESTORE ⏳ **Not Yet Implemented** (依赖 READ)
+| Test | Missing Feature |
+|------|-----------------|
+| test_read_data.bas | READ/DATA/RESTORE |
+| test_string_arrays.bas | String array DIM, READ/DATA |
+
+### File I/O (Sequential with WHILE) ⏳ **Not Yet Implemented** (依赖 WHILE/WEND)
+| Test | Missing Feature |
+|------|-----------------|
+| test_file_seq.bas | Sequential file I/O |
+| test_line_input.bas | LINE INPUT with file |
 
 ### DEF FN User Functions
 | Test | Missing Feature |

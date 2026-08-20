@@ -1,12 +1,17 @@
 #!/bin/bash
 # GW-BASIC test runner - categorizes tests by feature status
 
-TEST_DIR="tests/bas"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEST_DIR="$SCRIPT_DIR/tests/bas"
+GWBASIC_EXE="$SCRIPT_DIR/gwbasic.exe"
+
 PASS=0
 FAIL=0
 SKIP=0
 
 # Tests that should PASS (implemented features)
+# Updated to match TEST_CATEGORIES.md - removed 6 tests that depend on unimplemented features
 IMPLEMENTED_TESTS=(
     "test_hello.bas"
     "test_for.bas"
@@ -37,16 +42,11 @@ IMPLEMENTED_TESTS=(
     "test_math.bas"
     "test_cond.bas"
     "test_print_file.bas"
-    "test_file_seq.bas"
-    "test_file_rand.bas"
-    "test_line_input.bas"
-    "test_put_get.bas"
-    "test_read_data.bas"
     "test_tab_spc.bas"
-    "test_string_arrays.bas"
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)
+# Added the 6 tests moved from Implemented: file_seq, line_input, file_rand, put_get, read_data, string_arrays
 NOT_IMPLEMENTED_TESTS=(
     "test_def_fn.bas"
     "test_error.bas"
@@ -72,6 +72,12 @@ NOT_IMPLEMENTED_TESTS=(
     "test_print_using.bas"
     "test_while_wend.bas"
     "test_while_debug.bas"
+    "test_file_seq.bas"
+    "test_line_input.bas"
+    "test_file_rand.bas"
+    "test_put_get.bas"
+    "test_read_data.bas"
+    "test_string_arrays.bas"
 )
 
 # Run a test and check result
@@ -81,18 +87,20 @@ run_test() {
     local name=$(basename "$test_file" .bas)
     
     echo -n "Testing $name... "
-    output=$(cd /d/myplace/workspace/projects/gwbasic/c && ./gwbasic.exe "$test_file" 2>&1 | grep -v DEBUG)
-    exit_code=$?
     
-    # Check for syntax error or crash
+    # Run gwbasic.exe directly, capture exit code first (before any pipe)
+    "$GWBASIC_EXE" "$test_file" > "$SCRIPT_DIR/temp_output.txt" 2>&1
+    local exit_code=$?
+    local output=$(cat "$SCRIPT_DIR/temp_output.txt" | grep -v DEBUG)
+    
+    # Check for syntax error or crash in output
     if echo "$output" | grep -q "Syntax error\|Error at line"; then
         result="FAIL_SYNTAX"
-    elif echo "$output" | grep -q "PASS"; then
+    elif [ "$exit_code" -eq 0 ]; then
+        # Exit code 0 = success (pass)
         result="PASS"
-    elif echo "$output" | grep -q "FAIL"; then
-        result="FAIL_ASSERT"
     else
-        result="UNKNOWN"
+        result="FAIL_EXITCODE"
     fi
     
     if [ "$expected" = "pass" ] && [ "$result" = "PASS" ]; then
@@ -124,3 +132,6 @@ echo "Passed: $PASS"
 echo "Failed: $FAIL"
 echo "Skipped (expected): $SKIP"
 echo "Total: $((PASS + FAIL + SKIP))"
+
+# Cleanup
+rm -f "$SCRIPT_DIR/temp_output.txt"

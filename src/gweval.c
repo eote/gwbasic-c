@@ -112,27 +112,34 @@ static float parse_factor(parser_t *p) {
                                  strcasecmp_ascii(name, "INT") == 0 ||
                                  strcasecmp_ascii(name, "FIX") == 0);
             
-            if (is_math_func) {
+            /* Also check for TAB( and SPC( - they're PRINT functions but return numeric */
+            bool is_tab_spc = (strcasecmp_ascii(name, "TAB") == 0 ||
+                               strcasecmp_ascii(name, "SPC") == 0);
+            
+            if (is_math_func || is_tab_spc) {
                 parser_get(p);  /* consume '(' */
                 
                 /* Parse argument expression */
                 float arg = parse_expression(p);
                 
                 if (parser_match(p, ')')) {
-                            /* Math functions */
-                            if (strcasecmp_ascii(name, "SIN") == 0) return math1_sin(arg);
-                            if (strcasecmp_ascii(name, "COS") == 0) return math1_cos(arg);
-                            if (strcasecmp_ascii(name, "TAN") == 0) return math1_tan(arg);
-                            if (strcasecmp_ascii(name, "ATN") == 0) return math1_atn(arg);
-                            if (strcasecmp_ascii(name, "EXP") == 0) return math1_exp(arg);
-                            if (strcasecmp_ascii(name, "LOG") == 0) return math1_log(arg);
-                            if (strcasecmp_ascii(name, "SQR") == 0) return math2_sqr(arg);
-                            if (strcasecmp_ascii(name, "ABS") == 0) return math2_abs(arg);
-                            if (strcasecmp_ascii(name, "SGN") == 0) return math2_sgn(arg);
-                            if (strcasecmp_ascii(name, "RND") == 0) return math2_rnd(arg);
-                            if (strcasecmp_ascii(name, "INT") == 0) return math2_int(arg);
-                            if (strcasecmp_ascii(name, "FIX") == 0) return math2_fix(arg);
-                        }
+                    /* Math functions */
+                    if (strcasecmp_ascii(name, "SIN") == 0) return math1_sin(arg);
+                    if (strcasecmp_ascii(name, "COS") == 0) return math1_cos(arg);
+                    if (strcasecmp_ascii(name, "TAN") == 0) return math1_tan(arg);
+                    if (strcasecmp_ascii(name, "ATN") == 0) return math1_atn(arg);
+                    if (strcasecmp_ascii(name, "EXP") == 0) return math1_exp(arg);
+                    if (strcasecmp_ascii(name, "LOG") == 0) return math1_log(arg);
+                    if (strcasecmp_ascii(name, "SQR") == 0) return math2_sqr(arg);
+                    if (strcasecmp_ascii(name, "ABS") == 0) return math2_abs(arg);
+                    if (strcasecmp_ascii(name, "SGN") == 0) return math2_sgn(arg);
+                    if (strcasecmp_ascii(name, "RND") == 0) return math2_rnd(arg);
+                    if (strcasecmp_ascii(name, "INT") == 0) return math2_int(arg);
+                    if (strcasecmp_ascii(name, "FIX") == 0) return math2_fix(arg);
+                    /* TAB and SPC return the column/space count as numeric (for print positioning) */
+                    if (strcasecmp_ascii(name, "TAB") == 0) return arg;
+                    if (strcasecmp_ascii(name, "SPC") == 0) return arg;
+                }
             }
         }
         
