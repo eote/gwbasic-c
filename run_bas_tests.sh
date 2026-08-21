@@ -86,10 +86,10 @@ run_test() {
     echo -n "Testing $name... "
     
     # Run gwbasic.exe from SCRIPT_DIR with relative test path
-    # Use relative path from SCRIPT_DIR to avoid absolute path issues on Windows/MinGW
+    # Use relative paths for both executable and test file to avoid absolute path issues
     cd "$SCRIPT_DIR"
     local rel_test_file="${test_file#$SCRIPT_DIR/}"
-    "$GWBASIC_EXE" "$rel_test_file" > "$SCRIPT_DIR/temp_output.txt" 2>&1
+    ./gwbasic.exe "$rel_test_file" > "$SCRIPT_DIR/temp_output.txt" 2>&1
     local exit_code=$?
     local output=$(cat "$SCRIPT_DIR/temp_output.txt" | grep -v DEBUG)
     
