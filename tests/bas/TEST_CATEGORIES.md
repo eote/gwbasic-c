@@ -53,21 +53,9 @@ This document categorizes the `.bas` integration tests by feature implementation
 | test_arrays.bas | 1D array DIM, assign, read |
 | test_multi_array.bas | 2D array (5×5) read/write |
 
-### Math Functions
+### String Functions
 | Test | Feature |
 |------|---------|
-| test_math.bas | SIN, COS, TAN, ATN, EXP, LOG, SQR, ABS, SGN, INT, FIX, RND |
-### File I/O (Sequential)
-| Test | Feature |
-|------|---------|
-| test_print_file.bas | PRINT # / LINE INPUT # |
-| test_tab_spc.bas | TAB() and SPC() |
-
-## ⏳ Not Yet Implemented (Tests Expected to FAIL)
-
-### String Functions (All return 0/empty)
-| Test | Missing Feature |
-|------|-----------------|
 | test_string.bas | LEN, LEFT$, RIGHT$, MID$, UCASE$, LCASE$, STR$, VAL, CHR$, ASC, SPACE$, STRING$ |
 | test_string_funcs.bas | String functions |
 | test_string_simple.bas | LEN, LEFT$ |
@@ -79,11 +67,21 @@ This document categorizes the `.bas` integration tests by feature implementation
 | test_left_assign.bas | LEFT$ assignment |
 | test_left_direct.bas | LEFT$ direct |
 | test_left_direct2.bas | LEFT$ direct |
-| test_left_literal.bas | LEFT$ literal |
-| test_left_literal2.bas | LEFT$ literal |
 | test_left_only.bas | LEFT$ only |
 | test_left_print.bas | LEFT$ in PRINT |
 | test_left_simple.bas | LEFT$ simple |
+
+### Math Functions
+| Test | Feature |
+|------|---------|
+| test_math.bas | SIN, COS, TAN, ATN, EXP, LOG, SQR, ABS, SGN, INT, FIX, RND |
+### File I/O (Sequential)
+| Test | Feature |
+|------|---------|
+| test_print_file.bas | PRINT # / LINE INPUT # |
+| test_tab_spc.bas | TAB() and SPC() |
+
+## ⏳ Not Yet Implemented (Tests Expected to FAIL)
 
 ### File I/O (Random Access) ⏳ **Not Yet Implemented** (依赖 FIELD)
 | Test | Missing Feature |
@@ -134,19 +132,19 @@ This document categorizes the `.bas` integration tests by feature implementation
 ## 📝 Notes
 
 - **Total .bas tests**: ~60
-- **Implemented category**: ~30 tests (should PASS)
-- **Not implemented category**: ~30 tests (expected to FAIL with syntax errors or wrong output)
+- **Implemented category**: ~46 tests (should PASS) - includes 16 string function tests
+- **Not implemented category**: ~14 tests (expected to FAIL with syntax errors or wrong output)
 
 ## Running Tests
 
 ```bash
 # Run all implemented tests (should all pass)
-for f in tests/bas/test_{hello,for,if,let,goto_gosub,for_step,next_no_var,simple,scalar,empty_stmt,print_bare,print_hello,print_literal,basic,assign,assign2,cross_assign,expr,expr2,self_assign,simple_assign,for2,for3,int_var,arrays,multi_array,math,cond,print_file,file_seq,line_input,put_get,read_data,tab_spc,string_arrays}.bas; do
+for f in tests/bas/test_{hello,for,if,let,goto_gosub,for_step,next_no_var,simple,scalar,empty_stmt,print_bare,print_hello,print_literal,basic,assign,assign2,cross_assign,expr,expr2,self_assign,simple_assign,for2,for3,int_var,arrays,multi_array,math,cond,print_file,file_seq,line_input,put_get,read_data,tab_spc,string_arrays,string,string_funcs,string_simple,string_var,len,len2,len_literal,left,left_assign,left_direct,left_direct2,left_only,left_print,left_simple}.bas; do
     ./gwbasic.exe "$f" 2>&1 | grep -v DEBUG
 done
 
 # Check not-implemented tests (expected to show syntax errors)
-for f in tests/bas/test_{def_fn,error,on_goto,string,string_funcs,string_simple,string_var,len,len2,len_literal,left,left_assign,left_direct,left_direct2,left_literal,left_literal2,left_only,left_print,left_simple,using_simple,using_very_simple,print_using,while_wend,while_debug}.bas; do
+for f in tests/bas/test_{def_fn,error,on_goto,using_simple,using_very_simple,print_using,while_wend,while_debug}.bas; do
     ./gwbasic.exe "$f" 2>&1 | grep -v DEBUG | head -5
 done
 ```

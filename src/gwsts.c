@@ -18,6 +18,9 @@ extern int dskcom_put(int filenum, long record, const void *buffer, int buflen);
 extern int dskcom_print(int filenum, const char *data);
 extern int dskcom_line_input(int filenum, char *buffer, int maxlen);
 
+/* Include FM_* constants for OPEN statement */
+#include "dskcom.h"
+
 /* Forward declarations for static functions */
 static char *strdup_trim(const char *s);
 static bool starts_with(const char *s, const char *prefix);
@@ -224,14 +227,21 @@ int gwsts_exec_statement(const char *text) {
             if (*p == '#') {
                 /* File output: PRINT #filenum, expr */
                 char *rest = p + 1;  /* After '#' */
-                int filenum = (int)gweval_eval_numeric(rest);
                 
-                /* Find comma - make a copy to avoid modifying original */
+                /* Find comma FIRST - make a copy to avoid modifying original */
                 char *rest_copy = strdup_trim(rest);
                 if (rest_copy) {
                     char *comma = strchr(rest_copy, ',');
+                    int filenum = 0;
+                    if (comma) {
+                        *comma = '\0';  /* Truncate at comma to parse filenum */
+                        filenum = (int)gweval_eval_numeric(rest_copy);
+                    } else {
+                        /* No comma - entire rest is filenum */
+                        filenum = (int)gweval_eval_numeric(rest_copy);
+                    }
+                    
                     if (comma && filenum > 0) {
-                        *comma = '\0';
                         char *expr = strdup_trim(comma + 1);
                         if (expr) {
                             char *str_val = gweval_eval_string(expr);
@@ -376,7 +386,7 @@ int gwsts_exec_statement(const char *text) {
                     while (*rest && isspace((unsigned char)*rest)) rest++;
                     
                     /* Parse mode */
-                    int mode = 0;  /* 0=INPUT, 1=OUTPUT, 2=APPEND, 3=RANDOM */
+                    int mode = 0;  /* 0=INPUT, 1=OUTPUT, 2=APPEND, 3=RANDOM -> maps to FM_* */
                     int filenum = 1;
                     int reclen = 128;
                     
@@ -384,16 +394,16 @@ int gwsts_exec_statement(const char *text) {
                         rest += 4;
                         while (*rest && isspace((unsigned char)*rest)) rest++;
                         if (starts_with(rest, "INPUT")) {
-                            mode = 0;
+                            mode = FM_INPUT;
                             rest += 5;
                         } else if (starts_with(rest, "OUTPUT")) {
-                            mode = 1;
+                            mode = FM_OUTPUT;
                             rest += 6;
                         } else if (starts_with(rest, "APPEND")) {
-                            mode = 2;
+                            mode = FM_APPEND;
                             rest += 6;
                         } else if (starts_with(rest, "RANDOM")) {
-                            mode = 3;
+                            mode = FM_RANDOM;
                             rest += 6;
                         }
                     }

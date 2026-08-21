@@ -652,10 +652,8 @@ char *gweval_eval_string(const char *expr) {
         }
     }
     
-    /* Default: empty string */
-    char *result = gwdata_alloc_string(1);
-    if (result) result[0] = '\0';
-    return result;
+    /* Not a recognized string expression - return NULL to let caller try numeric eval */
+    return NULL;
 }
 
 /* Scan variable name from text */
