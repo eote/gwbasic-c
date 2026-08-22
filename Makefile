@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -std=c11 -Wall -Wextra -O2 -I./src -DDEBUG
+CFLAGS = -std=c11 -Wall -Wextra -O2 -I./src
 DEBUG_CFLAGS = -std=c11 -Wall -Wextra -O2 -I./src -DDEBUG
 LDFLAGS = -mconsole -lwinmm
 

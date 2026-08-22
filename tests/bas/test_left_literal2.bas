@@ -1,2 +1,0 @@
-10 PRINT LEFT$("HELLO", 2)
-20 END
