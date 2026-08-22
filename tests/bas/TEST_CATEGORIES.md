@@ -62,7 +62,6 @@ This document categorizes the `.bas` integration tests by feature implementation
 | test_string_var.bas | String variable + LEN |
 | test_len.bas | LEN |
 | test_len2.bas | LEN with variable |
-| test_len_literal.bas | LEN literal |
 | test_left.bas | LEFT$ |
 | test_left_assign.bas | LEFT$ assignment |
 | test_left_direct.bas | LEFT$ direct |
@@ -139,7 +138,7 @@ This document categorizes the `.bas` integration tests by feature implementation
 
 ```bash
 # Run all implemented tests (should all pass)
-for f in tests/bas/test_{hello,for,if,let,goto_gosub,for_step,next_no_var,simple,scalar,empty_stmt,print_bare,print_hello,print_literal,basic,assign,assign2,cross_assign,expr,expr2,self_assign,simple_assign,for2,for3,int_var,arrays,multi_array,math,cond,print_file,file_seq,line_input,put_get,read_data,tab_spc,string_arrays,string,string_funcs,string_simple,string_var,len,len2,len_literal,left,left_assign,left_direct,left_direct2,left_only,left_print,left_simple}.bas; do
+for f in tests/bas/test_{hello,for,if,let,goto_gosub,for_step,next_no_var,simple,scalar,empty_stmt,print_bare,print_hello,print_literal,basic,assign,assign2,cross_assign,expr,expr2,self_assign,simple_assign,for2,for3,int_var,arrays,multi_array,math,cond,print_file,file_seq,line_input,put_get,read_data,tab_spc,string_arrays,string,string_funcs,string_simple,string_var,len,len2,left,left_assign,left_direct,left_direct2,left_only,left_print,left_simple}.bas; do
     ./gwbasic.exe "$f" 2>&1 | grep -v DEBUG
 done
 
