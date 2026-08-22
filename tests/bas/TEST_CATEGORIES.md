@@ -74,11 +74,26 @@ This document categorizes the `.bas` integration tests by feature implementation
 | Test | Feature |
 |------|---------|
 | test_math.bas | SIN, COS, TAN, ATN, EXP, LOG, SQR, ABS, SGN, INT, FIX, RND |
+
 ### File I/O (Sequential)
 | Test | Feature |
 |------|---------|
 | test_print_file.bas | PRINT # / LINE INPUT # |
 | test_tab_spc.bas | TAB() and SPC() |
+
+### Control Flow - WHILE/WEND
+| Test | Feature |
+|------|---------|
+| test_while_wend.bas | WHILE/WEND loop |
+| test_while_debug.bas | WHILE debug |
+
+### File I/O (Sequential with WHILE/KILL)
+| Test | Feature |
+|------|---------|
+| test_file_seq.bas | Sequential file I/O |
+| test_line_input.bas | LINE INPUT with file |
+| test_kill_temp.bas | KILL after OPEN/PRINT#/CLOSE |
+| test_minimal.bas | Minimal program (END only) |
 
 ## ⏳ Not Yet Implemented (Tests Expected to FAIL)
 
@@ -93,12 +108,6 @@ This document categorizes the `.bas` integration tests by feature implementation
 |------|-----------------|
 | test_read_data.bas | READ/DATA/RESTORE |
 | test_string_arrays.bas | String array DIM, READ/DATA |
-
-### File I/O (Sequential with WHILE) ⏳ **Not Yet Implemented** (依赖 WHILE/WEND)
-| Test | Missing Feature |
-|------|-----------------|
-| test_file_seq.bas | Sequential file I/O |
-| test_line_input.bas | LINE INPUT with file |
 
 ### DEF FN User Functions
 | Test | Missing Feature |
@@ -118,27 +127,21 @@ This document categorizes the `.bas` integration tests by feature implementation
 ### PRINT USING
 | Test | Missing Feature |
 |------|-----------------|
-| test_using_simple.bas | PRINT USING basic |
-| test_using_very_simple.bas | PRINT USING simple |
-| test_print_using.bas | PRINT USING full |
-
-### WHILE/WEND
-| Test | Missing Feature |
-|------|-----------------|
-| test_while_wend.bas | WHILE/WEND (marked future) |
-| test_while_debug.bas | WHILE debug |
+| test_using_simple.bas | PRINT USING basic (output: leading zeros) |
+| test_using_very_simple.bas | PRINT USING simple (output: leading zeros) |
+| test_print_using.bas | PRINT USING full (output: leading zeros) |
 
 ## 📝 Notes
 
 - **Total .bas tests**: ~60
-- **Implemented category**: ~46 tests (should PASS) - includes 16 string function tests
-- **Not implemented category**: ~14 tests (expected to FAIL with syntax errors or wrong output)
+- **Implemented category**: ~50 tests (should PASS) - includes 16 string function tests + 2 WHILE/WEND tests + 4 KILL/file tests (test_file_seq, test_line_input, test_kill_temp, test_minimal)
+- **Not implemented category**: ~10 tests (expected to FAIL with syntax errors or wrong output) - includes 3 PRINT USING tests (leading zeros bug)
 
 ## Running Tests
 
 ```bash
 # Run all implemented tests (should all pass)
-for f in tests/bas/test_{hello,for,if,let,goto_gosub,for_step,next_no_var,simple,scalar,empty_stmt,print_bare,print_hello,print_literal,basic,assign,assign2,cross_assign,expr,expr2,self_assign,simple_assign,for2,for3,int_var,arrays,multi_array,math,cond,print_file,file_seq,line_input,put_get,read_data,tab_spc,string_arrays,string,string_funcs,string_simple,string_var,len,len2,left,left_assign,left_direct,left_direct2,left_only,left_print,left_simple}.bas; do
+for f in tests/bas/test_{hello,for,if,let,goto_gosub,for_step,next_no_var,simple,scalar,empty_stmt,print_bare,print_hello,print_literal,basic,assign,assign2,cross_assign,expr,expr2,self_assign,simple_assign,for2,for3,int_var,arrays,multi_array,math,cond,print_file,file_seq,line_input,put_get,read_data,tab_spc,string_arrays,string,string_funcs,string_simple,string_var,len,len2,left,left_assign,left_direct,left_direct2,left_only,left_print,left_simple,while_wend,while_debug}.bas; do
     ./gwbasic.exe "$f" 2>&1 | grep -v DEBUG
 done
 

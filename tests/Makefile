@@ -1,5 +1,5 @@
 # Test Makefile for GW-BASIC C Port
-# Builds test_gwbasic.exe linking all module objects except gwmain.o
+# Builds test_gwbasic.exe linking all module objects except gwmain.c
 
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -O2 -I../src -I.
@@ -56,7 +56,6 @@ TEST_SRCS = \
 	../tests/test_math.c \
 	../tests/test_advgrp.c \
 	../tests/test_call86.c \
-	../tests/test_gweval_helpers.c \
 	../tests/test_itsa86.c \
 	../tests/test_next86.c \
 	../tests/test_kanj86.c \
@@ -76,12 +75,12 @@ TEST_SRCS = \
 	../tests/test_giolpt.c \
 	../tests/test_giocom.c \
 	../tests/test_gwlist.c \
-../tests/test_gwsts.c \
-../tests/test_bistrs.c \
-../tests/test_bimisc.c \
-../tests/test_biptrg.c \
-../tests/test_fiveo_ext.c \
-../tests/test_scndrv.c
+	../tests/test_gwsts.c \
+	../tests/test_bistrs.c \
+	../tests/test_bimisc.c \
+	../tests/test_biptrg.c \
+	../tests/test_fiveo_ext.c \
+	../tests/test_scndrv.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o

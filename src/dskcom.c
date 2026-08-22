@@ -325,3 +325,19 @@ int dskcom_find_free_filenum(void) {
     }
     return 0;  /* All file numbers in use */
 }
+
+/* Check if file is at EOF */
+int dskcom_eof(int filenum) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return -1;  /* Error */
+    
+    if (fd->mode != FM_INPUT && fd->mode != FM_RANDOM) return -1;
+    
+    DWORD pos = SetFilePointer((HANDLE)fd->handle, 0, NULL, FILE_CURRENT);
+    if (pos == INVALID_SET_FILE_POINTER) return -1;
+    
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx((HANDLE)fd->handle, &size)) return -1;
+    
+    return (pos >= (DWORD)size.QuadPart) ? 1 : 0;
+}

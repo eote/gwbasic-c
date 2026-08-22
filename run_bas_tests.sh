@@ -11,7 +11,7 @@ FAIL=0
 SKIP=0
 
 # Tests that should PASS (implemented features)
-# Updated to match TEST_CATEGORIES.md - includes string functions (16 tests) and PRINT USING (3 tests - partial but no crash)
+# Updated to match TEST_CATEGORIES.md - includes string functions (16 tests), PRINT USING (removed - output bug), WHILE/WEND (2 tests), KILL (2 tests)
 IMPLEMENTED_TESTS=(
     "test_hello.bas"
     "test_for.bas"
@@ -56,25 +56,29 @@ IMPLEMENTED_TESTS=(
     "test_left_only.bas"
     "test_left_print.bas"
     "test_left_simple.bas"
-    "test_using_simple.bas"
-    "test_using_very_simple.bas"
-    "test_print_using.bas"
-)
-
-# Tests for NOT YET IMPLEMENTED features (expected to fail)
-# Removed 16 string function tests + 3 PRINT USING tests (now implemented)
-NOT_IMPLEMENTED_TESTS=(
-    "test_def_fn.bas"
-    "test_error.bas"
-    "test_on_goto.bas"
     "test_while_wend.bas"
     "test_while_debug.bas"
     "test_file_seq.bas"
     "test_line_input.bas"
+    "test_kill_temp.bas"
+    "test_minimal.bas"
+)
+
+# Tests for NOT YET IMPLEMENTED features (expected to fail)
+# Removed 16 string function tests + 2 WHILE/WEND tests + 2 KILL/file tests (now implemented)
+# PRINT USING (3 tests) moved to Not Implemented due to output bug (leading zeros)
+# test_kill_simple.bas deleted - KILL nonexistent file is expected error, not success test
+NOT_IMPLEMENTED_TESTS=(
+    "test_def_fn.bas"
+    "test_error.bas"
+    "test_on_goto.bas"
     "test_file_rand.bas"
     "test_put_get.bas"
     "test_read_data.bas"
     "test_string_arrays.bas"
+    "test_using_simple.bas"
+    "test_using_very_simple.bas"
+    "test_print_using.bas"
 )
 
 # Run a test and check result

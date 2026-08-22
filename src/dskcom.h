@@ -41,4 +41,7 @@ int dskcom_put(int filenum, long record, const void *buffer, int buflen);
 /* Find a free file number (1-255) not currently in use */
 int dskcom_find_free_filenum(void);
 
+/* Check if file is at EOF */
+int dskcom_eof(int filenum);
+
 #endif /* DSKCOM_H */

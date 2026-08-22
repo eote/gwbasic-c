@@ -44,3 +44,12 @@ void gwram_free(void *ptr) {
         free(ptr);
     }
 }
+
+/* Delete a file (for KILL statement) */
+int gwram_delete_file(const char *filename) {
+    if (!filename) return ERROR;
+    if (remove(filename) == 0) {
+        return SUCCESS;
+    }
+    return ERROR;
+}

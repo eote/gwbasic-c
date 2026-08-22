@@ -74,7 +74,12 @@ struct variable *gwdata_alloc_variable(const char *name, var_type_t type) {
             }
             existing->type = type;
             existing->is_array = false;
-            existing->value.s = NULL;  /* Clear any stale pointer */
+            /* Clear value based on new type - union needs proper member clearing */
+            if (type == VT_STRING) {
+                existing->value.s = NULL;
+            } else {
+                existing->value.f = 0.0f;  /* Clear numeric value (also clears i and d) */
+            }
             return existing;
         }
         existing = existing->next;

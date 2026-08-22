@@ -18,6 +18,7 @@ tests/*.dat
 
 # Root directory test artifacts
 *.DAT
+*.txt
 build.log
 test_output.log
 

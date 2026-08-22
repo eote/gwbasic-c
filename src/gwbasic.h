@@ -134,7 +134,6 @@ struct _runtime_state {
 /* Debug print macro - controlled by DEBUG compile flag */
 #ifdef DEBUG
 #define DEBUG_PRINT(fmt, ...) do { \
-    fprintf(stderr, "[DEBUG] " fmt "\n", ##__VA_ARGS__); \
 } while(0)
 #else
 #define DEBUG_PRINT(fmt, ...) do { } while(0)
@@ -169,9 +168,12 @@ int gweval_frqint(void);
 void gweval_chrgt2(const char **text);
 void gweval_synchr(const char **text, char expected);
 
-/* GWSTS module functions */
+/* GWSTS module functions - Statement Execution */
 void gwsts_init(void);
 int gwsts_exec_statement(const char *stmt);
+
+/* GWSTS internal - file operations */
+int gwram_delete_file(const char *filename);
 
 /* GIOCON module functions */
 void giocon_init(void);

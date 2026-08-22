@@ -164,7 +164,8 @@ int gwsts_exec_statement(const char *text) {
              !starts_with(trimmed, "IF ") &&
              !starts_with(trimmed, "INPUT ") &&
              !starts_with(trimmed, "LINE INPUT ") &&
-             !starts_with(trimmed, "FOR ")) {
+             !starts_with(trimmed, "FOR ") &&
+             !starts_with(trimmed, "WHILE ")) {
         char *eq = strchr(trimmed, '=');
         if (eq) {
             *eq = '\0';
@@ -364,6 +365,123 @@ int gwsts_exec_statement(const char *text) {
                 gwram_free(then_stmt);
             }
         }
+    }
+    /* WHILE statement: WHILE <condition> */
+    else if (starts_with(trimmed, "WHILE ")) {
+        char *rest = trimmed + 6;  /* Skip "WHILE " */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        
+        /* Find matching WEND in the program */
+        extern int fiveo_push_while(int while_text_ptr, int wend_text_ptr, int while_line);
+        extern int fiveo_find_while(int wend_text_ptr);
+        extern int fiveo_pop_while(struct while_entry *entry);
+        extern int fiveo_while_depth(void);
+        extern int fiveo_peek_while(struct while_entry *entry);
+        extern WORD g_curlin;
+        
+        /* We need to find the matching WEND. Search through program lines. */
+        struct program_line *curr = gwlist_get_first_line();
+        int while_line = g_curlin;
+        int wend_line = 0;
+        int while_depth = 0;
+        
+        while (curr) {
+            if (curr->number > while_line) {
+                char *trimmed_line = strdup_trim(curr->text);
+                if (trimmed_line) {
+                    if (starts_with(trimmed_line, "WHILE ")) {
+                        while_depth++;
+                    } else if (starts_with(trimmed_line, "WEND")) {
+                        if (while_depth == 0) {
+                            wend_line = curr->number;
+                            gwram_free(trimmed_line);
+                            break;
+                        }
+                        while_depth--;
+                    }
+                    gwram_free(trimmed_line);
+                }
+            }
+            curr = curr->next;
+        }
+        
+        
+        /* Check if this WHILE is already on stack (top entry) */
+                    struct while_entry entry;
+                    int rc = fiveo_peek_while(&entry);
+                    bool already_on_stack = (rc == 0 && entry.while_line == g_curlin);
+            
+                    if (!already_on_stack) {
+                        /* First execution - push WHILE entry */
+                        int rc = fiveo_push_while(g_curlin, wend_line, g_curlin);  /* while_text_ptr=line, wend_text_ptr=wend_line, while_line=line */
+                        if (rc != 0) {
+                            result = ERROR;  /* Stack overflow */
+                        } else {
+                            /* Verify it was pushed */
+                            struct while_entry entry;
+                            fiveo_peek_while(&entry);
+                            result = SUCCESS;
+                        }
+                    }
+                    /* Whether first time or jump back, evaluate condition */
+                    float cond_val = gweval_eval_numeric(rest);
+            
+                    if (cond_val != 0.0f) {
+                        /* Condition true - continue to loop body */
+                        result = SUCCESS;
+                    } else {
+                        /* Condition false - jump to line after WEND */
+                        struct program_line *after_wend = gwlist_find_line(wend_line);
+                        if (after_wend && after_wend->next) {
+                            result = after_wend->next->number;  /* Jump to line after WEND */
+                        } else {
+                            result = 0;  /* No next line, continue normally */
+                        }
+                    }
+                }
+    /* WEND statement */
+    else if (starts_with(trimmed, "WEND")) {
+        extern int fiveo_pop_while(struct while_entry *entry);
+        extern int fiveo_peek_while(struct while_entry *entry);
+        extern int fiveo_while_depth(void);
+        
+        /* WEND matches the most recent WHILE (by text position) */
+        /* Search from top of stack for matching entry */
+        int rc = fiveo_while_depth();
+        
+        if (rc > 0) {
+            /* Peek at top entry */
+            struct while_entry entry;
+            extern int fiveo_peek_while(struct while_entry *entry);
+            int rc = fiveo_peek_while(&entry);
+            
+            if (rc == 0) {
+                /* Jump back to WHILE to re-evaluate condition */
+                result = entry.while_line;  /* Jump to WHILE line */
+            } else {
+                result = ERROR;  /* Stack issue */
+            }
+        } else {
+            result = ERROR;  /* WEND without WHILE */
+        }
+    }
+    /* KILL statement: KILL <string_expr> */
+    else if (starts_with(trimmed, "KILL ")) {
+        char *rest = trimmed + 5;  /* Skip "KILL " */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        
+        /* Evaluate string expression (supports quoted string, variable, or function) */
+        char *filename = gweval_eval_string(rest);
+        
+        if (filename) {
+            result = gwram_delete_file(filename);
+            /* Don't free filename - it comes from string heap (bump allocator) */
+        } else {
+            result = ERROR;
+        }
+        
     }
     /* OPEN statement */
     else if (starts_with(trimmed, "OPEN ")) {
@@ -641,6 +759,7 @@ static bool parse_var_ref(const char *str, char **var_name, int *index, int *ind
 static int assign_value(const char *var_ref, const char *expr) {
     if (!var_ref || !expr) return ERROR;
     
+    
     char *base_name = NULL;
     int array_index = -1;
     int indices[8];
@@ -694,9 +813,11 @@ static int assign_value(const char *var_ref, const char *expr) {
                 }
             } else {
                 /* Numeric variable (integer or float) */
+                /* Evaluate expression FIRST before potentially clearing the variable */
+                float val = gweval_eval_numeric(expr);
                 struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
                 if (v) {
-                    v->value.f = gweval_eval_numeric(expr);
+                    v->value.f = val;
                     result = SUCCESS;
                 }
             }
