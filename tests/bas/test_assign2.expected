@@ -1,0 +1,3 @@
+Before: I = 1
+J = I+1 = 2
+After I=2: I = 2

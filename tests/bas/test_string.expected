@@ -1,0 +1,12 @@
+LEN: 13
+LEFT$: Hello
+RIGHT$: World!
+MID$: World
+UCASE$: HELLO, WORLD!
+LCASE$: hello, world!
+STR$: 123.45
+VAL: 456.78
+CHR$: A
+ASC: 65
+SPACE$:      END
+STRING$: 
