@@ -59,7 +59,8 @@ static bool parser_match(parser_t *p, char c) {
 static float parse_expression(parser_t *p);
 static char *parse_string_expression(parser_t *p);
 
-/* String function helper: parse string expression until comma or closing paren */
+/* String function helper: parse string expression until comma or closing paren
+ * Supports string concatenation with + operator */
 static char *parse_string_expression(parser_t *p) {
     /* Try to parse as string literal first */
     char c = parser_peek(p);
@@ -79,8 +80,7 @@ static char *parse_string_expression(parser_t *p) {
         return result;
     }
     
-    /* Otherwise parse as general string expression (variable, array, function) */
-    /* We need to handle functions that return strings */
+    /* Otherwise parse as general string expression (variable, array, function, concatenation) */
     if (isalpha((unsigned char)c)) {
         char name[41];
         size_t i = 0;
@@ -207,6 +207,10 @@ static char *parse_string_expression(parser_t *p) {
         }
     }
     
+    /* Check for string concatenation with + */
+    /* We need to handle cases like "Line " + STR$(I) */
+    /* The caller will handle this at a higher level */
+    
     /* Default: not a recognized string expression — return NULL so caller can try numeric eval */
     return NULL;
 }
@@ -229,6 +233,22 @@ static float parse_factor(parser_t *p) {
     if (c == '+') {
         parser_get(p);
         return parse_factor(p);
+    }
+    
+    /* Handle NOT operator */
+    /* Check if next chars spell "NOT" (case insensitive) */
+    if (p->pos + 2 < p->len) {
+        char c1 = p->input[p->pos];
+        char c2 = p->input[p->pos + 1];
+        char c3 = p->input[p->pos + 2];
+        if ((c1 == 'N' || c1 == 'n') && (c2 == 'O' || c2 == 'o') && (c3 == 'T' || c3 == 't')) {
+            /* Check that it's a whole word (next char is not alphanumeric/underscore) */
+            if (p->pos + 3 >= p->len || (!isalnum((unsigned char)p->input[p->pos + 3]) && p->input[p->pos + 3] != '_')) {
+                p->pos += 3;  /* consume "NOT" */
+                float val = parse_factor(p);
+                return (val == 0.0f) ? -1.0f : 0.0f;  /* GW-BASIC: NOT 0 = -1, NOT non-zero = 0 */
+            }
+        }
     }
     
     /* Number */
@@ -602,10 +622,48 @@ char *gweval_eval_string(const char *expr) {
         buf[i] = '\0';
         char *result = gwdata_alloc_string(strlen(buf) + 1);
         if (result) strcpy(result, buf);
+        
+        /* Check for concatenation after string literal */
+        /* Skip whitespace */
+        while (parser.pos < parser.len && isspace((unsigned char)parser.input[parser.pos])) parser.pos++;
+        /* Check for + operator for concatenation */
+        while (parser.pos < parser.len && parser.input[parser.pos] == '+') {
+            parser.pos++;  /* consume '+' */
+            /* Skip whitespace */
+            while (parser.pos < parser.len && isspace((unsigned char)parser.input[parser.pos])) parser.pos++;
+            /* Parse next string expression */
+            char *next_str = parse_string_expression(&parser);
+            if (next_str) {
+                /* Concatenate result + next_str */
+                size_t len1 = strlen(result);
+                size_t len2 = strlen(next_str);
+                char *concat = gwdata_alloc_string(len1 + len2 + 1);
+                if (concat) {
+                    strcpy(concat, result);
+                    strcat(concat, next_str);
+                    result = concat;
+                }
+            } else {
+                /* Try numeric expression then convert to string */
+                float num_val = parse_expression(&parser);
+                char num_buf[32];
+                sprintf(num_buf, "%g", num_val);
+                size_t len1 = strlen(result);
+                size_t len2 = strlen(num_buf);
+                char *concat = gwdata_alloc_string(len1 + len2 + 1);
+                if (concat) {
+                    strcpy(concat, result);
+                    strcat(concat, num_buf);
+                    result = concat;
+                }
+            }
+            /* Skip whitespace */
+            while (parser.pos < parser.len && isspace((unsigned char)parser.input[parser.pos])) parser.pos++;
+        }
         return result;
     }
     
-    /* Variable or array reference or function call */
+    /* Variable or array reference or function call or concatenation */
     if (isalpha((unsigned char)c)) {
         char name[41];
         size_t i = 0;
@@ -724,7 +782,45 @@ char *gweval_eval_string(const char *expr) {
         /* Scalar string variable */
         struct variable *v = gwdata_find_variable(name);
         if (v && v->type == VT_STRING && v->value.s) {
-            return v->value.s;
+            /* Check for concatenation after variable */
+            char *result = v->value.s;
+            /* Skip whitespace */
+            while (parser.pos < parser.len && isspace((unsigned char)parser.input[parser.pos])) parser.pos++;
+            /* Check for + operator for concatenation */
+            while (parser.pos < parser.len && parser.input[parser.pos] == '+') {
+                parser.pos++;  /* consume '+' */
+                /* Skip whitespace */
+                while (parser.pos < parser.len && isspace((unsigned char)parser.input[parser.pos])) parser.pos++;
+                /* Parse next string expression */
+                char *next_str = parse_string_expression(&parser);
+                if (next_str) {
+                    /* Concatenate result + next_str */
+                    size_t len1 = strlen(result);
+                    size_t len2 = strlen(next_str);
+                    char *concat = gwdata_alloc_string(len1 + len2 + 1);
+                    if (concat) {
+                        strcpy(concat, result);
+                        strcat(concat, next_str);
+                        result = concat;
+                    }
+                } else {
+                    /* Try numeric expression then convert to string */
+                    float num_val = parse_expression(&parser);
+                    char num_buf[32];
+                    sprintf(num_buf, "%g", num_val);
+                    size_t len1 = strlen(result);
+                    size_t len2 = strlen(num_buf);
+                    char *concat = gwdata_alloc_string(len1 + len2 + 1);
+                    if (concat) {
+                        strcpy(concat, result);
+                        strcat(concat, num_buf);
+                        result = concat;
+                    }
+                }
+                /* Skip whitespace */
+                while (parser.pos < parser.len && isspace((unsigned char)parser.input[parser.pos])) parser.pos++;
+            }
+            return result;
         }
     }
     

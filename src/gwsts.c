@@ -245,15 +245,88 @@ int gwsts_exec_statement(const char *text) {
                     if (comma && filenum > 0) {
                         char *expr = strdup_trim(comma + 1);
                         if (expr) {
-                            char *str_val = gweval_eval_string(expr);
-                            if (str_val) {
-                                result = dskcom_print(filenum, str_val);
-                            } else {
-                                float val = gweval_eval_numeric(expr);
-                                char buf[64];
-                                snprintf(buf, sizeof(buf), "%g", val);
-                                result = dskcom_print(filenum, buf);
+                            /* Handle multiple expressions separated by commas/semicolons (like console PRINT) */
+                            char *text = expr;
+                            char combined_output[256] = {0};
+                            size_t combined_len = 0;
+                            
+                            while (*text) {
+                                /* Find end of expression (next comma, semicolon, or end) - skip commas/semicolons inside quotes or parentheses */
+                                char *expr_start = text;
+                                char *expr_end = text;
+                                bool in_quotes = false;
+                                int paren_depth = 0;
+                                while (*expr_end && !(!in_quotes && paren_depth == 0 && (*expr_end == ',' || *expr_end == ';'))) {
+                                    if (*expr_end == '\"') {
+                                        in_quotes = !in_quotes;
+                                    } else if (!in_quotes) {
+                                        if (*expr_end == '(') paren_depth++;
+                                        else if (*expr_end == ')') paren_depth--;
+                                    }
+                                    expr_end++;
+                                }
+                                
+                                /* Extract expression */
+                                size_t expr_len = expr_end - expr_start;
+                                char *single_expr = (char *)gwram_alloc(expr_len + 1);
+                                if (!single_expr) {
+                                    gwram_free(expr);
+                                    return ERROR;
+                                }
+                                memcpy(single_expr, expr_start, expr_len);
+                                single_expr[expr_len] = '\0';
+                                
+                                /* Trim whitespace */
+                                char *trim_start = single_expr;
+                                char *trim_end = single_expr + strlen(single_expr) - 1;
+                                while (trim_end >= trim_start && isspace((unsigned char)*trim_end)) {
+                                    *trim_end = '\0';
+                                    trim_end--;
+                                }
+                                while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
+                                
+                                if (*trim_start) {
+                                    /* Try string evaluation first, then numeric */
+                                    char *str_val = gweval_eval_string(trim_start);
+                                    if (str_val) {
+                                        size_t str_len = strlen(str_val);
+                                        if (combined_len + str_len < sizeof(combined_output) - 1) {
+                                            strcpy(combined_output + combined_len, str_val);
+                                            combined_len += str_len;
+                                        }
+                                    } else {
+                                        float val = gweval_eval_numeric(trim_start);
+                                        char buf[64];
+                                        /* GW-BASIC: positive numbers have leading space */
+                                        snprintf(buf, sizeof(buf), "%s%g", (val >= 0) ? " " : "", val);
+                                        size_t str_len = strlen(buf);
+                                        if (combined_len + str_len < sizeof(combined_output) - 1) {
+                                            strcpy(combined_output + combined_len, buf);
+                                            combined_len += str_len;
+                                        }
+                                    }
+                                }
+                                
+                                gwram_free(single_expr);
+                                
+                                /* Handle separator */
+                                if (*expr_end == ',') {
+                                    /* Zone separator - add tab */
+                                    if (combined_len + 1 < sizeof(combined_output) - 1) {
+                                        combined_output[combined_len++] = '\t';
+                                        combined_output[combined_len] = '\0';
+                                    }
+                                } else if (*expr_end == ';') {
+                                    /* No separator - just continue */
+                                }
+                                
+                                text = expr_end;
+                                if (*text) text++;
                             }
+                            
+                            /* Write combined output to file */
+                            result = dskcom_print(filenum, combined_output);
+                            
                             gwram_free(expr);
                         }
                     }
@@ -809,6 +882,16 @@ static int assign_value(const char *var_ref, const char *expr) {
                     if (str_val) {
                         v->value.s = str_val;
                         result = SUCCESS;
+                    } else {
+                        /* Not a recognized string expression — treat raw expr as literal string
+                           (for LINE INPUT etc. which provide unquoted raw text) */
+                        size_t expr_len = strlen(expr);
+                        char *heap_str = gwdata_alloc_string(expr_len + 1);
+                        if (heap_str) {
+                            strcpy(heap_str, expr);
+                            v->value.s = heap_str;
+                            result = SUCCESS;
+                        }
                     }
                 }
             } else {

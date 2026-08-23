@@ -1,4 +1,3 @@
-' Test: LINE INPUT with file
 10 OPEN "LINEIN.DAT" FOR OUTPUT AS #1
 20 FOR I = 1 TO 3
 30 PRINT #1, "Line " + STR$(I)

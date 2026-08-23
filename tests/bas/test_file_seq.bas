@@ -1,4 +1,3 @@
-' Test: File I/O - Sequential
 10 OPEN "TESTSEQ.DAT" FOR OUTPUT AS #1
 20 FOR I = 1 TO 5
 30 PRINT #1, I; "Data line"
@@ -10,5 +9,4 @@
 90 PRINT L$
 100 WEND
 110 CLOSE #1
-120 KILL "TESTSEQ.DAT"
-130 END
+120 END

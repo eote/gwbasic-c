@@ -229,7 +229,8 @@ int dskcom_line_input(int filenum, char *buffer, int maxlen) {
     }
     buffer[pos] = '\0';
 
-    /* Return ERROR if EOF reached immediately (empty file) */
+    /* Return SUCCESS even on EOF (empty line), GW-BASIC behavior */
+    /* Only return ERROR on immediate EOF with no data (pos == 0 && read == 0) */
     if (pos == 0 && read == 0) {
         return ERROR;
     }
