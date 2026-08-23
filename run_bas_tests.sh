@@ -1,5 +1,5 @@
 #!/bin/bash
-# GW-BASIC test runner - categorizes tests by feature status
+# GW-BASIC test runner - categorizes tests by feature status with output validation
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,8 +10,7 @@ PASS=0
 FAIL=0
 SKIP=0
 
-# Tests that should PASS (implemented features)
-# Updated to match TEST_CATEGORIES.md - includes string functions (16 tests), PRINT USING (removed - output bug), WHILE/WEND (2 tests), KILL (2 tests)
+# Tests that should PASS (implemented features) with expected output files
 IMPLEMENTED_TESTS=(
     "test_hello.bas"
     "test_for.bas"
@@ -65,9 +64,6 @@ IMPLEMENTED_TESTS=(
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)
-# Removed 16 string function tests + 2 WHILE/WEND tests + 2 KILL/file tests (now implemented)
-# PRINT USING (3 tests) moved to Not Implemented due to output bug (leading zeros)
-# test_kill_simple.bas deleted - KILL nonexistent file is expected error, not success test
 NOT_IMPLEMENTED_TESTS=(
     "test_def_fn.bas"
     "test_error.bas"
@@ -81,7 +77,33 @@ NOT_IMPLEMENTED_TESTS=(
     "test_print_using.bas"
 )
 
-# Run a test and check result
+# Compare output with expected file
+# Returns 0 if match, 1 if mismatch, 2 if no expected file
+compare_output() {
+    local test_name=$1
+    local actual_file="$SCRIPT_DIR/temp_output.txt"
+    local expected_file="$TEST_DIR/${test_name}.expected"
+    
+    if [ ! -f "$expected_file" ]; then
+        return 2  # No expected file
+    fi
+    
+    # Normalize line endings for comparison
+    local actual_norm=$(cat "$actual_file" | sed 's/\r$//')
+    local expected_norm=$(cat "$expected_file" | sed 's/\r$//')
+    
+    if [ "$actual_norm" = "$expected_norm" ]; then
+        return 0  # Match
+    else
+        echo "  Expected:" >&2
+        echo "$expected_norm" | sed 's/^/    /' >&2
+        echo "  Actual:" >&2
+        echo "$actual_norm" | sed 's/^/    /' >&2
+        return 1  # Mismatch
+    fi
+}
+
+# Run a test and check result with output validation
 run_test() {
     local test_file=$1
     local expected=$2  # "pass" or "fail"
@@ -90,7 +112,6 @@ run_test() {
     echo -n "Testing $name... "
     
     # Run gwbasic.exe from SCRIPT_DIR with relative test path
-    # Use relative paths for both executable and test file to avoid absolute path issues
     cd "$SCRIPT_DIR"
     local rel_test_file="${test_file#$SCRIPT_DIR/}"
     ./gwbasic.exe "$rel_test_file" > "$SCRIPT_DIR/temp_output.txt" 2>&1
@@ -101,13 +122,25 @@ run_test() {
     if echo "$output" | grep -q "Syntax error\|Error at line"; then
         result="FAIL_SYNTAX"
     elif [ "$exit_code" -eq 0 ]; then
-        # Exit code 0 = success (pass)
         result="PASS"
     else
         result="FAIL_EXITCODE"
     fi
     
+    # For implemented tests, also validate output content
     if [ "$expected" = "pass" ] && [ "$result" = "PASS" ]; then
+        compare_output "$name"
+        local cmp_result=$?
+        if [ $cmp_result -eq 1 ]; then
+            echo "❌ FAIL (output mismatch)"
+            ((FAIL++))
+            return
+        elif [ $cmp_result -eq 2 ]; then
+            echo "⚠️  PASS (no expected output file - output not validated)"
+            ((PASS++))
+            return
+        fi
+        # cmp_result = 0 (match)
         echo "✅ PASS"
         ((PASS++))
     elif [ "$expected" = "fail" ] && [ "$result" != "PASS" ]; then

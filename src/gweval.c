@@ -207,10 +207,8 @@ static char *parse_string_expression(parser_t *p) {
         }
     }
     
-    /* Default: empty string */
-    char *result = gwdata_alloc_string(1);
-    if (result) result[0] = '\0';
-    return result;
+    /* Default: not a recognized string expression — return NULL so caller can try numeric eval */
+    return NULL;
 }
 
 static float parse_factor(parser_t *p) {
@@ -417,12 +415,9 @@ static float parse_factor(parser_t *p) {
                 }
                 else if (strcasecmp_ascii(name, "EOF") == 0) {
                     /* EOF(filenum) - check if file at EOF */
-                    char *str_val = parse_string_expression(p);
-                    if (str_val) {
-                        if (parser_match(p, ')')) {
-                            int filenum = (int)gweval_eval_numeric(str_val);
-                            return (float)dskcom_eof(filenum);
-                        }
+                    float fn = parse_expression(p);
+                    if (parser_match(p, ')')) {
+                        return (float)dskcom_eof((int)fn);
                     }
                 }
                 /* String functions returning string - not valid in numeric context, return 0 */
@@ -434,16 +429,47 @@ static float parse_factor(parser_t *p) {
             }
         }
         
-        /* Check for array reference: A(5) */
+        /* Check for array reference: A(5) or A(5, 3) */
         if (parser_peek(p) == '(') {
             parser_get(p);  /* consume '(' */
             
-            float index_val = parse_expression(p);
-            int index = (int)index_val;
-            if (index < 0) index = 0;
+            /* Parse indices - support multi-dimensional */
+            float indices[8];
+            int num_indices = 0;
+            
+            while (parser_peek(p) != ')' && parser_peek(p) != '\0' && num_indices < 8) {
+                /* Skip whitespace */
+                while (parser_peek(p) == ' ' || parser_peek(p) == '\t') parser_get(p);
+                if (parser_peek(p) == ')') break;
+                
+                /* Parse index expression */
+                float index_val = parse_expression(p);
+                indices[num_indices++] = index_val;
+                
+                /* Skip whitespace */
+                while (parser_peek(p) == ' ' || parser_peek(p) == '\t') parser_get(p);
+                
+                if (parser_match(p, ',')) {
+                    continue;  /* Parse next index */
+                } else if (parser_peek(p) == ')') {
+                    break;  /* End of indices */
+                } else {
+                    /* Unexpected character, break */
+                    break;
+                }
+            }
             
             if (parser_match(p, ')')) {
-                return biptrg_get_array_element(name, index);
+                if (num_indices == 1) {
+                    return biptrg_get_array_element(name, (int)indices[0]);
+                } else if (num_indices > 1) {
+                    int int_indices[8];
+                    for (int i = 0; i < num_indices; i++) {
+                        int_indices[i] = (int)indices[i];
+                        if (int_indices[i] < 0) int_indices[i] = 0;
+                    }
+                    return biptrg_get_array_element_multi(name, int_indices);
+                }
             }
         }
         
@@ -461,8 +487,8 @@ static float parse_factor(parser_t *p) {
 static float parse_power(parser_t *p) {
     float left = parse_factor(p);
     
-    while (parser_match(p, '^')) {
-        float right = parse_factor(p);
+    if (parser_match(p, '^')) {
+        float right = parse_power(p);  /* Right-associative: parse right side first */
         left = powf(left, right);
     }
     
@@ -480,7 +506,11 @@ static float parse_term(parser_t *p) {
         } else if (c == '/') {
             parser_get(p);
             float right = parse_power(p);
-            if (right != 0.0f) left /= right;
+            if (right == 0.0f) {
+                /* Division by zero - set error flag and return 0 */
+                return 0.0f / 0.0f;  /* NaN to signal error */
+            }
+            left /= right;
         } else {
             break;
         }
@@ -698,8 +728,6 @@ char *gweval_eval_string(const char *expr) {
         }
     }
     
-    /* Default: empty string */
-    char *result = gwdata_alloc_string(1);
-    if (result) result[0] = '\0';
-    return result;
+    /* Default: not a recognized string expression — return NULL so caller can try numeric eval */
+    return NULL;
 }
