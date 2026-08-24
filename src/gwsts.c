@@ -21,11 +21,11 @@ extern int dskcom_line_input(int filenum, char *buffer, int maxlen);
 /* Include FM_* constants for OPEN statement */
 #include "dskcom.h"
 
-/* Forward declarations for static functions */
+/* Forward declarations */
 static char *strdup_trim(const char *s);
 static bool starts_with(const char *s, const char *prefix);
 static bool parse_var_ref(const char *str, char **var_name, int *index, int *indices, int *num_indices);
-static int assign_value(const char *var_ref, const char *expr);
+int assign_value(const char *var_ref, const char *expr);
 
 void gwsts_init(void) {
     /* No initialization needed */
@@ -213,6 +213,75 @@ int gwsts_exec_statement(const char *text) {
     else if (starts_with(trimmed, "END")) {
         /* END - stop execution with special return code */
         result = -2;  /* Distinct from ERROR (-1) */
+    }
+    /* DATA statement - no-op at runtime (data is read by READ) */
+    else if (starts_with(trimmed, "DATA")) {
+        result = SUCCESS;
+    }
+    /* RESTORE statement: RESTORE [line] */
+    else if (starts_with(trimmed, "RESTORE")) {
+        char *rest = trimmed + 7;  /* Skip "RESTORE" */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        if (*rest == '\0') {
+            /* RESTORE without line number - reset to beginning */
+            bimisc_restore(0);
+        } else {
+            /* RESTORE with line number */
+            int line_num = (int)gweval_eval_numeric(rest);
+            bimisc_restore(line_num);
+        }
+        result = SUCCESS;
+    }
+    /* READ statement: READ var1, var2, ... */
+    else if (starts_with(trimmed, "READ ")) {
+        char *rest = trimmed + 5;  /* Skip "READ " */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        if (*rest == '\0') {
+            result = ERROR;  /* READ without variables */
+        } else {
+            /* Parse variable names */
+            char *var_names[64];
+            int var_count = 0;
+            char *token = rest;
+            
+            while (*token && var_count < 64) {
+                /* Skip leading whitespace */
+                while (*token && isspace((unsigned char)*token)) token++;
+                if (!*token) break;
+                
+                /* Find end of variable name (comma or end) */
+                char *var_end = token;
+                while (*var_end && *var_end != ',' && !isspace((unsigned char)*var_end)) var_end++;
+                
+                size_t name_len = var_end - token;
+                if (name_len > 0 && name_len <= MAX_VAR_NAME) {
+                    char *var_name = (char *)gwram_alloc(name_len + 1);
+                    if (var_name) {
+                        memcpy(var_name, token, name_len);
+                        var_name[name_len] = '\0';
+                        var_names[var_count++] = var_name;
+                    }
+                }
+                
+                /* Move to next token */
+                token = var_end;
+                if (*token == ',') token++;
+            }
+            
+            if (var_count > 0) {
+                const char *text_ptr = rest;
+                result = bimisc_read(&text_ptr, var_count, var_names);
+            } else {
+                result = ERROR;
+            }
+            
+            /* Free allocated variable names */
+            for (int i = 0; i < var_count; i++) {
+                if (var_names[i]) gwram_free(var_names[i]);
+            }
+        }
     }
     /* PRINT statement */
     else if (starts_with(trimmed, "PRINT")) {
@@ -829,7 +898,7 @@ static bool parse_var_ref(const char *str, char **var_name, int *index, int *ind
 }
 
 /* Common assignment function for both LET and direct assignment */
-static int assign_value(const char *var_ref, const char *expr) {
+int assign_value(const char *var_ref, const char *expr) {
     if (!var_ref || !expr) return ERROR;
     
     

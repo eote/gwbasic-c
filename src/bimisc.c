@@ -11,6 +11,7 @@
 extern void gwlist_init(void);
 extern void dskcom_close_all(void);
 extern void math2_init(void);  /* For RND reset */
+extern int assign_value(const char *var_ref, const char *expr);  /* From gwsts.c */
 
 /* Trap handling state */
 #define MAX_TRAPS 16
@@ -166,6 +167,7 @@ void bimisc_restore(int line_num) {
     if (line_num == 0) {
         /* RESTORE without line number - reset to beginning */
         g_state->prog_buf.used = 0;  /* Simplified: reset to start of program */
+        bimisc_data_init();
     } else {
         /* RESTORE with line number - find line and set DATA pointer */
         struct program_line *line = gwlist_find_line(line_num);
@@ -416,4 +418,135 @@ void bimisc_set_trap_address(int trap_num, int line_number) {
 /* Get trace flag status */
 int bimisc_get_trace_flag(void) {
     return trace_flag ? 1 : 0;
+}
+
+/* READ/DATA support implementation */
+
+/* Initialize DATA pointer at program start */
+void bimisc_data_init(void) {
+    if (!g_state) return;
+    g_state->data_ptr = gwlist_get_first_line();
+    g_state->data_index = 0;
+}
+
+/* Parse a single value from DATA statement text
+ * Returns pointer to next character after the parsed value (or NULL on error)
+ * value buffer must be at least 256 bytes
+ */
+static char *parse_data_value(char *text, char *value, size_t value_size) {
+    if (!text || !value) return NULL;
+    
+    /* Skip leading whitespace */
+    while (*text && isspace((unsigned char)*text)) text++;
+    if (!*text) return NULL;
+    
+    char *start = text;
+    bool in_quotes = false;
+    
+    while (*text) {
+        if (*text == '\"') {
+            in_quotes = !in_quotes;
+            text++;
+        } else if (*text == ',' && !in_quotes) {
+            break;
+        } else {
+            text++;
+        }
+    }
+    
+    size_t len = text - start;
+    if (len >= value_size) len = value_size - 1;
+    memcpy(value, start, len);
+    value[len] = '\0';
+    
+    /* Trim whitespace from the parsed value */
+    char *trim_start = value;
+    char *trim_end = value + strlen(value) - 1;
+    while (trim_end >= trim_start && isspace((unsigned char)*trim_end)) {
+        *trim_end = '\0';
+        trim_end--;
+    }
+    while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
+    
+    /* If we have a comma, advance past it */
+    if (*text == ',') text++;
+    
+    return text;
+}
+
+/* READ statement: READ var1, var2, ...
+ * Parses variable names from text, reads values from DATA statements
+ * Returns SUCCESS or ERROR
+ */
+int bimisc_read(const char **text, int var_count, char **var_names) {
+    if (!g_state || !text || var_count <= 0 || !var_names) return ERROR;
+    
+    /* Get current DATA pointer - if none, start from beginning */
+    if (!g_state->data_ptr) {
+        g_state->data_ptr = gwlist_get_first_line();
+        g_state->data_index = 0;
+    }
+    
+    for (int i = 0; i < var_count; i++) {
+        char *var_name = var_names[i];
+        if (!var_name) return ERROR;
+        
+        /* Find a DATA statement with remaining values */
+        char value[256];
+        bool found = false;
+        
+        while (g_state->data_ptr) {
+            char *line_text = g_state->data_ptr->text;
+            if (!line_text) {
+                g_state->data_ptr = g_state->data_ptr->next;
+                g_state->data_index = 0;
+                continue;
+            }
+            
+            /* Check if this line is a DATA statement */
+            char *trimmed = line_text;
+            while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+            
+            if (strncasecmp(trimmed, "DATA", 4) == 0 && 
+                (trimmed[4] == ' ' || trimmed[4] == '\t' || trimmed[4] == '\0')) {
+                /* This is a DATA statement - parse values from it */
+                char *data_text = trimmed + 4;
+                while (*data_text && isspace((unsigned char)*data_text)) data_text++;
+                
+                /* Skip already parsed values */
+                for (int j = 0; j < g_state->data_index; j++) {
+                    data_text = parse_data_value(data_text, value, sizeof(value));
+                    if (!data_text) break;
+                }
+                
+                if (data_text && *data_text) {
+                    /* Parse the next value */
+                    char *next_text = parse_data_value(data_text, value, sizeof(value));
+                    if (next_text || strlen(value) > 0) {
+                        /* Assign value to variable */
+                        if (assign_value(var_name, value) != SUCCESS) {
+                            return ERROR;
+                        }
+                        g_state->data_index++;
+                        found = true;
+                        break;
+                    }
+                }
+                
+                /* No more values in this DATA statement */
+                g_state->data_ptr = g_state->data_ptr->next;
+                g_state->data_index = 0;
+            } else {
+                g_state->data_ptr = g_state->data_ptr->next;
+                g_state->data_index = 0;
+            }
+        }
+        
+        if (!found) {
+            /* Out of DATA */
+            return ERROR;
+        }
+    }
+    
+    return SUCCESS;
 }

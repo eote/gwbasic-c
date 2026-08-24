@@ -129,6 +129,10 @@ struct _runtime_state {
     struct program_buffer prog_buf;
     uint16_t current_line;
     bool in_direct_mode;
+    
+    /* READ/DATA support */
+    struct program_line *data_ptr;      /* Current DATA statement being read */
+    int data_index;                     /* Index within current DATA statement */
 };
 
 /* Debug print macro - controlled by DEBUG compile flag */
@@ -337,6 +341,10 @@ void bimisc_control_char(int ch);
 int bimisc_is_file_io(void);
 void bimisc_stack_init(void);
 void bimisc_get_stack(int entries);
+
+/* READ/DATA support functions */
+void bimisc_data_init(void);  /* Initialize DATA pointer at program start */
+int bimisc_read(const char **text, int var_count, char **var_names);  /* READ statement */
 
 /* ADVGRP module functions - Advanced Graphics */
 void advgrp_init(void);

@@ -235,6 +235,9 @@ int main(int argc, char *argv[]) {
         
         DEBUG_PRINT("Program loaded, executing...");
         
+        /* Initialize DATA pointer for READ/DATA support */
+        bimisc_data_init();
+        
         /* Execute all program lines in order - with jump handling for FOR/GOTO/GOSUB/RETURN */
         struct program_line *curr = gwlist_get_first_line();
         int exec_rc = SUCCESS;

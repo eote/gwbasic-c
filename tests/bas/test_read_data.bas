@@ -1,4 +1,3 @@
-' Test: READ/DATA/RESTORE
 10 READ A, B, C
 20 PRINT "First read: "; A; B; C
 30 RESTORE
