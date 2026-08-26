@@ -180,3 +180,54 @@ char *bistrs_lcase(const char *str) {
     result[len] = '\0';
     return result;
 }
+
+/* MKI$ - convert integer to 2-byte string (little-endian) */
+char *bistrs_mki(int val) {
+    char *result = (char *)gwram_alloc(3);  /* 2 bytes + null */
+    if (!result) return NULL;
+    
+    result[0] = (char)(val & 0xFF);
+    result[1] = (char)((val >> 8) & 0xFF);
+    result[2] = '\0';
+    return result;
+}
+
+/* MKS$ - convert single precision float to 4-byte string (IEEE 754) */
+char *bistrs_mks(float val) {
+    char *result = (char *)gwram_alloc(5);  /* 4 bytes + null */
+    if (!result) return NULL;
+    
+    uint32_t bits;
+    memcpy(&bits, &val, 4);
+    result[0] = (char)(bits & 0xFF);
+    result[1] = (char)((bits >> 8) & 0xFF);
+    result[2] = (char)((bits >> 16) & 0xFF);
+    result[3] = (char)((bits >> 24) & 0xFF);
+    result[4] = '\0';
+    return result;
+}
+
+/* CVI - convert 2-byte string to integer */
+int bistrs_cvi(const char *str) {
+    if (!str) return 0;
+    if (strlen(str) < 2) return 0;
+    
+    int val = (unsigned char)str[0] | ((unsigned char)str[1] << 8);
+    return val;
+}
+
+/* CVS - convert 4-byte string to single precision float */
+float bistrs_cvs(const char *str) {
+    if (!str) return 0.0f;
+    if (strlen(str) < 4) return 0.0f;
+    
+    uint32_t bits = (unsigned char)str[0] | 
+                    ((unsigned char)str[1] << 8) | 
+                    ((unsigned char)str[2] << 16) | 
+                    ((unsigned char)str[3] << 24);
+    float val;
+    memcpy(&val, &bits, 4);
+    return val;
+}
+
+/* Declaration for MKI$, MKS$, CVI, CVS in gweval.c */

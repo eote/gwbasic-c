@@ -181,6 +181,20 @@ static char *parse_string_expression(parser_t *p) {
                     }
                 }
             }
+            /* MKI$(num) - convert integer to 2-byte string */
+            else if (strcasecmp_ascii(name, "MKI") == 0 || strcasecmp_ascii(name, "MKI$") == 0) {
+                float arg = parse_expression(p);
+                if (parser_match(p, ')')) {
+                    return bistrs_mki((int)arg);
+                }
+            }
+            /* MKS$(num) - convert float to 4-byte string */
+            else if (strcasecmp_ascii(name, "MKS") == 0 || strcasecmp_ascii(name, "MKS$") == 0) {
+                float arg = parse_expression(p);
+                if (parser_match(p, ')')) {
+                    return bistrs_mks(arg);
+                }
+            }
             
             /* If we get here, it wasn't a recognized string function - 
                rewind to handle as array/variable */
@@ -305,7 +319,7 @@ static float parse_factor(parser_t *p) {
                                    strcasecmp_ascii(name, "VAL") == 0 ||
                                    strcasecmp_ascii(name, "EOF") == 0);
             
-            /* Check for string functions that return string: LEFT$, RIGHT$, MID$, UCASE$, LCASE$, STR$, CHR$, SPACE$, STRING$ */
+            /* Check for string functions that return string: LEFT$, RIGHT$, MID$, UCASE$, LCASE$, STR$, CHR$, SPACE$, STRING$, MKI$, MKS$ */
             bool is_str_func = (strcasecmp_ascii(name, "LEFT") == 0 || strcasecmp_ascii(name, "LEFT$") == 0 ||
                                 strcasecmp_ascii(name, "RIGHT") == 0 || strcasecmp_ascii(name, "RIGHT$") == 0 ||
                                 strcasecmp_ascii(name, "MID") == 0 || strcasecmp_ascii(name, "MID$") == 0 ||
@@ -314,9 +328,14 @@ static float parse_factor(parser_t *p) {
                                 strcasecmp_ascii(name, "STR") == 0 || strcasecmp_ascii(name, "STR$") == 0 ||
                                 strcasecmp_ascii(name, "CHR") == 0 || strcasecmp_ascii(name, "CHR$") == 0 ||
                                 strcasecmp_ascii(name, "SPACE") == 0 || strcasecmp_ascii(name, "SPACE$") == 0 ||
-                                strcasecmp_ascii(name, "STRING") == 0 || strcasecmp_ascii(name, "STRING$") == 0);
+                                strcasecmp_ascii(name, "STRING") == 0 || strcasecmp_ascii(name, "STRING$") == 0 ||
+                                strcasecmp_ascii(name, "MKI") == 0 || strcasecmp_ascii(name, "MKI$") == 0 ||
+                                strcasecmp_ascii(name, "MKS") == 0 || strcasecmp_ascii(name, "MKS$") == 0);
             
-            if (is_math_func || is_tab_spc || is_str_numeric || is_str_func) {
+            /* Check for numeric functions that convert from string: CVI, CVS */
+            bool is_cv_func = (strcasecmp_ascii(name, "CVI") == 0 || strcasecmp_ascii(name, "CVS") == 0);
+            
+            if (is_math_func || is_tab_spc || is_str_numeric || is_str_func || is_cv_func) {
                 /* It's a known function - consume '(' and call it */
                 parser_get(p);  /* consume '(' */
                 
@@ -438,6 +457,24 @@ static float parse_factor(parser_t *p) {
                     float fn = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return (float)dskcom_eof((int)fn);
+                    }
+                }
+                /* CVI(string) - convert 2-byte string to integer */
+                else if (strcasecmp_ascii(name, "CVI") == 0) {
+                    char *str_val = parse_string_expression(p);
+                    if (str_val) {
+                        if (parser_match(p, ')')) {
+                            return (float)bistrs_cvi(str_val);
+                        }
+                    }
+                }
+                /* CVS(string) - convert 4-byte string to single precision float */
+                else if (strcasecmp_ascii(name, "CVS") == 0) {
+                    char *str_val = parse_string_expression(p);
+                    if (str_val) {
+                        if (parser_match(p, ')')) {
+                            return bistrs_cvs(str_val);
+                        }
                     }
                 }
                 /* String functions returning string - not valid in numeric context, return 0 */

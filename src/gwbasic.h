@@ -276,6 +276,12 @@ char *bistrs_space(int n);
 char *bistrs_ucase(const char *str);
 char *bistrs_lcase(const char *str);
 
+/* Random file I/O conversion functions */
+char *bistrs_mki(int val);      /* MKI$ - integer to 2-byte string */
+char *bistrs_mks(float val);    /* MKS$ - single to 4-byte string */
+int bistrs_cvi(const char *str);  /* CVI - 2-byte string to integer */
+float bistrs_cvs(const char *str);  /* CVS - 4-byte string to single */
+
 /* MATH1 module functions - Transcendental math */
 void math1_init(void);
 float math1_sin(float x);

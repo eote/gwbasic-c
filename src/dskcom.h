@@ -22,6 +22,19 @@ struct file_desc {
     char *filename;           /* Full path */
     int record_length;        /* For random files */
     struct file_desc *next;   /* Linked list */
+    
+    /* FIELD support - record buffer and field definitions */
+    char *field_buffer;       /* Buffer for FIELD variables (size = record_length) */
+    struct field_def *fields; /* Linked list of field definitions */
+};
+
+/* FIELD support - field definitions */
+struct field_def {
+    char *name;               /* Variable name (with $ suffix) */
+    int offset;               /* Offset in field buffer (0-based) */
+    int length;               /* Field length */
+    struct variable *var;     /* Pointer to string variable */
+    struct field_def *next;   /* Linked list */
 };
 
 /* DSKCOM module functions */
@@ -38,8 +51,16 @@ int dskcom_seek(int filenum, long record);
 int dskcom_get(int filenum, long record, void *buffer, int buflen);
 int dskcom_put(int filenum, long record, const void *buffer, int buflen);
 
+/* FIELD support functions */
+int dskcom_field(int filenum, const char *field_spec);  /* Parse and set up FIELD */
+int dskcom_lset(int filenum, const char *varname, const char *value);  /* LSET */
+int dskcom_rset(int filenum, const char *varname, const char *value);  /* RSET */
+
 /* Find a free file number (1-255) not currently in use */
 int dskcom_find_free_filenum(void);
+
+/* Access to file list for FIELD variable lookups */
+struct file_desc *dskcom_get_file_list(void);
 
 /* Check if file is at EOF */
 int dskcom_eof(int filenum);

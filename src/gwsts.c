@@ -31,6 +31,191 @@ void gwsts_init(void) {
     /* No initialization needed */
 }
 
+/* FIELD statement: FIELD #filenum, width AS var$, width AS var$, ... */
+int gwsts_handle_field(const char *trimmed) {
+    char *rest = trimmed + 6;  /* Skip "FIELD " */
+    while (*rest && isspace((unsigned char)*rest)) rest++;
+    
+    if (*rest == '#') {
+        rest++;
+        /* Find comma first, then parse filenum */
+        char *comma = strchr(rest, ',');
+        if (!comma) {
+            return ERROR;
+        }
+        
+        /* Temporarily null-terminate at comma to parse filenum */
+        char saved = *comma;
+        *comma = '\0';
+        int filenum = (int)gweval_eval_numeric(rest);
+        *comma = saved;
+        
+        char *field_spec = strdup_trim(comma + 1);
+        if (field_spec) {
+            int rc = dskcom_field(filenum, field_spec);
+            gwram_free(field_spec);
+            return rc;
+        }
+    }
+    return ERROR;
+}
+
+/* LSET statement: LSET var$ = value */
+int gwsts_handle_lset(const char *trimmed) {
+    char *rest = trimmed + 5;  /* Skip "LSET " */
+    while (*rest && isspace((unsigned char)*rest)) rest++;
+    
+    char *eq = strchr(rest, '=');
+    if (eq) {
+        *eq = '\0';
+        char *varname = strdup_trim(rest);
+        char *value = strdup_trim(eq + 1);
+        if (varname && value) {
+            char *eval_value = gweval_eval_string(value);
+            if (eval_value) {
+                /* Find which file has this field variable and do LSET */
+                struct file_desc *fd = dskcom_get_file_list();
+                while (fd) {
+                    if (fd->mode == FM_RANDOM && fd->field_buffer) {
+                        struct field_def *field = fd->fields;
+                        while (field) {
+                            if (strcasecmp(field->name, varname) == 0) {
+                                int rc = dskcom_lset(fd->filenum, varname, eval_value);
+                                gwram_free(varname);
+                                gwram_free(value);
+                                return rc;
+                            }
+                            field = field->next;
+                        }
+                    }
+                    fd = fd->next;
+                }
+                gwram_free(varname);
+                gwram_free(value);
+                return ERROR;  /* Variable not found in any FIELD */
+            }
+            gwram_free(varname);
+            gwram_free(value);
+        }
+    }
+    return ERROR;
+}
+
+/* RSET statement: RSET var$ = value */
+int gwsts_handle_rset(const char *trimmed) {
+    char *rest = trimmed + 5;  /* Skip "RSET " */
+    while (*rest && isspace((unsigned char)*rest)) rest++;
+    
+    char *eq = strchr(rest, '=');
+    if (eq) {
+        *eq = '\0';
+        char *varname = strdup_trim(rest);
+        char *value = strdup_trim(eq + 1);
+        if (varname && value) {
+            char *eval_value = gweval_eval_string(value);
+            if (eval_value) {
+                /* Find which file has this field variable and do RSET */
+                struct file_desc *fd = dskcom_get_file_list();
+                while (fd) {
+                    if (fd->mode == FM_RANDOM && fd->field_buffer) {
+                        struct field_def *field = fd->fields;
+                        while (field) {
+                            if (strcasecmp(field->name, varname) == 0) {
+                                int rc = dskcom_rset(fd->filenum, varname, eval_value);
+                                gwram_free(varname);
+                                gwram_free(value);
+                                return rc;
+                            }
+                            field = field->next;
+                        }
+                    }
+                    fd = fd->next;
+                }
+                gwram_free(varname);
+                gwram_free(value);
+                return ERROR;  /* Variable not found in any FIELD */
+            }
+            gwram_free(varname);
+            gwram_free(value);
+        }
+    }
+    return ERROR;
+}
+
+/* PUT statement: PUT #filenum, [record] */
+int gwsts_handle_put(const char *trimmed) {
+    char *rest = trimmed + 4;  /* Skip "PUT " */
+    while (*rest && isspace((unsigned char)*rest)) rest++;
+    
+    if (*rest == '#') {
+        rest++;
+        /* Parse filenum manually */
+        int filenum = 0;
+        while (*rest && isdigit((unsigned char)*rest)) {
+            filenum = filenum * 10 + (*rest - '0');
+            rest++;
+        }
+        
+        long record = 0;
+        char *comma = strchr(rest, ',');
+        
+        if (comma) {
+            *comma = '\0';
+            rest = comma + 1;
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+            
+            /* Check if next is a record number */
+            if (isdigit((unsigned char)*rest)) {
+                record = (long)gweval_eval_numeric(rest);
+            }
+        }
+        
+        /* PUT #filenum, [record] - writes the entire field buffer */
+        struct file_desc *fd = dskcom_find_file(filenum);
+        if (fd && fd->mode == FM_RANDOM && fd->field_buffer) {
+            return dskcom_put(filenum, record, fd->field_buffer, fd->record_length);
+        }
+    }
+    return ERROR;
+}
+
+/* GET statement: GET #filenum, [record] */
+int gwsts_handle_get(const char *trimmed) {
+    char *rest = trimmed + 4;  /* Skip "GET " */
+    while (*rest && isspace((unsigned char)*rest)) rest++;
+    
+    if (*rest == '#') {
+        rest++;
+        /* Parse filenum manually */
+        int filenum = 0;
+        while (*rest && isdigit((unsigned char)*rest)) {
+            filenum = filenum * 10 + (*rest - '0');
+            rest++;
+        }
+        
+        long record = 0;
+        char *comma = strchr(rest, ',');
+        
+        if (comma) {
+            *comma = '\0';
+            rest = comma + 1;
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+            
+            /* Check if next is a record number */
+            if (isdigit((unsigned char)*rest)) {
+                record = (long)gweval_eval_numeric(rest);
+            }
+        }
+        
+        /* GET #filenum, [record] - reads into the entire field buffer */
+        struct file_desc *fd = dskcom_find_file(filenum);
+        if (fd && fd->mode == FM_RANDOM && fd->field_buffer) {
+            return dskcom_get(filenum, record, fd->field_buffer, fd->record_length);
+        }
+    }
+    return ERROR;
+}
+
 int gwsts_exec_statement(const char *text) {
     if (!text) return ERROR;
     
@@ -649,6 +834,7 @@ int gwsts_exec_statement(const char *text) {
                     int mode = 0;  /* 0=INPUT, 1=OUTPUT, 2=APPEND, 3=RANDOM -> maps to FM_* */
                     int filenum = 1;
                     int reclen = 128;
+                    bool has_for = false;
                     
                     if (starts_with(rest, "FOR ")) {
                         rest += 4;
@@ -656,16 +842,27 @@ int gwsts_exec_statement(const char *text) {
                         if (starts_with(rest, "INPUT")) {
                             mode = FM_INPUT;
                             rest += 5;
+                            has_for = true;
                         } else if (starts_with(rest, "OUTPUT")) {
                             mode = FM_OUTPUT;
                             rest += 6;
+                            has_for = true;
                         } else if (starts_with(rest, "APPEND")) {
                             mode = FM_APPEND;
                             rest += 6;
+                            has_for = true;
                         } else if (starts_with(rest, "RANDOM")) {
                             mode = FM_RANDOM;
                             rest += 6;
+                            has_for = true;
                         }
+                    }
+                    
+                    if (has_for) {
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                    } else {
+                        /* No FOR clause - default to RANDOM for "AS #" syntax */
+                        mode = FM_RANDOM;
                     }
                     
                     while (*rest && isspace((unsigned char)*rest)) rest++;
@@ -673,13 +870,35 @@ int gwsts_exec_statement(const char *text) {
                         rest += 3;
                         while (*rest && isspace((unsigned char)*rest)) rest++;
                         if (*rest == '#') rest++;
-                        filenum = (int)gweval_eval_numeric(rest);
+                        /* Parse filenum manually (avoid gweval_eval_numeric parsing rest of line) */
+                        filenum = 0;
+                        while (*rest && isdigit((unsigned char)*rest)) {
+                            filenum = filenum * 10 + (*rest - '0');
+                            rest++;
+                        }
+                        /* Skip trailing whitespace */
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
                     }
                     
                     while (*rest && isspace((unsigned char)*rest)) rest++;
                     if (starts_with(rest, "LEN=")) {
                         rest += 4;
-                        reclen = (int)gweval_eval_numeric(rest);
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                        /* Parse record length directly (not via expression evaluator to avoid LEN function conflict) */
+                        reclen = 0;
+                        while (*rest && isdigit((unsigned char)*rest)) {
+                            reclen = reclen * 10 + (*rest - '0');
+                            rest++;
+                        }
+                    } else if (starts_with(rest, "LEN =")) {
+                        rest += 5;
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                        /* Parse record length directly (not via expression evaluator to avoid LEN function conflict) */
+                        reclen = 0;
+                        while (*rest && isdigit((unsigned char)*rest)) {
+                            reclen = reclen * 10 + (*rest - '0');
+                            rest++;
+                        }
                     }
                     
                     result = dskcom_open(filename, filenum, mode, reclen);
@@ -700,6 +919,26 @@ int gwsts_exec_statement(const char *text) {
             int filenum = (int)gweval_eval_numeric(rest);
             result = dskcom_close(filenum);
         }
+    }
+    /* FIELD statement: FIELD #filenum, width AS var$, width AS var$, ... */
+    else if (starts_with(trimmed, "FIELD ")) {
+        result = gwsts_handle_field(trimmed);
+    }
+    /* LSET statement: LSET var$ = value */
+    else if (starts_with(trimmed, "LSET ")) {
+        result = gwsts_handle_lset(trimmed);
+    }
+    /* RSET statement: RSET var$ = value */
+    else if (starts_with(trimmed, "RSET ")) {
+        result = gwsts_handle_rset(trimmed);
+    }
+    /* PUT statement: PUT #filenum, [record], var */
+    else if (starts_with(trimmed, "PUT ")) {
+        result = gwsts_handle_put(trimmed);
+    }
+    /* GET statement: GET #filenum, [record], var */
+    else if (starts_with(trimmed, "GET ")) {
+        result = gwsts_handle_get(trimmed);
     }
     /* INPUT statement */
     else if (starts_with(trimmed, "INPUT ")) {

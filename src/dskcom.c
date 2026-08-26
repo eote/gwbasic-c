@@ -16,6 +16,11 @@ void dskcom_init(void) {
     g_file_list = NULL;
 }
 
+/* Get file list for FIELD variable lookups */
+struct file_desc *dskcom_get_file_list(void) {
+    return g_file_list;
+}
+
 /* Find file descriptor by file number */
 struct file_desc *dskcom_find_file(int filenum) {
     struct file_desc *fd = g_file_list;
@@ -92,6 +97,8 @@ int dskcom_open(const char *filename, int filenum, int mode, int reclen) {
     fd->mode = mode;
     fd->handle = handle;
     fd->record_length = (reclen > 0) ? reclen : 128;  /* Default record length */
+    fd->field_buffer = NULL;
+    fd->fields = NULL;
 
     size_t fn_len = strlen(filename) + 1;
     fd->filename = (char *)gwram_alloc(fn_len);
@@ -314,6 +321,177 @@ int dskcom_put(int filenum, long record, const void *buffer, int buflen) {
     }
 
     return SUCCESS;
+}
+
+/* FIELD support implementation */
+
+/* Parse field specification and set up FIELD for a random file
+ * field_spec format: "width AS var$, width AS var$, ..."
+ */
+int dskcom_field(int filenum, const char *field_spec) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_RANDOM) return ERROR;
+    if (!field_spec) return ERROR;
+    
+    /* Free existing field definitions and buffer */
+    struct field_def *field = fd->fields;
+    while (field) {
+        struct field_def *next = field->next;
+        if (field->name) gwram_free(field->name);
+        gwram_free(field);
+        field = next;
+    }
+    fd->fields = NULL;
+    
+    if (fd->field_buffer) {
+        gwram_free(fd->field_buffer);
+    }
+    
+    /* Allocate field buffer */
+    fd->field_buffer = (char *)gwram_alloc(fd->record_length);
+    if (!fd->field_buffer) return ERROR;
+    memset(fd->field_buffer, 0, fd->record_length);
+    
+    /* Parse field specification: width AS var$, width AS var$, ... */
+    char *spec = (char *)field_spec;
+    int current_offset = 0;
+    
+    while (*spec) {
+        /* Skip whitespace */
+        while (*spec && isspace((unsigned char)*spec)) spec++;
+        if (!*spec) break;
+        
+        /* Parse width */
+        int width = 0;
+        while (*spec && isdigit((unsigned char)*spec)) {
+            width = width * 10 + (*spec - '0');
+            spec++;
+        }
+        
+        /* Skip whitespace */
+        while (*spec && isspace((unsigned char)*spec)) spec++;
+        
+        /* Expect "AS" */
+        if (strncasecmp(spec, "AS", 2) != 0) return ERROR;
+        spec += 2;
+        
+        /* Skip whitespace */
+        while (*spec && isspace((unsigned char)*spec)) spec++;
+        
+        /* Parse variable name */
+        char *var_start = spec;
+        while (*spec && *spec != ',' && !isspace((unsigned char)*spec)) spec++;
+        
+        size_t name_len = spec - var_start;
+        if (name_len == 0 || name_len > MAX_VAR_NAME) return ERROR;
+        
+        char *var_name = (char *)gwram_alloc(name_len + 1);
+        if (!var_name) return ERROR;
+        memcpy(var_name, var_start, name_len);
+        var_name[name_len] = '\0';
+        
+        /* Check that variable name ends with $ */
+        if (var_name[name_len - 1] != '$') {
+            gwram_free(var_name);
+            return ERROR;
+        }
+        
+        /* Check field fits in record */
+        if (current_offset + width > fd->record_length) {
+            gwram_free(var_name);
+            return ERROR;
+        }
+        
+        /* Create field definition */
+        struct field_def *field_def = (struct field_def *)gwram_alloc(sizeof(struct field_def));
+        if (!field_def) {
+            gwram_free(var_name);
+            return ERROR;
+        }
+        
+        field_def->name = var_name;
+        field_def->offset = current_offset;
+        field_def->length = width;
+        field_def->var = NULL;
+        field_def->next = fd->fields;
+        fd->fields = field_def;
+        
+        /* Find or create the string variable */
+        struct variable *v = gwdata_find_variable(var_name);
+        if (!v) {
+            v = gwdata_alloc_variable(var_name, VT_STRING);
+        }
+        if (v) {
+            v->value.s = fd->field_buffer + current_offset;
+            field_def->var = v;
+        }
+        
+        current_offset += width;
+        
+        /* Skip whitespace and comma */
+        while (*spec && isspace((unsigned char)*spec)) spec++;
+        if (*spec == ',') spec++;
+    }
+    
+    return SUCCESS;
+}
+
+/* LSET - Left justify string in FIELD variable */
+int dskcom_lset(int filenum, const char *varname, const char *value) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_RANDOM) return ERROR;
+    if (!fd->field_buffer) return ERROR;
+    
+    /* Find field definition */
+    struct field_def *field = fd->fields;
+    while (field) {
+        if (strcasecmp(field->name, varname) == 0) {
+            if (field->var && field->var->value.s) {
+                char *dest = field->var->value.s;
+                int len = field->length;
+                int val_len = strlen(value);
+                if (val_len > len) val_len = len;
+                memcpy(dest, value, val_len);
+                if (val_len < len) {
+                    memset(dest + val_len, ' ', len - val_len);
+                }
+                return SUCCESS;
+            }
+            break;
+        }
+        field = field->next;
+    }
+    
+    return ERROR;
+}
+
+int dskcom_rset(int filenum, const char *varname, const char *value) {
+    struct file_desc *fd = dskcom_find_file(filenum);
+    if (!fd) return ERROR;
+    if (fd->mode != FM_RANDOM) return ERROR;
+    if (!fd->field_buffer) return ERROR;
+    
+    /* Find field definition */
+    struct field_def *field = fd->fields;
+    while (field) {
+        if (strcasecmp(field->name, varname) == 0) {
+            if (field->var && field->var->value.s) {
+                char *dest = field->var->value.s;
+                int len = field->length;
+                int val_len = strlen(value);
+                if (val_len > len) val_len = len;
+                memset(dest, ' ', len);
+                memcpy(dest + len - val_len, value, val_len);
+                return SUCCESS;
+            }
+            break;
+        }
+        field = field->next;
+    }
+    
+    return ERROR;
 }
 
 /* Find a free file number (1-255) not currently in use */

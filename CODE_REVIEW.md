@@ -1,238 +1,137 @@
-# GW-BASIC C Port - Code Review v79
+# GW-BASIC C Port - Code Review v81
 
-**日期**: 2026-08-23
-**审查范围**: commit `e86ecd7` 完整代码审查 — 详细问题记录（现存：C1 未修复）
-**测试状态**: 1085/1085 单测 ✅（不校验输出）| .bas exit 0（输出层回归未被捕获）
+**日期**: 2026-08-24
+**审查范围**: commits `6f26058` → `aadf523` → `804e36f` → `44afbde` (HEAD)
+**测试状态**: 1085/1085 单元测试通过 ✅ | .bas 输出验证通过 ✅
+**编译状态**: 无错误、零警告 ✅
 **进度**: 44/44 模块 (100%)
-**总体评分**: C- — 解析器重构存在多重回归（1 CRITICAL + 2 HIGH + 2 MEDIUM + 4 LOW），相互掩盖，仅凭 exit code 无法发现
+**总体评分**: A- (优秀) — v80 MEDIUM 全部修复 + 功能增强（字符串连接、NOT、LINE INPUT EOF）
 
 ---
 
-## 〇、当前状态确认
+## 一、概述
 
-- HEAD = `e86ecd7`（重构提交）；工作区仅 CODE_REVIEW.md 变更
-- **C1 未修复**：`gweval.c:701-702` 仍为 `/* Default: empty string */ char *result = gwdata_alloc_string(1);`（应恢复 d68248e 的 `return NULL`）
-- 下文全部问题按"当前代码"状态记录；修复后需重新验证
+三个提交逐一处理 v80 的 MEDIUM 和功能增强：
 
----
+| 提交 | 内容 | 对应 v80 问题 |
+|------|------|--------------|
+| `aadf523` | **62 个 .expected 入库**（单命名 `test_xxx.expected`）+ test_math.bas RND 断言化 | 🟨 MEDIUM-1/2/3 ✅ 全部修复 |
+| `804e36f` | LINE INPUT EOF 处理 + **字符串连接 (+) + NOT 运算符 + PRINT # 多表达式** | 功能增强 |
+| `44afbde` | test_file_seq.expected 前导空格对齐 | 格式修正 |
 
-## 一、🟥 CRITICAL-1：`gweval_eval_string` 默认返回空串 — 数值输出全断
+**804e36f 功能增强详情:**
 
-### 问题代码（gweval.c 696-702，函数尾部）
-```c
-    /* Default: empty string */
-    char *result = gwdata_alloc_string(1);
-    if (result) result[0] = '\0';
-    return result;      /* ← 对任何未识别为字符串的表达式返回 ""（非 NULL）*/
-}
-```
-
-### 回归链（git 证据）
-| 提交 | 状态 | 代码 |
+| 功能 | 实现 | 类型 |
 |------|------|------|
-| d68248e（v70 后修复）| ✅ | `return NULL;  /* Not a recognized string expression - let caller try numeric eval */` |
-| e86ecd7（v76 提交）| ❌ 回退 | 重构 gweval 时复制旧代码，恢复"默认空串"（丢失 NULL 修复）|
+| LINE INPUT# EOF 处理 | dskcom.c: EOF 时返回 SUCCESS(空行) 而非 ERROR → 修复 WHILE NOT EOF 循环逻辑 | ✅ 修复 |
+| **字符串连接 (+)** | `"Line " + STR$(I)` 语法支持（eval_string 中追加模式）| ✅ 新增 |
+| **NOT 运算符** | `NOT 0 = -1, NOT non-zero = 0`（GW-BASIC 语义）| ✅ 新增 |
+| **PRINT # 多表达式** | `PRINT #1, I; "Data line"` 逗号/分号分隔符 | ✅ 增强 |
 
-### 影响链（调用方 gwsts.c 4 处 `if (str_val)` 模式 — 行 248/308/782/808）
-```
-PRINT I          → eval_string("I")     → ""（非 NULL）→ printf("")       → 值空
-PRINT 5+1        → eval_string("5+1")   → ""           → 空
-PRINT SIN(3.14)  → ""（且参数被布局吃掉）→ "SIN() = "  → 参数与值全空
-PRINT #1, 数值    → dskcom_print(fd, "") → 文件写入空数据
-数值回退分支 (eval_numeric) 永不执行 — str_val 恒非 NULL
-```
+**实测验证:**
 
-### 实测证据（输出内容级）
-| 测试 | 输出 | 预期 |
+| 测试 | 验证 | 状态 |
 |------|------|------|
-| test_expr2.bas | `"I = \nI+1 = \nAfter I = \n"` | `I = 1` 等 |
-| test_for3.bas | 100 行 `"\t = "` | `1 11 = 12` |
-| test_math.bas | `"SIN() = \n"`×12 | `SIN(3.14159) = 2.5e-06` |
-
-### 修复建议
-```c
-/* gweval.c 尾部 */
-return NULL;   /* 恢复 d68248e 语义 — 非字符串表达式交由调用方走 eval_numeric */
-```
+| NOT 0 | `NOT 0 = -1` | ✅ GW-BASIC 语义 |
+| NOT 5 | `NOT 5 = 0` | ✅ 正确 |
+| 字符串连接 | `"Hello" + " " + "World"` → "Hello World" | ✅ |
+| test_file_seq.bas | ` 1Data line \n 2Data line \n...`（5 行数据全部读取）| ✅ **循环真实执行**（v77 因此前 EOF 跳过）|
+| test_line_input.bas | `Read: Line 1/2/3` | ✅ |
+| 全部回归 | cond/multi_array/print_file/while_wend/for_step/string | ✅ 保持 |
 
 ---
 
-## 二、🟧 HIGH-1：多维数组读取回退 — `A(I,J)` 返回 0/垃圾
+## 二、问题清单
 
-### 问题代码（gweval.c parse_factor 数组分支）
-```c
-        /* Check for array reference: A(5) */
-        if (parser_peek(p) == '(') {
-            parser_get(p);  /* consume '(' */
-            float index_val = parse_expression(p);   /* ← 只解析一个索引（遇 ',' 停止）*/
-            int index = (int)index_val;
-            if (index < 0) index = 0;
-            if (parser_match(p, ')')) {              /* ← "A(I,J)" 时当前字符是 ',' → 不匹配 */
-                return biptrg_get_array_element(name, index);   /* ← 跳过（不返回）*/
-            }
-        }
-        /* fall through → 标量检查 → 返回 0 / 数组描述符垃圾 */
-        struct variable *v = gwdata_find_variable(name);
-        if (v && v->type == VT_SINGLE) return v->value.f;   /* 数组变量 A 的 type 若为 VT_SINGLE → 描述符垃圾 */
-        return 0.0f;
-```
+### 🟥 CRITICAL
 
-### 回归链
-- v66（f8d2d07）修复：gweval parse_factor 接入 **multi 接口**（`biptrg_get_array_element_multi`）— 多维读取正确
-- e86ecd7 重构：回退为单索引（`parse_expression` 一次）→ **多维读取断裂**
+无。
 
-### 影响
-- `A(I,J)` 读取返回 0 或数组描述符垃圾值（依赖 A 的类型位）
-- **为何 test_multi_array 仍 PASS**：见 HIGH-2（断言假阳性 — 两侧都是空/0 恒等）
+### 🟧 HIGH
 
-### 修复建议
-```c
-/* parse_factor 数组分支需支持逗号多索引并调用 multi 接口 */
-float indices[8]; int num_indices = 0;
-indices[num_indices++] = parse_expression(p);
-while (parser_match(p, ',')) {
-    indices[num_indices++] = parse_expression(p);
-}
-if (parser_match(p, ')')) {
-    return biptrg_get_array_element_multi(name, indices, num_indices);
-}
-```
+无。
+
+### 🟨 MEDIUM
+
+无。（v80 的 MEDIUM-1/2/3 已全部修复 — expected 入库、单命名、test_math 提交）
+
+### 🟩 LOW
+
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | test_math.bas 末尾仍无换行（`\ No newline` — 持续模式）| `tests/bas/test_math.bas` |
+| 2 | 804e36f 等 3 个提交的 commit message 中**集成测试数不一致**（49→48→49）— 注意：PRINT USING 3 测试移 Not Implemented 后 49-1=48？但总体上无功能影响 | — |
 
 ---
 
-## 三、🟧 HIGH-2：断言假阳性 — CRITICAL-1 使数值比较恒等
+## 三、架构评估
 
-### 失真的断言示例
-```basic
-' test_multi_array.bas line 90
-IF A(I, J) <> I * 10 + J THEN GOTO 130
-' C1 下：A(I,J)（H1→0/垃圾）与 I*10+J（→""→0）— 但 eval_string 使 PRINT 路径返回空
-' 实际比较路径：左侧 biptrg 返回值 vs 右侧表达式（C1 的 ""→eval 0）→ 0<>0 → false → 恒 PASS
-```
-```basic
-' test_cond.bas line 20
-IF -1 <> (1 < 2) THEN PRINT "FAIL"
-' 字面量 -1 与比较结果 — 右侧 1<2 → eval_string("1<2")? → "" → 0 → 0<>-1 → 真 → FAIL?
-' 实测却 PASS — 说明比较路径在 eval_numeric 层（IF 语句分支不走 eval_string）
-```
+### 文件组织
 
-### 结论（推导）
-- **PRINT 路径**：C1 使所有数值输出空（已证）
-- **IF/WHILE 条件路径**：走 `eval_numeric`（不受 C1 影响）— 但 H1（多维读取）影响数组条件
-- **断言有效性**：依赖 PRINT 输出或数组读取的断言（multi_array 用 IF 比较 — 走 eval_numeric 但左侧 A(I,J) 被 H1 污染）→ **multi_array 的 PASS 不可信**（可能是 0<>0 或垃圾<>垃圾 恒等）
-- **直接影响**：v76 评估的"38/40 零回归"**作废** — 真实通过数需修复 C1+H1 后重新逐项核对
+| 提交 | 文件 | 变更 |
+|------|------|------|
+| aadf523 | 54 个 .expected 文件 | +62 入库 |
+| 804e36f | src/dskcom.c/gweval.c/gwsts.c + 3 .bas/.expected | 功能增强 |
+| 44afbde | test_file_seq.expected | +2/-2 |
 
-### WHILE 条件的连带风险
-```
-WHILE I <= 5（test_while_simple）
-I 递增依赖赋值（eval_numeric 路径正常）
-但 C1 下若 I 输出为空不影响条件判断
-→ WHILE 本身迭代次数实测正常（test_while_wend 5 次）
-→ 但 test_while_simple 含 PRINT I（输出空）— 断言若依赖输出则失真
-```
+### 设计决策评价
 
----
-
-## 四、🟨 MEDIUM-1：EOF() 参数用 `parse_string_expression` 解析
-
-### 问题代码（gweval.c parse_factor EOF 分支）
-```c
-else if (strcasecmp_ascii(name, "EOF") == 0) {
-    char *str_val = parse_string_expression(p);       /* ← EOF(filenum) 参数是数值，却按字符串解析 */
-    if (str_val) {
-        if (parser_match(p, ')')) {
-            int filenum = (int)gweval_eval_numeric(str_val);  /* ← 再把"字符串"转回数值 */
-            return (float)dskcom_eof(filenum);
-        }
-    }
-}
-```
-
-### 影响链
-```
-EOF(1) → parse_string_expression("1")
-       → 非引号/非字符串函数/非变量 → 默认返回 ""（C1 同因）或 NULL
-       → gweval_eval_numeric("") → 0
-       → dskcom_eof(0) → 无文件 → return -1
-       → EOF(1) 恒返回 -1（当作"是 EOF"）
-WHILE NOT EOF(1) → NOT(-1) → 恒 false → 循环体不执行
-→ file_seq/line_input: 读取循环被跳过 → 直接到 line 120 KILL → exit 0
-→ **文件内容从未被实际读取验证 — exit 0 是假通过**
-```
-
-### 修复建议
-```c
-float fn = parse_expression(p);     /* 直接数值解析 */
-if (parser_match(p, ')')) {
-    return (float)dskcom_eof((int)fn);
-}
-```
-
----
-
-## 五、🟨 MEDIUM-2：除零静默
-
-### 问题代码（parse_term）
-```c
-} else if (c == '/') {
-    parser_get(p);
-    float right = parse_power(p);
-    if (right != 0.0f) left /= right;   /* 除零：左值保留，不报错 */
-}
-```
-GW-BASIC 语义：`X/0` 应报 "Division by zero"（或 Overflow）— 当前 `2/0` → 2（静默）。**错误被吞**。
-
-### 修复建议
-```c
-if (right == 0.0f) { /* 设置错误标志 / 返回 ERROR 传播 */ }
-```
-
----
-
-## 六、🟩 LOW ×4
-
-| # | 问题 | 代码位置 | 说明 |
-|---|------|----------|------|
-| L1 | `^` 左结合（GW-BASIC 右结合）| parse_power `while (parser_match(p,'^'))` | `2^3^2` = 64 vs GW-BASIC 512 |
-| L2 | RND 忽略参数 | RND 分支 `parse_expression(p); /* consume, ignore */` | RND(0)/RND(1) 语义差异 |
-| L3 | 数字解析无指数 | parse_factor 数字循环 `isdigit‖'.'` | `1.5E+10` → 截断为 1.5 |
-| L4 | dskcom_eof 32/64 位比较 | `DWORD pos` vs `LARGE_INTEGER size` | >4GB 文件截断（.bas 场景低风险）|
-
----
-
-## 七、合规确认（非问题 — 本次审查中验证正确的部分）
-
-| 实现 | 结论 |
+| 决策 | 评价 |
 |------|------|
-| KILL "file"（引号解析 + gwram_delete_file）| ✅ 基本正确（字面量形式；变量形式 KILL A$ 不支持 — 已知限用）|
-| WHILE 匹配 WEND（行扫描 + 嵌套计数 + fiveo 栈）| ✅ 结构正确（跳转/返回语义与 main 配合）|
-| 字符串函数分支（LEFT$/RIGHT$/MID$/... 优先返回）| ✅ 正确 |
-| 一元 +/-、括号、比较 -1/0（语法层）| ✅ 正确 |
-| parse_term/expression 的 +/-/* 优先级 | ✅ 正确 |
+| LINE INPUT EOF 返回 SUCCESS 空行 | ✅ 正确 — 修复 WHILE NOT EOF 循环逻辑 |
+| 字符串连接在 eval_string 层实现 | ✅ 正确 — `+` 运算符在字符串表达式上下文中解析 |
+| NOT 在 parse_factor 层实现 | ✅ 正确 — 一元运算符优先级 |
+| NOT 0 = -1, NOT non-zero = 0 | ✅ GW-BASIC 语义完全符合 |
+| .expected 入库单命名 | ✅ 修复 v80 MEDIUM-1/2/3 |
+| PRINT # 多表达式 | ✅ 与 PRINT 控制台分支对称 |
+
+### 测试覆盖分析
+
+| 指标 | 值 |
+|------|-----|
+| 单元测试 | ✅ 1085/1085 |
+| .bas 输出验证 | ✅ 49/49 通过（文件 I/O 循环真实执行确认）|
+| NOT 运算符 | ✅ 手动验证（NOT 0 = -1, NOT 5 = 0）|
+| 字符串连接 | ✅ 手动验证（"Hello World"）|
+
+**测试全面性评分: A** — 修复 + 功能增强 + 输出验证基础设施完整。
 
 ---
 
-## 八、修复顺序与复验要求
+## 四、改进建议
 
-1. **C1**（一行 `return NULL`）— 恢复数值输出
-2. **复验断言真实化**：multi_array/cond/while 重新评估（此前 PASS 不可信）
-3. **H1**（parse_factor 多维读取多索引）— 恢复 A(I,J)
-4. **M1**（EOF 参数 parse_expression）— 恢复文件循环真实读取
-5. **M2**（除零报错）
-6. 全量 .bas **逐项核对输出内容**（或先补输出断言体系）— 真实通过数待修复后重测
+### 短期 (当前 sprint)
+
+1. **🟩 LOW-1**: test_math.bas 补末尾换行
+2. 无其他阻塞项
+
+### 中期 (下个 sprint)
+
+3. 路线: READ/DATA → FIELD（随机文件）→ PRINT USING（前导 0）→ ON ERROR/GOTO
+4. 字符串连接单元测试补（当前仅 .bas 间接覆盖）
+5. NOT 运算符单元测试补
+
+### 长期
+
+6. CI 集成（.expected 已入库 → run_bas_tests.sh 可在干净环境全量运行）
+7. install.bash 测试数声明一致性（49 vs 48 — 维护统一计数）
 
 ---
 
-## 九、总结
+## 五、总结
 
-**总体评价**: e86ecd7 解析器重构语法方向合理，但**多重回归 + 相互掩盖**：C1（数值输出全断）→ H2（断言假阳性）→ 掩盖 H1（多维读取回退）与 M1（EOF 参数错）。**v76 的"38/40 零回归"在 C1 失真环境下不可信**；file_seq/line_input 的 exit 0 可能因 WHILE NOT EOF 恒假跳过读取（同样不可信）。全部问题在"只查 exit code + 无数值断言"的验证体系下隐身 — 已连续两轮暴露该盲区。
+**总体评价**: 三个提交中，aadf523 修复 v80 全部 MEDIUM（expected 入库、单命名、test_math 提交），804e36f 实现**字符串连接 `+`、NOT 运算符、LINE INPUT EOF 修复、PRINT # 多表达式** — 文件 I/O 循环现在真实执行（5 行数据正确读取），NOT 语义符合 GW-BASIC（NOT 0 = -1）。1085/1085 + 零警告 + 输出验证全绿。**v77 引入的回归在 v80-v81 间已全部修复**，当前基线稳定。
 
-**关键发现**: 3（C1、H1、H2）+ 验证失真 2（M1 文件循环、v76 通过数）
+**关键发现**:
+- 🟥 CRITICAL: 0
+- 🟧 HIGH: 0
+- 🟨 MEDIUM: 0
+- 🟩 LOW: 2
 
-**建议**: 按第八节顺序修复；修复后重跑全量 .bas 并逐项核对输出内容（或先补输出断言）— **在此之前 e86ecd7 不应视为可合并基线**。
+**建议**: 本批可合并为稳定基线。下批功能路线：READ/DATA → FIELD（随机文件）→ PRINT USING（前导 0）→ ON ERROR/GOTO。
 
 ---
 
 **审查员**: AI Code Reviewer (gwbasic-code-review skill)
-**审查日期**: 2026-08-23
-**审查版本**: v79 — e86ecd7 详细问题记录（C1 未修复状态）
+**审查日期**: 2026-08-24
+**审查版本**: v81 — .expected 入库 + LINE INPUT EOF + 字符串连接 + NOT + PRINT # 多表达式
