@@ -435,14 +435,14 @@ void bimisc_data_init(void) {
  */
 static char *parse_data_value(char *text, char *value, size_t value_size) {
     if (!text || !value) return NULL;
-    
+
     /* Skip leading whitespace */
     while (*text && isspace((unsigned char)*text)) text++;
     if (!*text) return NULL;
-    
+
     char *start = text;
     bool in_quotes = false;
-    
+
     while (*text) {
         if (*text == '\"') {
             in_quotes = !in_quotes;
@@ -453,12 +453,12 @@ static char *parse_data_value(char *text, char *value, size_t value_size) {
             text++;
         }
     }
-    
+
     size_t len = text - start;
     if (len >= value_size) len = value_size - 1;
     memcpy(value, start, len);
     value[len] = '\0';
-    
+
     /* Trim whitespace from the parsed value */
     char *trim_start = value;
     char *trim_end = value + strlen(value) - 1;
@@ -467,10 +467,22 @@ static char *parse_data_value(char *text, char *value, size_t value_size) {
         trim_end--;
     }
     while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
-    
+
+    /* Strip surrounding quotes if present */
+    size_t trimmed_len = strlen(trim_start);
+    if (trimmed_len >= 2 && trim_start[0] == '\"' && trim_start[trimmed_len - 1] == '\"') {
+        trim_start[trimmed_len - 1] = '\0';
+        trim_start++;
+        /* Copy trimmed value back to value buffer */
+        memmove(value, trim_start, strlen(trim_start) + 1);
+    } else if (trim_start != value) {
+        /* Copy trimmed value back to value buffer */
+        memmove(value, trim_start, strlen(trim_start) + 1);
+    }
+
     /* If we have a comma, advance past it */
     if (*text == ',') text++;
-    
+
     return text;
 }
 

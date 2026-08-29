@@ -350,7 +350,14 @@ int gwsts_exec_statement(const char *text) {
              !starts_with(trimmed, "INPUT ") &&
              !starts_with(trimmed, "LINE INPUT ") &&
              !starts_with(trimmed, "FOR ") &&
-             !starts_with(trimmed, "WHILE ")) {
+             !starts_with(trimmed, "WHILE ") &&
+             !starts_with(trimmed, "OPEN ") &&
+             !starts_with(trimmed, "CLOSE") &&
+             !starts_with(trimmed, "FIELD ") &&
+             !starts_with(trimmed, "LSET ") &&
+             !starts_with(trimmed, "RSET ") &&
+             !starts_with(trimmed, "PUT ") &&
+             !starts_with(trimmed, "GET ")) {
         char *eq = strchr(trimmed, '=');
         if (eq) {
             *eq = '\0';
@@ -865,9 +872,10 @@ int gwsts_exec_statement(const char *text) {
                         mode = FM_RANDOM;
                     }
                     
+                    /* Parse "AS #filenum" - handle both "AS #" and "AS#" */
                     while (*rest && isspace((unsigned char)*rest)) rest++;
-                    if (starts_with(rest, "AS ")) {
-                        rest += 3;
+                    if (starts_with(rest, "AS")) {
+                        rest += 2;
                         while (*rest && isspace((unsigned char)*rest)) rest++;
                         if (*rest == '#') rest++;
                         /* Parse filenum manually (avoid gweval_eval_numeric parsing rest of line) */
@@ -890,6 +898,8 @@ int gwsts_exec_statement(const char *text) {
                             reclen = reclen * 10 + (*rest - '0');
                             rest++;
                         }
+                        /* LEN clause implies RANDOM mode */
+                        mode = FM_RANDOM;
                     } else if (starts_with(rest, "LEN =")) {
                         rest += 5;
                         while (*rest && isspace((unsigned char)*rest)) rest++;
@@ -899,6 +909,8 @@ int gwsts_exec_statement(const char *text) {
                             reclen = reclen * 10 + (*rest - '0');
                             rest++;
                         }
+                        /* LEN clause implies RANDOM mode */
+                        mode = FM_RANDOM;
                     }
                     
                     result = dskcom_open(filename, filenum, mode, reclen);
@@ -1164,7 +1176,13 @@ int assign_value(const char *var_ref, const char *expr) {
                 if (str_val) {
                     result = biptrg_set_array_string(base_name, indices[0], str_val);
                 } else {
-                    result = ERROR;
+                    /* Fallback: treat raw expr as literal string (for DATA values without quotes) */
+                    size_t expr_len = strlen(expr);
+                    char *heap_str = gwdata_alloc_string(expr_len + 1);
+                    if (heap_str) {
+                        strcpy(heap_str, expr);
+                        result = biptrg_set_array_string(base_name, indices[0], heap_str);
+                    }
                 }
             } else {
                 /* Numeric array: use multi or single interface */

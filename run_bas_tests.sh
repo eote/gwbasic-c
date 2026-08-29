@@ -62,6 +62,12 @@ IMPLEMENTED_TESTS=(
     "test_kill_temp.bas"
     "test_minimal.bas"
     "test_read_data.bas"
+    "test_file_rand.bas"
+    "test_put_get.bas"
+    "test_string_arrays.bas"
+    "test_using_simple.bas"
+    "test_using_very_simple.bas"
+    "test_print_using.bas"
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)
@@ -69,12 +75,6 @@ NOT_IMPLEMENTED_TESTS=(
     "test_def_fn.bas"
     "test_error.bas"
     "test_on_goto.bas"
-    "test_file_rand.bas"
-    "test_put_get.bas"
-    "test_string_arrays.bas"
-    "test_using_simple.bas"
-    "test_using_very_simple.bas"
-    "test_print_using.bas"
 )
 
 # Compare output with expected file

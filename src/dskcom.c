@@ -331,7 +331,8 @@ int dskcom_put(int filenum, long record, const void *buffer, int buflen) {
 int dskcom_field(int filenum, const char *field_spec) {
     struct file_desc *fd = dskcom_find_file(filenum);
     if (!fd) return ERROR;
-    if (fd->mode != FM_RANDOM) return ERROR;
+    /* Allow FIELD on RANDOM/BINARY mode files */
+    if (fd->mode != FM_RANDOM && fd->mode != FM_BINARY) return ERROR;
     if (!field_spec) return ERROR;
     
     /* Free existing field definitions and buffer */

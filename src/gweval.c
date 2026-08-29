@@ -801,6 +801,23 @@ char *gweval_eval_string(const char *expr) {
                     }
                 }
             }
+            /* MKI$(num) - convert integer to 2-byte string */
+            else if (strcasecmp_ascii(name, "MKI") == 0 || strcasecmp_ascii(name, "MKI$") == 0) {
+                float arg = parse_expression(&parser);
+                if (parser_match(&parser, ')')) {
+                    return bistrs_mki((int)arg);
+                }
+            }
+            /* MKS$(num) - convert float to 4-byte string */
+            else if (strcasecmp_ascii(name, "MKS") == 0 || strcasecmp_ascii(name, "MKS$") == 0) {
+                float arg = parse_expression(&parser);
+                if (parser_match(&parser, ')')) {
+                    return bistrs_mks(arg);
+                }
+            }
+            
+            /* Not a recognized string function - put back '(' to check for array reference */
+            parser.pos--;  /* Put back '(' */
         }
         
         /* Check for array reference: A$(5) */
@@ -818,7 +835,7 @@ char *gweval_eval_string(const char *expr) {
         
         /* Scalar string variable */
         struct variable *v = gwdata_find_variable(name);
-        if (v && v->type == VT_STRING && v->value.s) {
+        if (v && v->type == VT_STRING && v->value.s && !v->is_array) {
             /* Check for concatenation after variable */
             char *result = v->value.s;
             /* Skip whitespace */
