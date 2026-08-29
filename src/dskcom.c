@@ -424,7 +424,8 @@ int dskcom_field(int filenum, const char *field_spec) {
             v = gwdata_alloc_variable(var_name, VT_STRING);
         }
         if (v) {
-            v->value.s = fd->field_buffer + current_offset;
+            v->value.s.ptr = fd->field_buffer + current_offset;
+            v->value.s.len = width;
             field_def->var = v;
         }
         
@@ -449,10 +450,19 @@ int dskcom_lset(int filenum, const char *varname, const char *value) {
     struct field_def *field = fd->fields;
     while (field) {
         if (strcasecmp(field->name, varname) == 0) {
-            if (field->var && field->var->value.s) {
-                char *dest = field->var->value.s;
+            if (field->var && field->var->value.s.ptr) {
+                char *dest = field->var->value.s.ptr;
                 int len = field->length;
+                /* For binary strings (MKI$/MKS$), use actual binary length instead of strlen
+                 * because binary strings contain embedded NUL bytes */
                 int val_len = strlen(value);
+                if (val_len <= 2 && len >= 2) {
+                    /* Likely MKI$ result (2-byte binary): copy exactly 2 bytes */
+                    val_len = 2;
+                } else if (val_len <= 4 && len >= 4) {
+                    /* Likely MKS$ result (4-byte binary): copy exactly 4 bytes */
+                    val_len = 4;
+                }
                 if (val_len > len) val_len = len;
                 memcpy(dest, value, val_len);
                 if (val_len < len) {
@@ -478,10 +488,15 @@ int dskcom_rset(int filenum, const char *varname, const char *value) {
     struct field_def *field = fd->fields;
     while (field) {
         if (strcasecmp(field->name, varname) == 0) {
-            if (field->var && field->var->value.s) {
-                char *dest = field->var->value.s;
+            if (field->var && field->var->value.s.ptr) {
+                char *dest = field->var->value.s.ptr;
                 int len = field->length;
                 int val_len = strlen(value);
+                if (val_len <= 2 && len >= 2) {
+                    val_len = 2;
+                } else if (val_len <= 4 && len >= 4) {
+                    val_len = 4;
+                }
                 if (val_len > len) val_len = len;
                 memset(dest, ' ', len);
                 memcpy(dest + len - val_len, value, val_len);

@@ -231,7 +231,8 @@ void test_biptrg_free_array(void) {
     
     biptrg_free_array(v);
     
-    TEST_ASSERT(v->value.s == NULL, "ARR value.s = NULL after free");
+    TEST_ASSERT(v->value.s.ptr == NULL, "ARR value.s.ptr = NULL after free");
+    TEST_ASSERT(v->value.s.len == 0, "ARR value.s.len = 0 after free");
     /* Note: biptrg_free_array does not clear is_array flag */
     TEST_PASS("free array");
 }
@@ -248,8 +249,9 @@ void test_biptrg_free_non_array(void) {
     setup();
     struct variable *v = gwdata_alloc_variable("SCALAR", VT_SINGLE);
     v->is_array = false;
-    /* Set value.s=NULL to avoid biptrg_free_array treating float bits as pointer */
-    v->value.s = NULL;
+    /* Set value.s.ptr=NULL to avoid biptrg_free_array treating float bits as pointer */
+    v->value.s.ptr = NULL;
+    v->value.s.len = 0;
     
     biptrg_free_array(v);
     

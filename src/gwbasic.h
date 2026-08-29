@@ -85,7 +85,10 @@ struct variable {
         int32_t  i;
         float    f;
         double   d;
-        char    *s;
+        struct {
+            int len;       /* String length (GW-BASIC: length-prefixed descriptor, LEN first) */
+            char *ptr;     /* Pointer to string data */
+        } s;
     } value;
     struct variable *next;
 };

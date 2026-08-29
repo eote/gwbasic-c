@@ -164,8 +164,8 @@ int gwsts_handle_put(const char *trimmed) {
             rest = comma + 1;
             while (*rest && isspace((unsigned char)*rest)) rest++;
             
-            /* Check if next is a record number */
-            if (isdigit((unsigned char)*rest)) {
+            /* Check if next is a record number or expression (not empty) */
+            if (*rest != '\0') {
                 record = (long)gweval_eval_numeric(rest);
             }
         }
@@ -201,8 +201,8 @@ int gwsts_handle_get(const char *trimmed) {
             rest = comma + 1;
             while (*rest && isspace((unsigned char)*rest)) rest++;
             
-            /* Check if next is a record number */
-            if (isdigit((unsigned char)*rest)) {
+            /* Check if next is a record number or expression (not empty) */
+            if (*rest != '\0') {
                 record = (long)gweval_eval_numeric(rest);
             }
         }
@@ -1206,7 +1206,8 @@ int assign_value(const char *var_ref, const char *expr) {
                 if (v) {
                     char *str_val = gweval_eval_string(expr);
                     if (str_val) {
-                        v->value.s = str_val;
+                        v->value.s.ptr = str_val;
+                        v->value.s.len = strlen(str_val);
                         result = SUCCESS;
                     } else {
                         /* Not a recognized string expression — treat raw expr as literal string
@@ -1215,7 +1216,8 @@ int assign_value(const char *var_ref, const char *expr) {
                         char *heap_str = gwdata_alloc_string(expr_len + 1);
                         if (heap_str) {
                             strcpy(heap_str, expr);
-                            v->value.s = heap_str;
+                            v->value.s.ptr = heap_str;
+                            v->value.s.len = expr_len;
                             result = SUCCESS;
                         }
                     }

@@ -49,3 +49,6 @@ tests/bas/     # 26 .bas integration tests
 ## Git rules
 - No `git commit` / `push` / `restore` / `checkout` without explicit user "批准合并"
 - Reviewer reads `CODE_REVIEW.md` before approval
+
+## Development Principle
+- **Follow ASM source code strictly** — this is a 1:1 C port of Microsoft GW-BASIC 1983 ASM. All behavior must match the original ASM implementation unless technically impossible in C.

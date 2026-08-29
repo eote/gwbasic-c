@@ -55,8 +55,8 @@ void bimisc_new(void) {
             if (v->is_array) {
                 biptrg_free_array(v);
             }
-            if (v->type == VT_STRING && v->value.s) {
-                gwram_free(v->value.s);
+            if (v->type == VT_STRING && v->value.s.ptr) {
+                gwram_free(v->value.s.ptr);
             }
             gwram_free(v);
             v = next;
@@ -102,8 +102,8 @@ void bimisc_clear_with_args(int stack_size, int max_mem) {
             if (v->is_array) {
                 biptrg_free_array(v);
             }
-            if (v->type == VT_STRING && v->value.s) {
-                gwram_free(v->value.s);
+            if (v->type == VT_STRING && v->value.s.ptr) {
+                gwram_free(v->value.s.ptr);
             }
             gwram_free(v);
             v = next;
@@ -134,8 +134,8 @@ void bimisc_run_setup(void) {
             if (v->is_array) {
                 biptrg_free_array(v);
             }
-            if (v->type == VT_STRING && v->value.s) {
-                gwram_free(v->value.s);
+            if (v->type == VT_STRING && v->value.s.ptr) {
+                gwram_free(v->value.s.ptr);
             }
             gwram_free(v);
             v = next;
@@ -249,9 +249,12 @@ void bimisc_swap(const char *var1, const char *var2) {
             break;
         }
         case VT_STRING: {
-            char *tmp = v1->value.s;
-            v1->value.s = v2->value.s;
-            v2->value.s = tmp;
+            int tmp_len = v1->value.s.len;
+            char *tmp_ptr = v1->value.s.ptr;
+            v1->value.s.len = v2->value.s.len;
+            v1->value.s.ptr = v2->value.s.ptr;
+            v2->value.s.len = tmp_len;
+            v2->value.s.ptr = tmp_ptr;
             break;
         }
     }
@@ -266,7 +269,8 @@ void bimisc_erase(const char *var_name) {
     
     biptrg_free_array(v);
     v->is_array = false;
-    v->value.s = NULL;
+    v->value.s.ptr = NULL;
+    v->value.s.len = 0;
 }
 
 /* Test if character is a letter (A-Z) */

@@ -216,8 +216,8 @@ static char *parse_string_expression(parser_t *p) {
         
         /* Scalar string variable */
         struct variable *v = gwdata_find_variable(name);
-        if (v && v->type == VT_STRING && v->value.s) {
-            return v->value.s;
+        if (v && v->type == VT_STRING && v->value.s.ptr) {
+            return v->value.s.ptr;
         }
     }
     
@@ -835,9 +835,15 @@ char *gweval_eval_string(const char *expr) {
         
         /* Scalar string variable */
         struct variable *v = gwdata_find_variable(name);
-        if (v && v->type == VT_STRING && v->value.s && !v->is_array) {
+        if (v && v->type == VT_STRING && v->value.s.ptr && !v->is_array) {
+            /* For FIELD variables, the string may not be NUL-terminated.
+             * Create a proper NUL-terminated copy using the stored length. */
+            char *result = gwdata_alloc_string(v->value.s.len + 1);
+            if (result) {
+                memcpy(result, v->value.s.ptr, v->value.s.len);
+                result[v->value.s.len] = '\0';
+            }
             /* Check for concatenation after variable */
-            char *result = v->value.s;
             /* Skip whitespace */
             while (parser.pos < parser.len && isspace((unsigned char)parser.input[parser.pos])) parser.pos++;
             /* Check for + operator for concatenation */

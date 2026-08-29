@@ -546,8 +546,9 @@ void test_fiveo_chain_all_vars(void) {
     if (var_a) var_a->value.i = 42;
     struct variable *var_b = gwdata_alloc_variable("B$", VT_STRING);
     if (var_b) {
-        var_b->value.s = gwdata_alloc_string(5);
-        strcpy(var_b->value.s, "TEST");
+        var_b->value.s.ptr = gwdata_alloc_string(5);
+        var_b->value.s.len = 5;
+        strcpy(var_b->value.s.ptr, "TEST");
     }
     fiveo_common_mark("A");
     fiveo_common_mark("B$");
@@ -567,7 +568,7 @@ void test_fiveo_chain_all_vars(void) {
         struct variable *found_a = gwdata_find_variable("A");
         struct variable *found_b = gwdata_find_variable("B$");
         TEST_ASSERT(found_a != NULL && found_a->value.i == 42, "Variable A preserved");
-        TEST_ASSERT(found_b != NULL && strcmp(found_b->value.s, "TEST") == 0, "Variable B$ preserved");
+        TEST_ASSERT(found_b != NULL && strcmp(found_b->value.s.ptr, "TEST") == 0, "Variable B$ preserved");
         
         remove(test_file);
     }

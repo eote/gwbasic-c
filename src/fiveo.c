@@ -312,8 +312,8 @@ int fiveo_chain(const char *filename, int line_number, bool merge, bool all_vars
                         g_state->var_table[i] = next;
                     }
                     /* Free string data if string type */
-                    if (v->type == VT_STRING && v->value.s) {
-                        gwdata_free_string(v->value.s);
+                    if (v->type == VT_STRING && v->value.s.ptr) {
+                        gwdata_free_string(v->value.s.ptr);
                     }
                     gwram_free(v);
                 } else {

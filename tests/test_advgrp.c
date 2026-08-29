@@ -181,7 +181,7 @@ void test_advgrp_get_data_correctness(void) {
     
     /* Debug: dump buffer content */
     struct variable *v_dbg = gwdata_find_variable("TESTARR2");
-    char *buf_dbg = v_dbg->value.s;
+    char *buf_dbg = v_dbg->value.s.ptr;
     for (int i = 0; i < 8; i++) {
         char msg[64];
         sprintf(msg, "buf[%d] = 0x%02X", i, (unsigned char)buf_dbg[i]);
@@ -194,7 +194,7 @@ void test_advgrp_get_data_correctness(void) {
     TEST_ASSERT_EQ_INT(v->type, VT_STRING, "Array stored as string");
     
     /* Verify header */
-    char *buf = v->value.s;
+    char *buf = v->value.s.ptr;
     TEST_ASSERT_EQ_INT(buf[0], 0, "Header width high byte");
     TEST_ASSERT_EQ_INT(buf[1], 2, "Header width low byte");
     TEST_ASSERT_EQ_INT(buf[2], 0, "Header height high byte");
@@ -251,7 +251,8 @@ void test_advgrp_put_basic(void) {
     buf[6] = 3; buf[7] = 1;  /* row 2 (colors 1-3) */
     
     struct variable *v = gwdata_alloc_variable("TESTARR4", VT_STRING);
-    v->value.s = buf;
+    v->value.s.ptr = buf;
+    v->value.s.len = 8;
     v->is_array = false;
     
     int rc = advgrp_put(10, 10, "TESTARR4", 1);  /* PSET */

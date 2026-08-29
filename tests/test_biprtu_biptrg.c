@@ -100,14 +100,14 @@ void test_variable_reassignment(void) {
     
     struct variable *s = gwdata_find_variable("S$");
     TEST_ASSERT(s != NULL, "S$ exists");
-    TEST_ASSERT_EQ_STR(s->value.s, "hello", "S$ = hello");
+    TEST_ASSERT_EQ_STR(s->value.s.ptr, "hello", "S$ = hello");
     
     rc = gwsts_exec_statement("S$ = \"world\"");
     TEST_ASSERT_EQ_INT(rc, 0, "S$ = world executes");
     
     s = gwdata_find_variable("S$");
     TEST_ASSERT(s != NULL, "S$ exists after reassignment");
-    TEST_ASSERT_EQ_STR(s->value.s, "world", "S$ = world after reassignment");
+    TEST_ASSERT_EQ_STR(s->value.s.ptr, "world", "S$ = world after reassignment");
     
     TEST_PASS("variable reassignment");
 }

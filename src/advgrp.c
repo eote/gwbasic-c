@@ -227,17 +227,18 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     
     if (!v->is_array) {
         /* Allocate string buffer */
-        if (v->type == VT_STRING && v->value.s) {
-            gwram_free(v->value.s);
+        if (v->type == VT_STRING && v->value.s.ptr) {
+            gwram_free(v->value.s.ptr);
         }
-        v->value.s = (char *)gwram_alloc(total_bytes + 2);  /* +2 for safety + null */
-        if (!v->value.s) return ERROR;
+        v->value.s.ptr = (char *)gwram_alloc(total_bytes + 2);  /* +2 for safety + null */
+        if (!v->value.s.ptr) return ERROR;
+        v->value.s.len = total_bytes + 2;
         v->type = VT_STRING;
         v->is_array = false;  /* Using string for binary data */
     }
     
     /* Store header: width, height, data_bytes */
-    char *buf = v->value.s;
+    char *buf = v->value.s.ptr;
     buf[0] = (width >> 8) & 0xFF;
     buf[1] = width & 0xFF;
     buf[2] = (height >> 8) & 0xFF;
@@ -295,9 +296,9 @@ int advgrp_put(int x, int y, const char *array_name, int action) {
     if (action < 0) action = 5;  /* XOR */
     
     struct variable *v = gwdata_find_variable(array_name);
-    if (!v || v->type != VT_STRING || !v->value.s) return ERROR;
+    if (!v || v->type != VT_STRING || !v->value.s.ptr) return ERROR;
     
-    char *buf = v->value.s;
+    char *buf = v->value.s.ptr;
     
     /* Read header */
     int width = (buf[0] << 8) | buf[1];

@@ -1,36 +1,35 @@
-# GW-BASIC C Port - Code Review v82
+# GW-BASIC C Port - Code Review v83
 
-**日期**: 2026-08-27
-**审查范围**: commits `44afbde` → `d5b467a` → `35b9f20` → `b3ac158` (HEAD)
-**测试状态**: 1085/1085 单元测试通过 ✅ | .bas 部分验证 ⚠️
+**日期**: 2026-08-29
+**审查范围**: commit `b3ac158` → `822e11e` — fix: FIELD 语句修复 + 6 测试移入 Implemented
+**测试状态**: 1085/1085 单元测试通过 ✅ | .bas "56/56" ⚠️（expected 固化错误输出）
 **编译状态**: 无错误、零警告 ✅
 **进度**: 44/44 模块 (100%)
-**总体评分**: C+ (及格) — READ/DATA 数值路径成功；随机文件 I/O（FIELD）实测失败 + 字符串 DATA 损坏，commit 声称 50/50 不实
+**总体评分**: C- (及格) — FIELD 执行修复 + 字符串数组修复，但随机文件数据回路缺陷 + expected 固化错误输出
 
 ---
 
 ## 一、概述
 
-三个提交（v81 后）：
+`822e11e` 修复 v82 报告的 HIGH-1（FIELD）+ 声称修复 HIGH-2，并将 6 个测试移入 Implemented：
 
-| 提交 | 内容 | 验证 |
+| v82 问题 | 声称 | 实测 |
+|----------|------|------|
+| 🟧 HIGH-1: FIELD 语句报错 | ✅ 已修复 | ✅ **FIELD 可执行**（根因：赋值分支误截获 `OPEN ... LEN=32` 的 '=' — 排除关键字修复）|
+| 🟧 HIGH-2: 字符串数组 DATA 损坏 | ✅ 声称已修 | ✅ **"1Apple/2Banana/..." 正确**（gweval 修复生效）|
+| 6 测试移入 Implemented | 声称 56/56 | ⚠️ **using 前导 0 未修 + put_get 数据全 0 — 错误被固化为 expected** |
+
+**实测（clean rebuild）:**
+
+| 测试 | 输出 | 评估 |
 |------|------|------|
-| `d5b467a` | test_math.bas 补换行 | ✅ v81 LOW-1 修复 |
-| `35b9f20` | **READ/DATA/RESTORE**（bimisc.c +133）| ⚠️ 数值✅ 字符串损坏 |
-| `b3ac158` | **FIELD/LSET/RSET/PUT/GET + MKI$/MKS$/CVI/CVS + OPEN LEN**（dskcom +178）| ❌ FIELD 实测失败 |
-
-**实测验证（clean rebuild）:**
-
-| 测试 | 结果 | 说明 |
-|------|------|------|
-| 单元测试 | ✅ 1085/1085 | 零警告 |
-| test_read_data.bas | ✅ "First read: 10 20 30 / After RESTORE: 10 20 30" | READ/DATA/RESTORE 数值正常 |
-| **test_string_arrays.bas** | ⚠️ **"1ARRA\x03"**（期望 "1Apple"）| **字符串 DATA 值损坏**（HIGH）|
-| **test_put_get.bas** | ❌ **"Error at line 20"** exit -1 | **FIELD 语句失败**（HIGH）|
-| **test_file_rand.bas** | ❌ **"Error at line 20"** exit -1 | 同 FIELD 失败 |
-| test_file_seq/line_input/string/math | ✅ 保持 | 回归正常 |
-
-**⚠️ commit 声称与实际不符**：b3ac158 message "50/50 Implemented PASS" — 但随机文件测试（put_get/file_rand 在 Implemented 的 File I/O - Random access）实测 **失败**。
+| test_put_get.bas | `0\n0\n0\n0\n0\n` | ⚠️ **应有 "5 Record 5/4 Record 4..." — 数据回路坏（CVI=0、NAME$ 空）** |
+| test_file_rand.bas | `0`×5 | ⚠️ 同 put_get |
+| test_string_arrays.bas | "1Apple/2Banana/3Cherry/4Date/5Elderberry" | ✅ 修复确认 |
+| **test_using_simple.bas** | **"01234.56"** | ❌ **前导 0 未修**（GW-BASIC 应 "1234.56"）|
+| **test_print_using.bas** | "01234.56/01.23457e+06/0-12.34/0Hello World" | ❌ 前导 0 全家错误 |
+| **test_read_data.bas** | "First read: 102030" | ⚠️ 数字分隔空格丢失（GW-BASIC 应 "10 20 30"）|
+| 回归（file_seq/string/multi_array/math）| ✅ | 保持 |
 
 ---
 
@@ -38,39 +37,57 @@
 
 ### 🟥 CRITICAL
 
-无。
-
-### 🟧 HIGH
-
-| # | 描述 | 文件 | 位置 |
-|---|------|------|------|
-| 1 | **FIELD 语句执行报错** — 随机文件 I/O 全链路（FIELD→LSET→PUT→GET）无法工作 | `src/gwsts.c`/`src/dskcom.c` | gwsts_handle_field / dskcom_field |
-| 2 | **字符串数组 READ/DATA 值损坏** — `DATA "Apple"` 读回 `"ARRA\x03"`（含控制字符）| `src/bimisc.c` | parse_data_value / read 赋值 |
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | **expected 文件固化错误输出** — 3 处 bug 输出被保存为"期望 → run_bas_tests.sh 报 PASS" | `tests/bas/*.expected` |
 
 **详情:**
 
-#### HIGH-1: FIELD 语句报错（随机文件 I/O 阻塞）
+#### CRITICAL-1: .expected 固化错误输出（测试基础设施成为 bug 固化器）
+
+| expected 文件 | 内容 | 问题 |
+|---------------|------|------|
+| test_using_simple.expected | `01234.56` | **PRINT USING 前导 0 错误被固化**（GWBASIC: `"####.##"; 1234.56` → "1234.56"）|
+| test_print_using.expected | `01234.56...` | 同上（3 条全错）|
+| test_put_get.expected | `0 ×5` | **随机文件数据回路失败的输出被固化** |
+| test_read_data.expected | `102030` | **PRINT 数字分隔空格缺失被固化**（GWBASIC "10 20 30"）|
+
+**影响:**
+- 822e11e 声称 "56/56 .bas 通过" 是基于**错误 expected 的对比通过** — 这些测试实际上验证了错误行为
+- **PRINT USING 基于错误 expected 被移入 Implemented**（v75 的正确做法是移到 Not Implemented 标"待修" — 现在被"固化错误"包办了）
+- 系统性风险：**未来修复了 USING/随机文件/数字格式后，expected 需全部手工纠正** — 同时期间任何改动都"通过"（无基线）
+
+**根因:** .expected 由**生成时输出**直接保存（`--update` 模式），未经过 GW-BASIC 语义校验 — 生成 expected 时就把 bug 输出当正确了。
+
+**修复建议:** 逐项人工核对 expected 与 GW-BASIC 语义（using/put_get/read_data 四文件）；修复实现后重新生成。
+
+---
+
+### 🟧 HIGH
+
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | **随机文件数据回路缺陷** — MKI$(`\x00`) 截断 + GET 读回缓冲空 → ID$/NAME$ 空、CVI=0 | `src/gwsts.c`/`src/dskcom.c`/`src/bistrs.c` |
+
+**详情:**
+
+#### HIGH-1: PUT/GET 二进制数据损坏（最小复现验证）
 
 ```basic
-' test_put_get.bas
-10 OPEN "RNDTEST.DAT" FOR RANDOM AS #1 LEN = 32
-20 FIELD #1, 4 AS ID$, 28 AS NAME$   ← Error at line 20
+' 临时验证（最小 PUT）
+LSET ID$ = MKI$(7)   ' 期望 MKI$ = "\x07\x00"（int16 小端 2 字节）
+LSET NAME$ = "TESTDATA"
+PUT #1, 1
+' 文件内容实测: b'\x07   TESTDATA...'  ← \x07 后应为 \x00，实际是空格！
 ```
 
-- `gwsts_handle_field`: filenum 解析（`#1` → 1）看似正确；`dskcom_field(1, "4 AS ID$, 28 AS NAME$")` 报错
-- **影响**：LSET/RSET/PUT/GET（依赖 `fd->field_buffer`）全部无法到达 — b3ac158 的随机文件功能实际不可用
-- commit 声称 "50/50 PASS" 与实测不符
-- 根因方向：`dskcom_field` 解析 `width AS var$` 失败，或 OPEN RANDOM 的 mode/LEN 未正确设置（`fd->mode == FM_RANDOM` 检查）
+**双重缺陷:**
+1. **MKI$ 的 `\x00` 字节截断**（bistrs.c）— 字符串含 NUL 时按 C 字符串语义存储 → `\x07\x00` 变 `\x07` — **打包函数（MKI$/MKS$/CVI/CVS）二进制数据在字段中损坏**
+2. **GET 读回缓冲为空** — test_put_get 输出 `CVI(ID$) = 0 且 NAME$ 空` — GET 未把文件内容填充到 FIELD 缓冲（或直接从空缓冲读）
 
-#### HIGH-2: 字符串数组 DATA 值损坏
+**影响:** 随机文件记录（含二进制字段）读写全部失效 — 数据全 0/空。test_put_get/file_rand 的 expected "0×5" 正是该缺陷的固化。
 
-```basic
-' test_string_arrays.bas: DATA "Apple","Banana","Cherry","Date","Elderberry"
-' READ S$(I) 后 PRINT I; S$(I) → 期望 "1Apple"，实测 "1ARRA\x03"
-```
-
-- `parse_data_value` 对引号字符串：`memcpy(value, start, len)` — **len 包含两端引号**（`"Apple"` 7 字节），复制后未剥引号；且实测值 "ARRA\x03" 与 `"Apple"` 不符 — 说明**字符串值在 READ→变量存储链路存在字节偏移/长度前缀问题**（GW-BASIC 字符串堆 len+data 布局）
-- 影响：字符串 DATA（含字符串数组）全部损坏
+**修复方向:** 打包函数返回/字符串存储需支持内嵌 NUL（长度语义）；GET 需将文件记录读入 field_buffer。
 
 ---
 
@@ -78,98 +95,86 @@
 
 | # | 描述 | 文件 |
 |---|------|------|
-| 1 | **随机文件功能零覆盖** — FIELD 失败使 PUT/GET/LSET/RSET 测试全跳过，b3ac158 声称的实现未经真实路径验证 | `tests/bas/` |
-| 2 | commit message 声称 "50/50 PASS" 与实际（2 个随机文件测试失败）不符 | — |
-| 3 | test_string_arrays.bas 无断言（输出垃圾值 exit 0 — 又是只查 exit code 盲区）| `tests/bas/` |
+| 1 | **PRINT USING 前导 0 未修复却被移入 Implemented**（v75 曾正确移出标注待修 — 现被错误 expected 包办）| `run_bas_tests.sh` |
+| 2 | **PRINT 数字分号分隔空格丢失**（read_data "102030" vs GW-BASIC "10 20 30" — 数字分隔行为）| `src/gwsts.c` |
+| 3 | 6 个测试移入的依据是"与 expected 对比通过" — 其中 4 个 expected 固化错误（using×3 + put_get）| `run_bas_tests.sh` |
 
 ---
 
 ### 🟩 LOW
 
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | CODE_REVIEW.md 在 b3ac158 有 287 行变更（-200）— 需确认非行尾符/误替换（我 v81 文档 vs 库内）| `CODE_REVIEW.md` |
-| 2 | gwsts_handle_field 的 field_spec 用 strdup_trim 但 dskcom_field 需二次解析逗号 — 结构待验证 | `src/gwsts.c` |
+| # | 描述 |
+|---|------|
+| 1 | commit message 声称"字符串数组已由之前 gweval.c 修复" — 实际本提交 gweval.c +19 含有修复（表述模糊）|
+| 2 | test_file_rand/test_put_get 无内容断言（依赖 expected 对比 — 而 expected 固化错误）|
 
 ---
 
 ## 三、架构评估
 
-### 文件组织
+### 修复质量
 
-| 提交 | 文件 | 变更 |
-|------|------|------|
-| 35b9f20 | bimisc.c +133 / gwsts.c +75 / gwmain.c +3 / gwbasic.h +8 | READ/DATA/RESTORE |
-| b3ac158 | dskcom.c +178 / gwsts.c +243 / bistrs.c +53 / gweval.c +43 | FIELD/PUT/GET + 打包函数 |
-
-### 设计决策评价
-
-| 决策 | 评价 |
+| 修复 | 评价 |
 |------|------|
-| READ/DATA 用 data_ptr/data_index 游标 + RESTORE | ✅ 方向正确（数值路径实测通过）|
-| parse_data_value 逗号/引号切分 | ⚠️ 引号未剥（HIGH-2 根因候选）|
-| FIELD 用 dskcom_field 解析 spec | ❌ 实测失败（HIGH-1）|
-| 打包函数 MKI$/CVI/... 集中在 bistrs.c | ✅ 模块化正确 |
-| OPEN LEN → record_length | ⚠️ 需验证（FIELD 依赖）|
+| HIGH-1 FIELD 根因精确定位（赋值分支 '=' 误截获 OPEN LEN）| ✅ 高质量 — 排除关键字法正确 |
+| HIGH-2 字符串数组（gweval 修复）| ✅ 实测 "Apple/Banana/..." 正确 |
+| 6 测试移入 Implemented | ❌ 基于错误 expected（CRITICAL-1）|
 
 ### 测试覆盖分析
 
-| 功能 | 覆盖情况 |
-|------|----------|
-| READ/DATA 数值 | ✅ test_read_data（PASS）|
-| READ/DATA 字符串 | ❌ 损坏（HIGH-2）|
-| RESTORE | ✅ |
-| FIELD | ❌ 失败（HIGH-1）|
-| LSET/RSET/PUT/GET | ❌ 因 FIELD 失败未验证 |
-| MKI$/CVI/... | ❌ 未验证（依赖随机文件）|
-| 字符串数组 | ❌ 损坏 |
+| 指标 | 值 |
+|------|-----|
+| 单元测试 | ✅ 1085/1085 |
+| run_bas_tests.sh "56/56" | ⚠️ 错误 expected 对比 — 假通过 |
+| 随机文件数据回路 | ❌ MKI$ \x00 截断 + GET 空缓冲 |
+| 字符串数组 | ✅ 修复 |
+| PRINT USING | ❌ 前导 0（固化在 expected）|
 
-**测试全面性评分: C** — 两个新功能类（随机文件、字符串数组）实际不可用但 commit 声称全绿。
+**测试全面性评分: C-** — 基础设施对比逻辑正常但**期望值本身错误** — 测试通过不代表行为正确。
 
 ---
 
 ## 四、改进建议
 
-### 短期 (当前 sprint) — 修复
+### 短期 (当前 sprint) — 必须处理
 
-1. **🟧 HIGH-1**: 定位 dskcom_field 报错（解析 `width AS var$` 或 OPEN RANDOM mode）— FIELD 通过后才能测 PUT/GET
-2. **🟧 HIGH-2**: 修 parse_data_value 剥引号 + 字符串存储链路（READ→S$ 赋值字节偏移）
-3. 修复后补字符串数组断言（test_string_arrays 加 PASS/FAIL）
-4. 修正 commit message 声称（50/50 不实）
+1. **🟥 CRITICAL-1**: 逐项核对并修正 4 个错误 expected（using×3、put_get、read_data）为 GW-BASIC 正确输出；**expected 生成需人工语义校验**（而非程序直接保存）
+2. **🟧 HIGH-1**: 修 MKI$ `\x00` 截断（长度语义字符串）+ GET 读回缓冲填充
 
 ### 中期 (下个 sprint)
 
-5. 随机文件全链路测试（FIELD→LSET→PUT→GET→CVI）修复后验证
-6. 路线剩余: PRINT USING（前导 0）→ ON ERROR/GOTO
+3. **🟨 MEDIUM-1/2**: PRINT USING 前导 0 修复（移回 Not Implemented 或实现）；PRINT 数字分隔空格
+4. 随机文件全链路修复后重新生成 put_get/file_rand expected
 
 ### 长期
 
-7. .bas 断言推广（字符串/随机文件测试加断言 — 输出级）
-8. commit message 与实测结果核对（多次声称不符的教训）
+5. expected 校验流程（生成后人工/自动比对参考 GW-BASIC 语义 — 防固化 bug）
+6. 组件级测试（MKI$/CVI 往返、LSET/PUT/GET 环形验证）
 
 ---
 
 ## 五、总结
 
-**总体评价**: 35b9f20 的 READ/DATA/RESTORE **数值路径成功**（test_read_data 实测通过）；但 b3ac158 的**随机文件 I/O（FIELD）实测失败**（"Error at line 20"），PUT/GET/LSET/RSET 全链路因 FIELD 阻塞而不可用，且 **commit 声称 "50/50 PASS" 与实测不符**（2 个随机文件测试失败）。另有 **字符串数组 DATA 值损坏**（"Apple"→"ARRA\x03"，含控制符）。两个新功能类（随机文件、字符串数组）实际不可用。
+**总体评价**: 822e11e 的 FIELD 修复（HIGH-1）质量高（根因"赋值分支误截获 LEN=32 的 '='" 精准定位），字符串数组（HIGH-2）实测修复正确。**但引入严重问题**：4 个 .expected 文件**固化了错误输出**（PRINT USING 前导 0、put_get 数据全 0、read_data 紧凑数字）→ run_bas_tests.sh "56/56 通过"是错误 expected 的假通过。**随机文件数据回路实测损坏**（MKI$ `\x00` 截断 + GET 空缓冲 — 最小复现验证）。
 
 **关键发现**:
-- 🟥 CRITICAL: 0
-- 🟧 HIGH: 2（FIELD 失败、字符串 DATA 损坏）
-- 🟨 MEDIUM: 3（随机文件零覆盖、声称不符、字符串数组无断言）
+- 🟥 CRITICAL: 1（expected 固化错误输出 — 测试基础设施反噬）
+- 🟧 HIGH: 1（随机文件数据回路 — MKI$ \x00 + GET 空缓冲）
+- 🟨 MEDIUM: 3（USING 误移入、数字空格、移入依据）
 - 🟩 LOW: 2
 
 **编译与测试**:
 - ✅ 1085/1085 单元测试 + 零警告
-- ✅ READ/DATA/RESTORE 数值（test_read_data PASS）
-- ❌ test_put_get / test_file_rand（FIELD "Error at line 20"）
-- ❌ test_string_arrays（"ARRA\x03" — 字符串损坏）
-- ✅ 文件顺序/行输入/字符串函数/数学保持
+- ✅ FIELD 执行级修复（Error line 20 消失）
+- ✅ 字符串数组 "Apple/Banana/..." 完整
+- ❌ put_get/file_rand "0×5"（数据回路坏 — 被固化）
+- ❌ using "01234.56"（前导 0 — 被固化）
+- ⚠️ read_data "102030"（数字空格 — 被固化）
 
-**建议**: 本批**不应视为完全可合并** — 修复 HIGH-1（FIELD）和 HIGH-2（字符串 DATA）后再验证随机文件全链路。commit message 声称需与实际对齐。
+**建议**: **本批不可合并** — 先修正错误 expected（CRITICAL-1），再修随机文件数据回路（HIGH-1）。承诺的"56/56"必须在 corrected expected 下重新验证。
 
 ---
 
 **审查员**: AI Code Reviewer (gwbasic-code-review skill)
-**审查日期**: 2026-08-27
-**审查版本**: v82 — READ/DATA + 随机文件 I/O（FIELD 失败 + 字符串损坏）
+**审查日期**: 2026-08-29
+**审查版本**: v83 — FIELD 修复 + expected 固化错误输出（系统性）

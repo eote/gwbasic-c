@@ -56,7 +56,7 @@ int biptrg_dim_array(const char *name, int size, var_type_t type) {
     }
     
     /* Store descriptor in variable's string pointer (reuse for array) */
-    v->value.s = (char *)desc;
+    v->value.s.ptr = (char *)desc;
     v->type = type;  /* Keep original type for identification */
     v->is_array = true;  /* Mark as array to distinguish from scalar */
     
@@ -110,7 +110,7 @@ int biptrg_dim_array_multi(const char *name, const int *dim_sizes, int dimension
     }
     
     /* Store descriptor in variable's string pointer (reuse for array) */
-    v->value.s = (char *)desc;
+    v->value.s.ptr = (char *)desc;
     v->type = type;
     v->is_array = true;
     
@@ -143,7 +143,7 @@ int biptrg_set_array_element_multi(const char *name, const int *indices, float v
     struct variable *v = gwdata_find_variable(name);
     if (!v) return ERROR;
     
-    array_desc_t *desc = (array_desc_t *)v->value.s;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
     if (!desc) return ERROR;
     
     if (desc->magic != ARRAY_MAGIC) return ERROR;
@@ -177,7 +177,7 @@ float biptrg_get_array_element_multi(const char *name, const int *indices) {
     struct variable *v = gwdata_find_variable(name);
     if (!v) return 0.0f;
     
-    array_desc_t *desc = (array_desc_t *)v->value.s;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
     if (!desc) return 0.0f;
     
     if (desc->magic != ARRAY_MAGIC) return 0.0f;
@@ -219,7 +219,7 @@ int biptrg_set_array_element(const char *name, int index, float val) {
         return ERROR;
     }
     
-    array_desc_t *desc = (array_desc_t *)v->value.s;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
     if (!desc) {
         DEBUG_PRINT("biptrg_set_array_element: no descriptor");
         return ERROR;
@@ -271,7 +271,7 @@ float biptrg_get_array_element(const char *name, int index) {
         return 0.0f;
     }
     
-    array_desc_t *desc = (array_desc_t *)v->value.s;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
     if (!desc) {
         DEBUG_PRINT("biptrg_get_array_element: no descriptor");
         return 0.0f;
@@ -320,7 +320,7 @@ int biptrg_set_array_string(const char *name, int index, const char *str) {
     struct variable *v = gwdata_find_variable(name);
     if (!v) return ERROR;
     
-    array_desc_t *desc = (array_desc_t *)v->value.s;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
     if (!desc) return ERROR;
     
     if (desc->type != VT_STRING) return ERROR;
@@ -351,7 +351,7 @@ char *biptrg_get_array_string(const char *name, int index) {
     struct variable *v = gwdata_find_variable(name);
     if (!v) return NULL;
     
-    array_desc_t *desc = (array_desc_t *)v->value.s;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
     if (!desc) return NULL;
     
     if (desc->type != VT_STRING) return NULL;
@@ -364,10 +364,9 @@ char *biptrg_get_array_string(const char *name, int index) {
     return data[index];
 }
 
-/* Free array descriptor and data */
 void biptrg_free_array(struct variable *v) {
     if (!v) return;
-    array_desc_t *desc = (array_desc_t *)v->value.s;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
     if (!desc) return;
     
     /* Validate that this is actually an array descriptor using magic number */
@@ -378,5 +377,6 @@ void biptrg_free_array(struct variable *v) {
     if (desc->data) gwram_free(desc->data);
     if (desc->dim_sizes) gwram_free(desc->dim_sizes);
     gwram_free(desc);
-    v->value.s = NULL;
+    v->value.s.ptr = NULL;
+    v->value.s.len = 0;
 }

@@ -210,8 +210,9 @@ char *bistrs_mks(float val) {
 /* CVI - convert 2-byte string to integer */
 int bistrs_cvi(const char *str) {
     if (!str) return 0;
-    if (strlen(str) < 2) return 0;
-    
+    /* MKI$ produces 2-byte binary string; check actual data not strlen */
+    /* We can't use strlen because of embedded NUL */
+    /* Assume valid MKI$ has at least 2 bytes allocated */
     int val = (unsigned char)str[0] | ((unsigned char)str[1] << 8);
     return val;
 }
@@ -219,8 +220,6 @@ int bistrs_cvi(const char *str) {
 /* CVS - convert 4-byte string to single precision float */
 float bistrs_cvs(const char *str) {
     if (!str) return 0.0f;
-    if (strlen(str) < 4) return 0.0f;
-    
     uint32_t bits = (unsigned char)str[0] | 
                     ((unsigned char)str[1] << 8) | 
                     ((unsigned char)str[2] << 16) | 
