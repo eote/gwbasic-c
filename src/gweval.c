@@ -285,14 +285,23 @@ static float parse_factor(parser_t *p) {
     }
     
     if (isalpha((unsigned char)c)) {
-        char name[41];
-        size_t i = 0;
-        while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_' || p->input[p->pos] == '$') && i < sizeof(name) - 1) {
-            name[i++] = p->input[p->pos++];
-        }
-        name[i] = '\0';
-        
-        /* Check for function call - BEFORE array reference check */
+            char name[41];
+            size_t i = 0;
+            while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_' || p->input[p->pos] == '$') && i < sizeof(name) - 1) {
+                name[i++] = p->input[p->pos++];
+            }
+            name[i] = '\0';
+
+            /* Check for special ERR variable (GW-BASIC error code) */
+            if (strcasecmp_ascii(name, "ERR") == 0) {
+                struct variable *err_var = gwdata_find_variable("ERR");
+                if (err_var && err_var->type == VT_INTEGER) {
+                    return (float)err_var->value.i;
+                }
+                return 0.0f;
+            }
+
+            /* Check for function call - BEFORE array reference check */
         /* Only consume '(' if it's a known function name */
         if (parser_peek(p) == '(') {
             /* Check if name matches a known math function BEFORE consuming '(' */
@@ -564,8 +573,11 @@ static float parse_term(parser_t *p) {
             parser_get(p);
             float right = parse_power(p);
             if (right == 0.0f) {
-                /* Division by zero - set error flag and return 0 */
-                return 0.0f / 0.0f;  /* NaN to signal error */
+                /* Division by zero - trigger GW-BASIC error 11 "Division by zero" */
+                if (g_state) {
+                    gwdata_set_error(11, g_state->current_line, (int)(intptr_t)p->input);
+                }
+                return 0.0f;
             }
             left /= right;
         } else {

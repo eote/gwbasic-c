@@ -135,3 +135,74 @@ void gwdata_free_string(char *s) {
     (void)s;
     /* In a real implementation, we'd have a free list or garbage collection */
 }
+
+/* GWDATA module - ON ERROR / RESUME / ERROR support */
+
+void gwdata_set_error(int code, uint16_t line, int text_ptr) {
+    if (!g_state) return;
+    g_state->error_code = code;
+    g_state->error_line = line;
+    g_state->error_text_ptr = text_ptr;
+    g_state->on_error_active = true;
+}
+
+int gwdata_get_error(void) {
+    if (!g_state) return 0;
+    return g_state->error_code;
+}
+
+uint16_t gwdata_get_error_line(void) {
+    if (!g_state) return 0;
+    return g_state->error_line;
+}
+
+int gwdata_get_error_text_ptr(void) {
+    if (!g_state) return 0;
+    return g_state->error_text_ptr;
+}
+
+void gwdata_clear_error(void) {
+    if (!g_state) return;
+    g_state->error_code = 0;
+    g_state->error_line = 0;
+    g_state->error_text_ptr = 0;
+}
+
+bool gwdata_is_on_error_active(void) {
+    if (!g_state) return false;
+    return g_state->on_error_active;
+}
+
+void gwdata_set_on_error_goto(int line, int text_ptr) {
+    if (!g_state) return;
+    g_state->on_error_line = line;
+    g_state->on_error_text_ptr = text_ptr;
+    g_state->on_error_active = (line != 0);
+}
+
+void gwdata_clear_on_error(void) {
+    if (!g_state) return;
+    g_state->on_error_line = 0;
+    g_state->on_error_text_ptr = 0;
+    g_state->on_error_active = false;
+}
+
+void gwdata_enter_error_handler(void) {
+    if (!g_state) return;
+    g_state->in_error_handler = true;
+}
+
+void gwdata_exit_error_handler(void) {
+    if (!g_state) return;
+    g_state->in_error_handler = false;
+}
+
+bool gwdata_is_in_error_handler(void) {
+    if (!g_state) return false;
+    return g_state->in_error_handler;
+}
+
+int gwdata_get_on_error_line(void) {
+    if (!g_state) return 0;
+    return g_state->on_error_line;
+}

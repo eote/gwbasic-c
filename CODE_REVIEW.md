@@ -1,45 +1,43 @@
-# GW-BASIC C Port - Code Review v84
+# GW-BASIC C Port - Code Review v85
 
-**日期**: 2026-08-29
-**审查范围**: commit `822e11e` → `99e49cc` — fix: FIELD/随机文件完整修复 + 字符串描述符重构
-**测试状态**: 1086/1086 单元测试通过 ✅ | .bas 输出验证 ✅（随机文件修复确认）
+**日期**: 2026-08-31
+**审查范围**: commit `99e49cc` → `6e3413d` — fix: USING 前导0修复 + PRINT 数字分隔空格修复
+**测试状态**: 1086/1086 单元测试通过 ✅ | .bas 输出验证 ✅（v84 HIGH-1/2 修复确认）
 **编译状态**: 无错误、零警告 ✅
 **进度**: 44/44 模块 (100%)
-**总体评分**: A- (优秀) — 随机文件数据回路完整修复 + 字符串描述符重构零回归；**USING 前导 0 声称修复实未修（expected 再次固化错误）**
+**总体评分**: A- (优秀) — v84 HIGH-1/2 修复实现且验证；调试文件误提交待清理
 
 ---
 
 ## 一、概述
 
-`99e49cc` 是 v83 后的大型修复 + 架构重构提交：
+`6e3413d` 修复 v84 报告的 HIGH-1（USING 前导 0）和 HIGH-2（数字分隔空格）：
 
-| v83 问题 | 声称 | 实测 |
+| v84 问题 | 状态 | 验证 |
 |----------|------|------|
-| 🟥 CRITICAL-1: expected 固化错误输出 | ✅ 重新生成 expected | ⚠️ **USING 前导 0 实现未修，仅 expected 再次固化错误** |
-| 🟧 HIGH-1: 随机文件数据回路 | ✅ 修复 | ✅ **实测确认**（MKI$ \x00 + LSET 二进制 + GET 变量解析 + PRINT # FIELD）|
-| 架构重构: 字符串描述符 len+ptr | — | ✅ **零回归**（全字符串函数正确）|
+| 🟧 HIGH-1: PRINT USING 前导 0 | ✅ **已修复** | biprtu.c 重写格式化器（宽度解析、无前导零、溢出 `*`）|
+| 🟧 HIGH-2: 数字分隔空格 | ✅ **已修复** | gwsts.c 正数前加空格（GW-BASIC 行为）|
 
-**修复内容（实测确认的关键项）:**
+**修复内容（实测确认）:**
 
 | 修复点 | 实现 | 验证 |
 |--------|------|------|
-| MKI$/\x00 截断 | bistrs.c 移除 strlen 检查（二进制字符串支持内嵌 NUL）| ✅ |
-| LSET/RSET 二进制复制 | dskcom.c 按字段长度复制 | ✅ |
-| GET 记录号解析 | gwsts.c 支持变量表达式（不再只 isdigit）| ✅ |
-| PRINT # FIELD 变量输出 | gweval.c 按存储长度复制 + NUL 终止 | ✅ |
-| **字符串描述符 len+ptr** | gwbasic.h `{int len; char *ptr}` + 8 模块全链路更新 | ✅ 零回归 |
+| USING `####.##` 无前导 0 | biprtu.c: 重写格式化器（整数/小数位宽度解析）| ✅ `1234.56`（原 `01234.56`）|
+| USING 溢出 | 输出 `*` | ✅（格式串不足时）|
+| USING 负数 | 负号处理 | ✅ `-12.34` |
+| 数字正数前空格 | gwsts.c: GW-BASIC 正数前导空格 | ✅ ` 1234.56`、`First read:  10 20 30` |
+| 字符串 USING（`!` `&`）| 保持 | ✅ `Hello World` |
 
 **实测（clean rebuild + 输出内容级）:**
 
 | 测试 | 输出 | 评估 |
 |------|------|------|
-| **test_put_get.bas** | **"5Record 5/4Record 4/3Record 3/2Record 2/1Record 1"** | ✅ **数据回路修复**（v83 全 0）|
-| **test_file_rand.bas** | 同上（逆序正确）| ✅ |
-| test_string_arrays.bas | 1Apple/2Banana/3Cherry/4Date/5Elderberry | ✅ |
-| test_string.bas | LEN:13 / LEFT$/RIGHT$/MID$/UCASE$/LCASE$/STR$/VAL/CHR$/ASC/SPACE$ 全对 | ✅ 描述符重构零回归 |
-| test_string_funcs / len / cond / multi_array / math | ✅ | ✅ |
-| **test_using_simple.bas** | **"01234.56"** | ❌ **前导 0 未修**（GW-BASIC 应 "1234.56"）|
-| **test_read_data.bas** | "First read: 102030" | ❌ **数字分隔空格仍丢**（GW-BASIC 应 "10 20 30"）|
+| test_using_simple.bas | ` 1234.56` | ✅ 前导 0 消除（v84 `01234.56`）|
+| test_print_using.bas | ` 1234.56 /  1.23457e+06 / -12.34 / Hello World×3` | ✅ 全格式正确 |
+| test_read_data.bas | `First read:  10 20 30` | ✅ 数字空格恢复（v84 `102030`）|
+| test_math.bas | `SIN( 3.14159) =  2.53518e-06` | ✅ 正数前导空格（GW-BASIC）|
+| test_put_get / file_rand | ` 5Record 5/...` | ✅ 随机文件保持 |
+| 回归（string/cond/arrays/file_seq）| ✅ | 全绿 |
 
 ---
 
@@ -47,50 +45,40 @@
 
 ### 🟥 CRITICAL
 
-无。（v83 CRITICAL-1 中随机文件/描述符部分已实质修复；USING/数字空格残留见 HIGH-1）
+无。
 
 ### 🟧 HIGH
 
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | **PRINT USING 前导 0 实现未修 — commit 声称"重新生成 expected 修复 CRITICAL-1"实为再次固化错误输出**（"01234.56" 作为期望）| `tests/bas/test_using*.expected` |
-| 2 | **PRINT 数字分号分隔空格仍丢失**（read_data "102030" vs GW-BASIC "10 20 30"）— 同样被固化进 expected | `tests/bas/test_read_data.expected` |
-
-**详情:**
-
-#### HIGH-1: USING 前导 0 "重新生成 expected"冒充修复
-
-```
-commit 声称: CRITICAL-1 (v83): .expected 固化错误输出 - 重新生成 test_using* expected
-实测:       test_using_simple 仍输出 "01234.56"（GW-BASIC "####.##" 应 "1234.56"）
-```
-
-- **实现未修**（gweval/gwsts 无 USING 格式改动 — 前导 0 由宽度/填充逻辑产生）
-- **只是把错误输出重新保存为 expected** → run_bas_tests.sh 对比"通过"
-- **v83 CRITICAL-1（expected 固化错误）未真正解决** — 错误行为继续被固化为"期望"
-
-**影响:** PRINT USING 功能语义仍错误（5 位整数 vs 4 位格式）；且测试基础设施继续把错误当通过。
-
-**修复建议:** 实现 USING 格式（宽度处理：`####.##` 对 1234.56 输出 "1234.56" 无前导 0）；修后重新生成 expected。
-
-#### HIGH-2: read_data 数字空格固化
-
-```
-test_read_data 输出 "First read: 102030"（无分隔）
-GW-BASIC: PRINT A; B; C → "10 20 30"（数字分号分隔应有空格）
-```
-
-- PRINT 数值分号分隔的空格规则（正数后缀空格）未实现
-- expected "102030" 固化 — 与 HIGH-1 同模式
-
----
+无。（v84 HIGH-1/2 全部修复）
 
 ### 🟨 MEDIUM
 
-| # | 描述 |
-|---|------|
-| 1 | commit 声称"修复 CRITICAL-1"但仅重新生成 expected（未修实现）— **声称与事实不符**（重复模式）|
-| 2 | expected 生成流程仍无人工 GW-BASIC 语义校验（v83 已建议 — 未建立）|
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | **5 个调试文件误提交**（commit 新增 test_printf.c/test_using_dbg*.bas/test_print_space.bas）+ **工作区删除未提交** — 调试临时文件入库且清理不完整 | 根目录 |
+
+**详情:**
+
+#### MEDIUM-1: 调试文件误入库 + 删除未提交
+
+```
+# commit 6e3413d 新增（误提交）
++ test_printf.c      (+8)   调试 C 文件
++ test_using_dbg.bas (+3)   USING 调试
++ test_using_dbg2/3.bas     USING 调试
++ test_print_space.bas (+5) 数字空格调试
+
+# 工作区（删除未提交 — 清理不完整）
+ D test_print_space.bas
+ D test_printf.c
+ D test_using_dbg.bas / dbg2 / dbg3
+```
+
+- 调试临时文件被提交入库（开发期调试产物 — 不应在 git）
+- 开发者随后在工作区删除了它们，但**删除未提交** → git 索引仍跟踪 → 后续 `git commit -a` 会连带；或遗留 D 状态
+- 与 v54 (.qwen)、v58 (gwsts.c.patch) 同类"调试产物入库"模式
+
+**修复建议:** 提交删除（`git rm` 5 个文件）+ 添加 .gitignore（`/test_printf.c` `/test_*_dbg*.bas` 或根目录调试模式）— 防止再次误提交。
 
 ---
 
@@ -98,8 +86,8 @@ GW-BASIC: PRINT A; B; C → "10 20 30"（数字分号分隔应有空格）
 
 | # | 描述 |
 |---|------|
-| 1 | 字符串描述符重构涉及 8 模块 — 已通过全量测试但应关注内存语义（len 长度 vs 分配）后续回归 |
-| 2 | test_put_get 输出 "5Record 5"（无空格分隔 — FIELD 字段固定宽度 28 含尾随空格，GW-BASIC 正确 — 非问题，记录）|
+| 1 | 数字前导空格变更导致 **67 个 .expected 更新**（+588/-338）— 大批量 expected 变更需抽查确认无误（本次抽查 using/read_data/math 正确 — 其余为同规则变化）|
+| 2 | USING 完整格式集（`+` `-` `*` `$` `,` 前导/尾随字符）— 当前 `#` `.` 已实现，其余待扩充（记录）|
 
 ---
 
@@ -109,24 +97,22 @@ GW-BASIC: PRINT A; B; C → "10 20 30"（数字分号分隔应有空格）
 
 | 决策 | 评价 |
 |------|------|
-| MKI$ 移除 strlen 检查（二进制字符串）| ✅ 正确 — 支持内嵌 NUL |
-| LSET/RSET 按字段长度复制 | ✅ 正确 — 字段缓冲语义 |
-| GET 记录号支持变量表达式 | ✅ 正确 — `GET #1, I` |
-| PRINT # FIELD 按存储长度输出 | ✅ 正确 |
-| **字符串描述符 {len, ptr}** | ✅ **高质量重构** — 对齐 ASM 定义，零回归（全字符串函数实测正确）|
-| expected 重新生成 | ❌ 固化错误（HIGH-1）|
+| USING 格式化器重写（宽度/整数/小数解析）| ✅ 正确 — 无前导零、溢出 `*`、负数处理 |
+| 数字正数前空格（GW-BASIC 行为）| ✅ 正确 — `SIN( 3.14159)` 前导空格符合 |
+| 67 个 expected 同步更新 | ✅ 行为变更 → expected 同步（同规则）|
+| 调试文件提交 | ❌ 误提交（MEDIUM-1）|
 
 ### 测试覆盖分析
 
 | 指标 | 值 |
 |------|-----|
-| 单元测试 | ✅ 1086/1086（+1 新增）|
-| 随机文件数据回路 | ✅ 实测 "5Record 5..." 正确 |
-| 字符串描述符回归 | ✅ 全字符串函数正确（LEN/LEFT$/RIGHT$/MID$/STR$/VAL/CHR$/ASC/SPACE$）|
-| PRINT USING | ❌ 前导 0 未修（固化 expected）|
-| 数字分隔空格 | ❌ 未修（固化 expected）|
+| 单元测试 | ✅ 1086/1086 |
+| USING 前导 0 | ✅ 修复（1234.56）|
+| 数字分隔空格 | ✅ 修复（10 20 30）|
+| 随机文件/字符串/数组 | ✅ 保持 |
+| USING 格式集完整性 | ⚠️ 仅 `#` `.` 已实现（LOW-2）|
 
-**测试全面性评分: B+** — 随机文件/字符串重构全绿；USING 与数字格式残留被 expected 固化掩盖。
+**测试全面性评分: A-** — 核心修复验证充分；调试文件清理与 USING 格式集为遗留项。
 
 ---
 
@@ -134,44 +120,42 @@ GW-BASIC: PRINT A; B; C → "10 20 30"（数字分号分隔应有空格）
 
 ### 短期 (当前 sprint)
 
-1. **🟧 HIGH-1**: 实现 PRINT USING 宽度/前导 0 处理（`####.##` → "1234.56"）— 然后重新生成 expected
-2. **🟧 HIGH-2**: 实现 PRINT 数字分号分隔空格（`10; 20; 30` → "10 20 30"）
-3. **🟨 MEDIUM-1**: commit message 应准确描述"重新生成 expected"而非"修复"（或先修实现）
+1. **🟨 MEDIUM-1**: 提交 5 个调试文件删除 + .gitignore 加根目录调试模式（防再犯）
+2. 抽查其余 67 个 expected 中数值输出（确认前导空格规则一致）
 
 ### 中期 (下个 sprint)
 
-4. **🟨 MEDIUM-2**: expected 生成流程加入语义校验（人工/参考 GWBASIC 行为）
-5. 路线剩余: ON ERROR/GOTO
+3. USING 完整格式集（`+` `-` `*` `$` `,` 等）
+4. 路线剩余: ON ERROR/GOTO → DEF FN
 
 ### 长期
 
-6. 字符串描述符重构的内存泄漏审计（len+ptr 语义下的释放路径 — gwdata_free_string 是否配套）
-7. USING 完整格式集（`#` `+` `-` `*` `$` 等）
+5. pre-commit 工具（调试文件/临时产物审计 — 反复出现的模式）
+6. expected 批量变更的自动化核对（可对比 GW-BASIC 参考输出）
 
 ---
 
 ## 五、总结
 
-**总体评价**: `99e49cc` 高质量修复了**随机文件数据回路**（MKI$ `\x00` 截断、LSET/RSET 二进制复制、GET 变量解析、PRINT # FIELD 输出 — 实测 "5Record 5/4Record 4/..." 数据正确写读），并完成**字符串描述符 len+ptr 架构重构**（对齐 ASM 定义，8 模块全链路 — 零回归，全字符串函数实测正确）。**但 v83 CRITICAL-1 未真正解决**：PRINT USING 前导 0（"01234.56"）和数字分隔空格（"102030"）实现未修，commit 仅"重新生成 expected"再次固化错误输出 — 声称"修复"与事实不符。
+**总体评价**: `6e3413d` 高质量修复 v84 的 HIGH-1（USING 前导 0 — biprtu 格式化器重写）和 HIGH-2（数字分隔空格 — GW-BASIC 正数前导），实测输出内容级确认（`1234.56`、`10 20 30`、`SIN( 3.14159) =  2.53518e-06`），1086/1086 + 全 .bas 绿。唯一问题：**5 个调试文件误提交 + 工作区删除未提交**（清理不完整 — 常见模式重演）。
 
 **关键发现**:
 - 🟥 CRITICAL: 0
-- 🟧 HIGH: 2（USING 前导 0 固化、数字空格固化）
-- 🟨 MEDIUM: 2（声称不符、expected 无校验）
+- 🟧 HIGH: 0
+- 🟨 MEDIUM: 1（调试文件误提交/删除未提交）
 - 🟩 LOW: 2
 
 **编译与测试**:
 - ✅ 1086/1086 单元测试 + 零警告
-- ✅ 随机文件数据回路（put_get/file_rand "5Record 5..." — 数据写读正确）
-- ✅ 字符串数组 "Apple/Banana/..." 保持
-- ✅ 字符串描述符重构零回归（LEN/LEFT$/RIGHT$/MID$/STR$/VAL/CHR$/ASC/SPACE$ 全对）
-- ❌ test_using_simple "01234.56"（前导 0 — 固化 expected）
-- ❌ test_read_data "102030"（数字空格 — 固化 expected）
+- ✅ USING: ` 1234.56`（前导 0 消除）
+- ✅ 数字空格: `First read:  10 20 30`
+- ✅ 随机文件/字符串/数组保持
+- ⚠️ 5 个调试文件 D 状态未提交
 
-**建议**: 本批可部分合并（随机文件/字符串重构为高质量），但 **USING/数字格式需实现修复而非重新固化 expected**。修复后重新生成正确 expected。
+**建议**: 提交调试文件删除 + .gitignore 后本批可合并。路线剩余：ON ERROR/GOTO → DEF FN → USING 格式集扩充。
 
 ---
 
 **审查员**: AI Code Reviewer (gwbasic-code-review skill)
-**审查日期**: 2026-08-29
-**审查版本**: v84 — FIELD/随机文件完整修复 + 字符串描述符重构
+**审查日期**: 2026-08-31
+**审查版本**: v85 — fix: USING 前导0修复 + PRINT 数字分隔空格修复

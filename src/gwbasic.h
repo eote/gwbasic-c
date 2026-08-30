@@ -136,6 +136,17 @@ struct _runtime_state {
     /* READ/DATA support */
     struct program_line *data_ptr;      /* Current DATA statement being read */
     int data_index;                     /* Index within current DATA statement */
+    
+    /* ON ERROR / RESUME / ERROR support (from GWDATA.ASM) */
+    bool on_error_active;               /* ONEFLG - ON ERROR GOTO active */
+    int on_error_line;                  /* ONELIN - target line number for ON ERROR GOTO */
+    int on_error_text_ptr;              /* ONELIN - text pointer for ON ERROR GOTO */
+    uint16_t error_line;                /* ERRLIN - line number where error occurred */
+    int error_text_ptr;                 /* ERRTXT - text pointer where error occurred */
+    int error_code;                     /* ERRFLG - current error code */
+    
+    /* RESUME support */
+    bool in_error_handler;              /* Currently executing error handler */
 };
 
 /* Debug print macro - controlled by DEBUG compile flag */
@@ -155,6 +166,20 @@ struct variable *gwdata_alloc_variable(const char *name, var_type_t type);
 struct variable *gwdata_find_variable(const char *name);
 char *gwdata_alloc_string(size_t len);
 void gwdata_free_string(char *s);
+
+/* GWDATA module - ON ERROR / RESUME / ERROR support */
+void gwdata_set_error(int code, uint16_t line, int text_ptr);
+int gwdata_get_error(void);
+uint16_t gwdata_get_error_line(void);
+int gwdata_get_error_text_ptr(void);
+void gwdata_clear_error(void);
+bool gwdata_is_on_error_active(void);
+void gwdata_set_on_error_goto(int line, int text_ptr);
+void gwdata_clear_on_error(void);
+void gwdata_enter_error_handler(void);
+void gwdata_exit_error_handler(void);
+bool gwdata_is_in_error_handler(void);
+int gwdata_get_on_error_line(void);
 
 /* GWRAM module functions */
 void gwram_init(void);

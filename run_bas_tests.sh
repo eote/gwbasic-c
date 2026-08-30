@@ -68,12 +68,12 @@ IMPLEMENTED_TESTS=(
     "test_using_simple.bas"
     "test_using_very_simple.bas"
     "test_print_using.bas"
+    "test_error.bas"
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)
 NOT_IMPLEMENTED_TESTS=(
     "test_def_fn.bas"
-    "test_error.bas"
     "test_on_goto.bas"
 )
 

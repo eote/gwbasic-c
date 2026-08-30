@@ -357,7 +357,8 @@ int gwsts_exec_statement(const char *text) {
              !starts_with(trimmed, "LSET ") &&
              !starts_with(trimmed, "RSET ") &&
              !starts_with(trimmed, "PUT ") &&
-             !starts_with(trimmed, "GET ")) {
+             !starts_with(trimmed, "GET ") &&
+             !starts_with(trimmed, "ON ERROR GOTO ")) {
         char *eq = strchr(trimmed, '=');
         if (eq) {
             *eq = '\0';
@@ -825,6 +826,88 @@ int gwsts_exec_statement(const char *text) {
             }
         } else {
             result = ERROR;  /* WEND without WHILE */
+        }
+    }
+    /* ON ERROR statement */
+    else if (starts_with(trimmed, "ON ERROR GOTO ")) {
+        char *rest = trimmed + 14;  /* Skip "ON ERROR GOTO " */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        int line = (int)gweval_eval_numeric(rest);
+        if (line == 0) {
+            /* ON ERROR GOTO 0 - disable error trapping */
+            gwdata_clear_on_error();
+        } else {
+            /* Find the target line to get text pointer */
+            extern struct program_line *gwlist_find_line(int number);
+            struct program_line *target = gwlist_find_line(line);
+            int text_ptr = target ? (int)(intptr_t)target->text : 0;
+            gwdata_set_on_error_goto(line, text_ptr);
+        }
+        result = SUCCESS;
+    }
+    /* RESUME statement */
+    else if (starts_with(trimmed, "RESUME")) {
+        if (!gwdata_is_on_error_active() || !gwdata_is_in_error_handler()) {
+            /* RESUME without error - error */
+            result = ERROR;
+        } else {
+            char *rest = trimmed + 6;  /* Skip "RESUME" */
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+            
+            if (starts_with(rest, "NEXT")) {
+                /* RESUME NEXT - continue after error line */
+                int err_line = gwdata_get_error_line();
+                int err_text = gwdata_get_error_text_ptr();
+                
+                /* Find the line after the error line */
+                extern struct program_line *gwlist_get_first_line(void);
+                extern struct program_line *gwlist_find_line(int number);
+                struct program_line *curr = gwlist_find_line(err_line);
+                if (curr && curr->next) {
+                    gwdata_clear_error();
+                    gwdata_exit_error_handler();
+                    result = curr->next->number;  /* Jump to next line */
+                } else {
+                    /* No next line - end program */
+                    gwdata_clear_error();
+                    gwdata_exit_error_handler();
+                    result = SUCCESS;
+                }
+            } else if (*rest == '\0') {
+                /* RESUME - retry the line that caused error */
+                int err_line = gwdata_get_error_line();
+                int err_text = gwdata_get_error_text_ptr();
+                gwdata_clear_error();
+                gwdata_exit_error_handler();
+                result = err_line;  /* Jump to error line */
+            } else {
+                /* RESUME <line> - resume at specific line */
+                int line = (int)gweval_eval_numeric(rest);
+                gwdata_clear_error();
+                gwdata_exit_error_handler();
+                result = line;
+            }
+        }
+    }
+    /* ERROR statement */
+    else if (starts_with(trimmed, "ERROR ")) {
+        char *rest = trimmed + 6;  /* Skip "ERROR " */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        int code = (int)gweval_eval_numeric(rest);
+        if (code == 0) {
+            result = ERROR;  /* FCERR - error code 0 is illegal */
+        } else {
+            /* Force an error with given code */
+            gwdata_set_error(code, g_state->current_line, 0);
+            /* Jump to error handler if ON ERROR active */
+            if (gwdata_is_on_error_active()) {
+                gwdata_enter_error_handler();
+                result = gwdata_get_on_error_line();
+            } else {
+                result = ERROR;  /* No handler - propagate error */
+            }
         }
     }
     /* KILL statement: KILL <string_expr> */

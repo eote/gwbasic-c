@@ -1,0 +1,6 @@
+10 ON ERROR GOTO 100
+20 ERROR 11
+30 PRINT "Should not print"
+40 END
+100 PRINT "Error handler, ERR="; ERR
+110 END
