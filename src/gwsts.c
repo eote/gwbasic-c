@@ -638,13 +638,40 @@ int gwsts_exec_statement(const char *text) {
                         while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
                         
                         if (*trim_start) {
-                            /* Try string evaluation first, then numeric */
-                            char *str_val = gweval_eval_string(trim_start);
-                            if (str_val) {
-                                printf("%s", str_val);
+                            /* Check for USING keyword - PRINT USING format; value */
+                            char *using_pos = strstr(trim_start, "USING");
+                            if (using_pos && (using_pos == trim_start || *(using_pos - 1) == ' ' || *(using_pos - 1) == '\t')) {
+                                /* Found USING keyword - extract format string and value */
+                                *using_pos = '\0';
+                                char *format_str = strdup_trim(trim_start);
+                                if (format_str) {
+                                    char *value_expr = strdup_trim(using_pos + 5);  /* Skip "USING" */
+                                    if (value_expr) {
+                                        /* Evaluate format string (should be string literal) */
+                                        char *fmt_val = gweval_eval_string(format_str);
+                                        if (fmt_val) {
+                                            /* Evaluate value expression */
+                                            float val = gweval_eval_numeric(value_expr);
+                                            biprtu_print_using(fmt_val, val);
+                                        } else {
+                                            /* Fallback: try numeric format string */
+                                            float val = gweval_eval_numeric(value_expr);
+                                            biprtu_print_using(format_str, val);
+                                        }
+                                        gwram_free(value_expr);
+                                    }
+                                    gwram_free(format_str);
+                                }
                             } else {
-                                float val = gweval_eval_numeric(trim_start);
-                                printf("%g", val);
+                                /* Try string evaluation first, then numeric */
+                                char *str_val = gweval_eval_string(trim_start);
+                                if (str_val) {
+                                    printf("%s", str_val);
+                                } else {
+                                    float val = gweval_eval_numeric(trim_start);
+                                    /* GW-BASIC: positive numbers have leading space */
+                                    printf("%s%g", (val >= 0) ? " " : "", val);
+                                }
                             }
                         }
                         
