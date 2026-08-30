@@ -22,6 +22,11 @@ tests/*.dat
 build.log
 test_output.log
 
+# Debug artifacts (prevent accidental commit of debug files)
+test_printf.c
+test_using_dbg*.bas
+test_print_space.bas
+
 # IDE/Editor
 .vscode/
 .idea/
