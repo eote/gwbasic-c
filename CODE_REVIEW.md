@@ -1,43 +1,25 @@
-# GW-BASIC C Port - Code Review v85
+# GW-BASIC C Port - Code Review v86
 
-**日期**: 2026-08-31
-**审查范围**: commit `99e49cc` → `6e3413d` — fix: USING 前导0修复 + PRINT 数字分隔空格修复
-**测试状态**: 1086/1086 单元测试通过 ✅ | .bas 输出验证 ✅（v84 HIGH-1/2 修复确认）
+**日期**: 2026-09-01
+**审查范围**: commits `6e3413d` → `ddabca9` → `4058bcb` → `717550f` (HEAD) — 完整代码审查
+**测试状态**: 1086/1086 单元测试通过 ✅ | .bas: ON ERROR 基本功能通过但 RESUME NEXT 损坏 ⚠️
 **编译状态**: 无错误、零警告 ✅
 **进度**: 44/44 模块 (100%)
-**总体评分**: A- (优秀) — v84 HIGH-1/2 修复实现且验证；调试文件误提交待清理
+**总体评分**: B- (良好但有关键缺陷) — ON ERROR 架构方向正确但 RESUME NEXT 语义损坏
 
 ---
 
 ## 一、概述
 
-`6e3413d` 修复 v84 报告的 HIGH-1（USING 前导 0）和 HIGH-2（数字分隔空格）：
+3 个提交（v85 后）：
 
-| v84 问题 | 状态 | 验证 |
-|----------|------|------|
-| 🟧 HIGH-1: PRINT USING 前导 0 | ✅ **已修复** | biprtu.c 重写格式化器（宽度解析、无前导零、溢出 `*`）|
-| 🟧 HIGH-2: 数字分隔空格 | ✅ **已修复** | gwsts.c 正数前加空格（GW-BASIC 行为）|
+| 提交 | 内容 |
+|------|------|
+| `ddabca9` | 删除 5 个误提交调试文件 ✅ v85 MEDIUM-1 清理 |
+| `4058bcb` | .gitignore 增加调试文件模式 ✅ 防再犯 |
+| `717550f` | **ON ERROR / RESUME / ERROR / ERR 变量 + 除零错误检测** — Phase 5 |
 
-**修复内容（实测确认）:**
-
-| 修复点 | 实现 | 验证 |
-|--------|------|------|
-| USING `####.##` 无前导 0 | biprtu.c: 重写格式化器（整数/小数位宽度解析）| ✅ `1234.56`（原 `01234.56`）|
-| USING 溢出 | 输出 `*` | ✅（格式串不足时）|
-| USING 负数 | 负号处理 | ✅ `-12.34` |
-| 数字正数前空格 | gwsts.c: GW-BASIC 正数前导空格 | ✅ ` 1234.56`、`First read:  10 20 30` |
-| 字符串 USING（`!` `&`）| 保持 | ✅ `Hello World` |
-
-**实测（clean rebuild + 输出内容级）:**
-
-| 测试 | 输出 | 评估 |
-|------|------|------|
-| test_using_simple.bas | ` 1234.56` | ✅ 前导 0 消除（v84 `01234.56`）|
-| test_print_using.bas | ` 1234.56 /  1.23457e+06 / -12.34 / Hello World×3` | ✅ 全格式正确 |
-| test_read_data.bas | `First read:  10 20 30` | ✅ 数字空格恢复（v84 `102030`）|
-| test_math.bas | `SIN( 3.14159) =  2.53518e-06` | ✅ 正数前导空格（GW-BASIC）|
-| test_put_get / file_rand | ` 5Record 5/...` | ✅ 随机文件保持 |
-| 回归（string/cond/arrays/file_seq）| ✅ | 全绿 |
+**717550f 代码审查（完整源码阅读 — 5 源文件 + 8 .bas）:**
 
 ---
 
@@ -49,45 +31,99 @@
 
 ### 🟧 HIGH
 
-无。（v84 HIGH-1/2 全部修复）
-
-### 🟨 MEDIUM
-
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | **5 个调试文件误提交**（commit 新增 test_printf.c/test_using_dbg*.bas/test_print_space.bas）+ **工作区删除未提交** — 调试临时文件入库且清理不完整 | 根目录 |
+| # | 描述 | 文件 | 位置 |
+|---|------|------|------|
+| 1 | **RESUME NEXT 语义损坏 — 不跳到错误行的下一行，而是跳到 RESUME 语句的下一行** | `src/gwmain.c` / `src/gwsts.c` | gwmain:262 / gwsts:860 |
 
 **详情:**
 
-#### MEDIUM-1: 调试文件误入库 + 删除未提交
+#### HIGH-1: RESUME NEXT 损坏（error_line 在 handler 前被清除）
 
+**根因链:**
 ```
-# commit 6e3413d 新增（误提交）
-+ test_printf.c      (+8)   调试 C 文件
-+ test_using_dbg.bas (+3)   USING 调试
-+ test_using_dbg2/3.bas     USING 调试
-+ test_print_space.bas (+5) 数字空格调试
-
-# 工作区（删除未提交 — 清理不完整）
- D test_print_space.bas
- D test_printf.c
- D test_using_dbg.bas / dbg2 / dbg3
+错误发生 → gwdata_set_error(11, line=20, ...) → error_line=20
+gwmain.c:262: gwdata_clear_error() → error_line=0 ← 清除了！
+gwmain.c:263: gwdata_enter_error_handler()
+gwmain.c:264: 跳转到 handler (line 100)
+handler 执行 → RESUME NEXT
+gwsts.c:860: err_line = gwdata_get_error_line() → 0 ← 已清除！
+gwsts.c:863: gwlist_find_line(0) → NULL
+gwsts.c:864: curr && curr->next → false → "No next line"
+gwsts.c:870: result = SUCCESS (0) → 返回 0
+gwmain.c: rc=0 → curr = curr->next → 跳到 RESUME 语句的下一行
 ```
 
-- 调试临时文件被提交入库（开发期调试产物 — 不应在 git）
-- 开发者随后在工作区删除了它们，但**删除未提交** → git 索引仍跟踪 → 后续 `git commit -a` 会连带；或遗留 D 状态
-- 与 v54 (.qwen)、v58 (gwsts.c.patch) 同类"调试产物入库"模式
+**实测复现:**
+```basic
+10 ON ERROR GOTO 100
+20 A = 1/0
+30 PRINT "After error line"   ← 应执行但被跳过
+40 END
+100 PRINT "Handler"
+110 RESUME NEXT
+```
+- **期望**: "Handler\nAfter error line"
+- **实测**: "Handler"（仅 handler 输出 — "After error line" 从未执行）
 
-**修复建议:** 提交删除（`git rm` 5 个文件）+ 添加 .gitignore（`/test_printf.c` `/test_*_dbg*.bas` 或根目录调试模式）— 防止再次误提交。
+**现有测试通过的原因:** test_on_error.bas 的 PRINT "After RESUME NEXT" 紧跟 RESUME 语句 → `curr->next` 碰巧是正确的行 → **假通过**。
+
+**修复建议:**
+```c
+/* gwmain.c — 不要在 handler 前清除 error_line */
+/* 当前（错误）*/
+gwdata_clear_error();  /* 清除了 error_code + error_line + error_text_ptr */
+gwdata_enter_error_handler();
+
+/* 修复：只清除 error_code，保留 error_line/error_text_ptr 供 RESUME 使用 */
+g_state->error_code = 0;  /* 或新增 gwdata_clear_error_code() 只清错误码 */
+gwdata_enter_error_handler();
+```
+或：将 error_line/error_text_ptr 存储到单独的 resume_line/resume_text_ptr 字段，在 `gwdata_clear_error` 中不清除。
+
+---
+
+### 🟨 MEDIUM
+
+| # | 描述 | 文件 | 位置 |
+|---|------|------|------|
+| 1 | **`gwdata_set_error` 误设 `on_error_active = true`** — 应仅由 ON ERROR GOTO 语句控制 | `src/gwdata.c` | 142 |
+| 2 | 8 个根目录 .bas 测试未纳入 run_bas_tests.sh / TEST_CATEGORIES → "57/57"声称不含它们 | 根目录 | — |
+| 3 | gwmain.c 两处错误处理块代码重复（表达式层 + 语句层各一份 ON ERROR 检查）| `src/gwmain.c` | 252-281 / 290-301 |
+
+**详情:**
+
+#### MEDIUM-1: set_error 误设 on_error_active
+
+```c
+/* gwdata.c:142 */
+void gwdata_set_error(int code, uint16_t line, int text_ptr) {
+    ...
+    g_state->on_error_active = true;  /* ← 错误！应仅由 set_on_error_goto 控制 */
+}
+```
+
+- **当前碰巧不影响行为**: `handler_line = gwdata_get_on_error_line()` 返回 0（被 clear_on_error 清除）→ `handler_line > 0` 失败 → 落入"无 handler"路径
+- **但如果 handler_line 检查逻辑改变** → 可能重新启用已禁用的陷阱
+- **修复**: 移除 `g_state->on_error_active = true;`（on_error_active 只由 set_on_error_goto/clear_on_error 控制）
+
+#### MEDIUM-2: 根目录 .bas 未纳入
+
+8 个 .bas 在根目录（test_debug/div/div2/err2/error_stmt/onerr_off/onerr_simple/resume_next）— run_bas_tests.sh 和 TEST_CATEGORIES.md 均不含 → "57/57"声称不含它们 → 覆盖缺口。
+
+#### MEDIUM-3: gwmain 代码重复
+
+两处 ON ERROR 检查（表达式层 gwdata_get_error + 语句层 rc<0）逻辑几乎相同 — 可提取公共函数。
 
 ---
 
 ### 🟩 LOW
 
-| # | 描述 |
-|---|------|
-| 1 | 数字前导空格变更导致 **67 个 .expected 更新**（+588/-338）— 大批量 expected 变更需抽查确认无误（本次抽查 using/read_data/math 正确 — 其余为同规则变化）|
-| 2 | USING 完整格式集（`+` `-` `*` `$` `,` 前导/尾随字符）— 当前 `#` `.` 已实现，其余待扩充（记录）|
+| # | 描述 | 位置 |
+|---|------|------|
+| 1 | gwdata.c 末尾无换行（`\ No newline`）| gwdata.c EOF |
+| 2 | `error_text_ptr` 存储 raw 指针 cast 到 int（64 位截断 — 与 v54 指针截断同模式）| gweval.c:283 |
+| 3 | gweval.c parse_factor 的 ERR 变量检查缩进异常（12 空格 vs 8 空格）| gweval.c:288-294 |
+| 4 | RESUME（不带 NEXT）同样受 HIGH-1 影响 — error_line=0 → 跳到行 0 | gwsts.c:873 |
 
 ---
 
@@ -97,65 +133,70 @@
 
 | 决策 | 评价 |
 |------|------|
-| USING 格式化器重写（宽度/整数/小数解析）| ✅ 正确 — 无前导零、溢出 `*`、负数处理 |
-| 数字正数前空格（GW-BASIC 行为）| ✅ 正确 — `SIN( 3.14159)` 前导空格符合 |
-| 67 个 expected 同步更新 | ✅ 行为变更 → expected 同步（同规则）|
-| 调试文件提交 | ❌ 误提交（MEDIUM-1）|
+| 运行时状态集中在 g_state（on_error_active/line/error_code/error_line/in_handler）| ✅ 方向正确 — 对齐 ASM 字段 |
+| ERR 变量自动填充 + 持久化 | ✅ GW-BASIC 语义 |
+| 除零 → set_error(11) | ✅ 正确错误码 |
+| RESUME 返回行号给 main 跳转 | ✅ 与 GOTO 对称 |
+| **clear_error 在 handler 前调用** | ❌ HIGH-1 — 清除了 RESUME 需要的 error_line |
+| **set_error 设 on_error_active** | ⚠️ MEDIUM-1 — 语义错误（碰巧不影响行为）|
+| ON ERROR GOTO 排除关键字 | ✅ 继承 v82 修复 |
 
 ### 测试覆盖分析
 
 | 指标 | 值 |
 |------|-----|
 | 单元测试 | ✅ 1086/1086 |
-| USING 前导 0 | ✅ 修复（1234.56）|
-| 数字分隔空格 | ✅ 修复（10 20 30）|
-| 随机文件/字符串/数组 | ✅ 保持 |
-| USING 格式集完整性 | ⚠️ 仅 `#` `.` 已实现（LOW-2）|
+| ON ERROR GOTO / GOTO 0 / ERROR / ERR | ✅ 实测通过 |
+| **RESUME NEXT（错误行与 handler 有间距）** | ❌ **HIGH-1 — "After error line" 未执行** |
+| 除零 → ERR=11 | ✅ |
+| 回归（using/read_data/put_get/string/cond/multi_array）| ✅ 全绿 |
+| 根目录 .bas 纳入 run_bas_tests.sh | ❌ 0/8 |
 
-**测试全面性评分: A-** — 核心修复验证充分；调试文件清理与 USING 格式集为遗留项。
+**测试全面性评分: B-** — ON ERROR 基本功能验证但 RESUME NEXT 语义损坏未被现有测试捕获（假通过）。
 
 ---
 
 ## 四、改进建议
 
-### 短期 (当前 sprint)
+### 短期 (当前 sprint) — 必须修复
 
-1. **🟨 MEDIUM-1**: 提交 5 个调试文件删除 + .gitignore 加根目录调试模式（防再犯）
-2. 抽查其余 67 个 expected 中数值输出（确认前导空格规则一致）
+1. **🟧 HIGH-1**: 修复 RESUME NEXT — `gwdata_clear_error()` 不应在 handler 前清除 `error_line`/`error_text_ptr`（只清 `error_code`）；或新增 `gwdata_clear_error_code()` 函数
+2. **🟨 MEDIUM-1**: 移除 `gwdata_set_error` 中的 `on_error_active = true`
+3. 补充 RESUME NEXT 间距测试（错误行与 handler 分离 — 暴露 HIGH-1）
 
 ### 中期 (下个 sprint)
 
-3. USING 完整格式集（`+` `-` `*` `$` `,` 等）
-4. 路线剩余: ON ERROR/GOTO → DEF FN
+4. **🟨 MEDIUM-2**: 8 个根目录 .bas 移入 tests/bas/ + 纳入脚本
+5. **🟨 MEDIUM-3**: gwmain 提取公共错误处理函数
+6. 路线: DEF FN → USING 格式集扩充
 
 ### 长期
 
-5. pre-commit 工具（调试文件/临时产物审计 — 反复出现的模式）
-6. expected 批量变更的自动化核对（可对比 GW-BASIC 参考输出）
+7. 其他运行时错误码扩展（溢出/下标越界/文件不存在 → GW-BASIC 错误码）
+8. RESUME 嵌套深度测试
 
 ---
 
 ## 五、总结
 
-**总体评价**: `6e3413d` 高质量修复 v84 的 HIGH-1（USING 前导 0 — biprtu 格式化器重写）和 HIGH-2（数字分隔空格 — GW-BASIC 正数前导），实测输出内容级确认（`1234.56`、`10 20 30`、`SIN( 3.14159) =  2.53518e-06`），1086/1086 + 全 .bas 绿。唯一问题：**5 个调试文件误提交 + 工作区删除未提交**（清理不完整 — 常见模式重演）。
+**总体评价**: `717550f` 实现 ON ERROR/RESUME/ERROR/ERR 的架构方向正确（g_state 集中状态 + gwmain 主循环检测 + ERR 自动填充 + handler 跳转），ON ERROR GOTO / GOTO 0 / ERROR / ERR / 除零检测均实测通过。**但 RESUME NEXT 语义损坏**（HIGH-1）— `gwdata_clear_error()` 在 handler 执行前清除了 `error_line`，导致 RESUME NEXT 读到 0 → 跳到 RESUME 语句的下一行而非错误行的下一行。现有测试假通过（PRINT 紧跟 RESUME 巧合掩盖）。
 
 **关键发现**:
 - 🟥 CRITICAL: 0
-- 🟧 HIGH: 0
-- 🟨 MEDIUM: 1（调试文件误提交/删除未提交）
-- 🟩 LOW: 2
+- 🟧 HIGH: 1（**RESUME NEXT 损坏** — error_line 在 handler 前被清除）
+- 🟨 MEDIUM: 3（set_error 误设 on_error_active、根目录 .bas 未纳入、gwmain 代码重复）
+- 🟩 LOW: 4
 
 **编译与测试**:
 - ✅ 1086/1086 单元测试 + 零警告
-- ✅ USING: ` 1234.56`（前导 0 消除）
-- ✅ 数字空格: `First read:  10 20 30`
-- ✅ 随机文件/字符串/数组保持
-- ⚠️ 5 个调试文件 D 状态未提交
+- ✅ ON ERROR GOTO / GOTO 0 / ERROR / ERR / 除零 → 全部通过
+- ❌ **RESUME NEXT 间距测试**（错误行 20 + handler 100 → "After error line" 未执行）
+- ✅ 回归全绿
 
-**建议**: 提交调试文件删除 + .gitignore 后本批可合并。路线剩余：ON ERROR/GOTO → DEF FN → USING 格式集扩充。
+**建议**: 修复 HIGH-1（`clear_error` 不清 `error_line` — 一行核心改动）后补充间距测试 → 可合并。下批：DEF FN → USING 格式集。
 
 ---
 
 **审查员**: AI Code Reviewer (gwbasic-code-review skill)
-**审查日期**: 2026-08-31
-**审查版本**: v85 — fix: USING 前导0修复 + PRINT 数字分隔空格修复
+**审查日期**: 2026-09-01
+**审查版本**: v86 — ON ERROR / RESUME / ERROR 完整代码审查（RESUME NEXT 损坏）

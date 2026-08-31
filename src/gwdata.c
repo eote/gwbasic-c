@@ -143,7 +143,7 @@ void gwdata_set_error(int code, uint16_t line, int text_ptr) {
     g_state->error_code = code;
     g_state->error_line = line;
     g_state->error_text_ptr = text_ptr;
-    g_state->on_error_active = true;
+    /* Note: on_error_active should only be set by ON ERROR GOTO statement (via gwdata_set_on_error_goto) */
 }
 
 int gwdata_get_error(void) {
@@ -161,11 +161,11 @@ int gwdata_get_error_text_ptr(void) {
     return g_state->error_text_ptr;
 }
 
+/* Clear only the error code, preserving error_line/error_text_ptr for RESUME */
 void gwdata_clear_error(void) {
     if (!g_state) return;
     g_state->error_code = 0;
-    g_state->error_line = 0;
-    g_state->error_text_ptr = 0;
+    /* Preserve error_line and error_text_ptr for RESUME NEXT/RESUME line */
 }
 
 bool gwdata_is_on_error_active(void) {
