@@ -206,3 +206,19 @@ int gwdata_get_on_error_line(void) {
     if (!g_state) return 0;
     return g_state->on_error_line;
 }
+
+/* Handle error - returns true if error was handled (jump to handler), false otherwise */
+bool gwdata_handle_error(uint16_t line) {
+    if (!g_state) return false;
+    if (gwdata_is_on_error_active()) {
+        int handler_line = gwdata_get_on_error_line();
+        if (handler_line > 0) {
+            gwdata_enter_error_handler();
+            /* Note: caller must set curr to handler_line after this returns true */
+            return true;
+        }
+    }
+    /* No ON ERROR handler or handler not found */
+    printf("Error at line %d\n", line);
+    return false;
+}

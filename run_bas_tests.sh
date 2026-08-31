@@ -69,12 +69,19 @@ IMPLEMENTED_TESTS=(
     "test_using_very_simple.bas"
     "test_print_using.bas"
     "test_error.bas"
+    "test_debug.bas"
+    "test_div.bas"
+    "test_err2.bas"
+    "test_error_stmt.bas"
+    "test_onerr_simple.bas"
+    "test_resume_next.bas"
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)
 NOT_IMPLEMENTED_TESTS=(
     "test_def_fn.bas"
     "test_on_goto.bas"
+    "test_onerr_off.bas"
 )
 
 # Compare output with expected file

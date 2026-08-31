@@ -180,6 +180,7 @@ void gwdata_enter_error_handler(void);
 void gwdata_exit_error_handler(void);
 bool gwdata_is_in_error_handler(void);
 int gwdata_get_on_error_line(void);
+bool gwdata_handle_error(uint16_t line);
 
 /* GWRAM module functions */
 void gwram_init(void);

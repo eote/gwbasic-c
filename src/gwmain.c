@@ -255,57 +255,51 @@ int main(int argc, char *argv[]) {
                 DEBUG_PRINT("Statement returned %d", rc);
                 
                 /* Check if an error occurred during expression evaluation (e.g., division by zero) */
-                if (gwdata_get_error() != 0) {
-                    /* Error occurred - check if ON ERROR GOTO is active */
-                    if (gwdata_is_on_error_active()) {
-                        int error_code = gwdata_get_error();
-                        int handler_line = gwdata_get_on_error_line();
-                        if (handler_line > 0) {
-                            /* Store error code in ERR variable for the handler */
-                            struct variable *err_var = gwdata_alloc_variable("ERR", VT_INTEGER);
-                            if (err_var) {
-                                err_var->value.i = error_code;
-                            }
-                            /* Clear internal error state so main loop doesn't keep re-entering handler.
-                             * ERR variable persists until next error (GW-BASIC behavior). */
-                            gwdata_clear_error();
-                            gwdata_enter_error_handler();
-                            curr = gwlist_find_line((WORD)handler_line);
-                            continue;
-                        }
-                    }
-                    /* No ON ERROR handler or handler not found */
-                    printf("Error at line %d\n", curr->number);
-                    exec_rc = ERROR;
-                    break;
-                }
+                                if (gwdata_get_error() != 0) {
+                                    /* Error occurred - check if ON ERROR GOTO is active */
+                                    if (gwdata_is_on_error_active()) {
+                                        int error_code = gwdata_get_error();
+                                        int handler_line = gwdata_get_on_error_line();
+                                        if (handler_line > 0) {
+                                            /* Store error code in ERR variable for the handler */
+                                            struct variable *err_var = gwdata_alloc_variable("ERR", VT_INTEGER);
+                                            if (err_var) {
+                                                err_var->value.i = error_code;
+                                            }
+                                            /* Clear internal error state so main loop doesn't keep re-entering handler.
+                                             * ERR variable persists until next error (GW-BASIC behavior). */
+                                            gwdata_clear_error();
+                                            gwdata_enter_error_handler();
+                                            curr = gwlist_find_line((WORD)handler_line);
+                                            continue;
+                                        }
+                                    }
+                                    /* No ON ERROR handler or handler not found */
+                                    printf("Error at line %d\n", curr->number);
+                                    exec_rc = ERROR;
+                                    break;
+                                }
                 
-                if (rc > 0) {
-                    /* FOR/GOTO/GOSUB/RETURN/ON ERROR continuation - rc is the line number to jump to */
-                    curr = gwlist_find_line((WORD)rc);
-                    continue;
-                } else if (rc < 0) {
-                    /* Check if it's END statement (-2 from gwsts_exec_statement) */
-                    if (rc == -2) {
-                        /* END - stop execution gracefully */
-                        break;
-                    }
-                    /* Error occurred */
-                    /* Check if ON ERROR GOTO is active */
-                    if (gwdata_is_on_error_active()) {
-                        int handler_line = gwdata_get_on_error_line();
-                        if (handler_line > 0) {
-                            gwdata_enter_error_handler();
-                            curr = gwlist_find_line((WORD)handler_line);
-                            continue;
-                        }
-                    }
-                    /* No ON ERROR handler or handler not found */
-                    printf("Error at line %d\n", curr->number);
-                    exec_rc = ERROR;
-                    break;
-                }
-                /* rc == 0 is success, continue to next line */
+                                if (rc < 0) {
+                                    /* Check if it's END statement (-2 from gwsts_exec_statement) */
+                                    if (rc == -2) {
+                                        /* END - stop execution gracefully */
+                                        break;
+                                    }
+                                    /* Error occurred (from statement execution) */
+                                    if (gwdata_handle_error(curr->number)) {
+                                        curr = gwlist_find_line(gwdata_get_on_error_line());
+                                        continue;
+                                    }
+                                    /* No ON ERROR handler or handler not found */
+                                    exec_rc = ERROR;
+                                    break;
+                                } else if (rc > 0) {
+                                    /* FOR/GOTO/GOSUB/RETURN/ON ERROR continuation - rc is the line number to jump to */
+                                    curr = gwlist_find_line((WORD)rc);
+                                    continue;
+                                }
+                                /* rc == 0 is success, continue to next line */
             }
             curr = curr->next;
         }
