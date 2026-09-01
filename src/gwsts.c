@@ -235,6 +235,84 @@ int gwsts_exec_statement(const char *text) {
     if (starts_with(trimmed, "REM")) {
         result = SUCCESS;
     }
+    /* DEF FN statement: DEF FN name(param) = expression */
+    else if (starts_with(trimmed, "DEF FN")) {
+        char *rest = trimmed + 6;  /* Skip "DEF FN" */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        /* Parse function name (e.g., SQUARE) */
+        char *fn_name_start = rest;
+        char *fn_name_end = rest;
+        while (*fn_name_end && (isalnum((unsigned char)*fn_name_end) || *fn_name_end == '_')) fn_name_end++;
+        
+        if (fn_name_end > fn_name_start) {
+            size_t fn_name_len = fn_name_end - fn_name_start;
+            char *fn_name = (char *)gwram_alloc(fn_name_len + 1);
+            if (fn_name) {
+                memcpy(fn_name, fn_name_start, fn_name_len);
+                fn_name[fn_name_len] = '\0';
+                
+                rest = fn_name_end;
+                while (*rest && isspace((unsigned char)*rest)) rest++;
+                
+                /* Expect '(' */
+                if (*rest == '(') {
+                    rest++;
+                    while (*rest && isspace((unsigned char)*rest)) rest++;
+                    
+                    /* Parse parameter name */
+                    char *param_start = rest;
+                    char *param_end = rest;
+                    while (*param_end && (isalnum((unsigned char)*param_end) || *param_end == '_')) param_end++;
+                    
+                    if (param_end > param_start) {
+                        size_t param_len = param_end - param_start;
+                        char *param_name = (char *)gwram_alloc(param_len + 1);
+                        if (param_name) {
+                            memcpy(param_name, param_start, param_len);
+                            param_name[param_len] = '\0';
+                            
+                            rest = param_end;
+                            while (*rest && isspace((unsigned char)*rest)) rest++;
+                            
+                            /* Expect ')' */
+                            if (*rest == ')') {
+                                rest++;
+                                while (*rest && isspace((unsigned char)*rest)) rest++;
+                                
+                                /* Expect '=' */
+                                if (*rest == '=') {
+                                    rest++;
+                                    while (*rest && isspace((unsigned char)*rest)) rest++;
+                                    
+                                    /* The rest is the function body expression */
+                                    char *fn_body = strdup_trim(rest);
+                                    if (fn_body) {
+                                        /* Find or create the function definition variable */
+                                        char full_fn_name[MAX_VAR_NAME + 1];
+                                        snprintf(full_fn_name, sizeof(full_fn_name), "FN%s", fn_name);
+                                        
+                                        struct variable *fn_var = gwdata_alloc_variable(full_fn_name, VT_SINGLE);
+                                        if (fn_var) {
+                                            fn_var->is_fn_def = true;
+                                            fn_var->fn_text_ptr = (intptr_t)fn_body;  /* Store text pointer to formula */
+                                            strncpy(fn_var->fn_param_name, param_name, MAX_VAR_NAME);
+                                            fn_var->fn_param_name[MAX_VAR_NAME] = '\0';
+                                            fn_var->fn_param_type = VT_SINGLE;
+                                            result = SUCCESS;
+                                        }
+                                        /* Do NOT free fn_body - we store the pointer in fn_var->fn_text_ptr */
+                                    }
+                                }
+                            }
+                            gwram_free(param_name);
+                        }
+                    }
+                }
+                gwram_free(fn_name);
+            }
+        }
+    }
     /* DIM statement */
     else if (starts_with(trimmed, "DIM ")) {
         char *rest = trimmed + 4;

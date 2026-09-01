@@ -76,11 +76,11 @@ IMPLEMENTED_TESTS=(
     "test_onerr_simple.bas"
     "test_resume_next.bas"
     "test_resume_line.bas"
+    "test_def_fn.bas"
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)
 NOT_IMPLEMENTED_TESTS=(
-    "test_def_fn.bas"
     "test_on_goto.bas"
     "test_onerr_off.bas"
 )

@@ -81,6 +81,13 @@ struct variable {
     var_type_t type;
     bool is_array;
     bool is_common;     /* COMMON flag: variable preserved across CHAIN */
+    
+    /* DEF FN support */
+    bool is_fn_def;           /* True if this variable is a DEF FN function definition */
+    intptr_t fn_text_ptr;     /* Text pointer to the function body (formula) */
+    char fn_param_name[MAX_VAR_NAME + 1];  /* Parameter variable name */
+    var_type_t fn_param_type; /* Parameter type */
+
     union {
         int32_t  i;
         float    f;
@@ -200,6 +207,10 @@ void gweval_scan_var(const char **text, int *var_ptr);
 int gweval_frqint(void);
 void gweval_chrgt2(const char **text);
 void gweval_synchr(const char **text, char expected);
+
+/* GWEVAL module functions - DEF FN support */
+struct variable *gwdata_find_fn_def(const char *name);
+float gweval_call_fn(const char *fn_name, float arg);
 
 /* GWSTS module functions - Statement Execution */
 void gwsts_init(void);

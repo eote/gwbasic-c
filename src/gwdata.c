@@ -222,3 +222,19 @@ bool gwdata_handle_error(uint16_t line) {
     printf("Error at line %d\n", line);
     return false;
 }
+
+/* DEF FN support */
+struct variable *gwdata_find_fn_def(const char *name) {
+    if (!g_state) return NULL;
+    
+    unsigned int idx = hash_name(name);
+    struct variable *v = g_state->var_table[idx];
+    
+    while (v) {
+        if (strcmp(v->name, name) == 0 && v->is_fn_def) {
+            return v;
+        }
+        v = v->next;
+    }
+    return NULL;
+}
