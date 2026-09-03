@@ -81,6 +81,7 @@ struct variable {
     var_type_t type;
     bool is_array;
     bool is_common;     /* COMMON flag: variable preserved across CHAIN */
+    bool is_field;      /* True if this variable is a FIELD variable pointing into a field buffer */
     
     /* DEF FN support */
     bool is_fn_def;           /* True if this variable is a DEF FN function definition */

@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
+#include <math.h>
 
 void bistrs_init(void) {
     /* No initialization needed */
@@ -48,7 +50,7 @@ char *bistrs_right(const char *str, int n) {
     return result;
 }
 
-/* MID$ - return substring from start position (1-based) of length len */
+/* MID$ - return substring from start position for len characters */
 char *bistrs_mid(const char *str, int start, int len) {
     if (!str || start <= 0 || len <= 0) {
         char *result = (char *)gwram_alloc(1);
@@ -57,14 +59,13 @@ char *bistrs_mid(const char *str, int start, int len) {
     }
     
     int str_len = strlen(str);
-    if (start > str_len) {
+    /* GW-BASIC: start is 1-based */
+    start--;
+    if (start >= str_len) {
         char *result = (char *)gwram_alloc(1);
         if (result) result[0] = '\0';
         return result;
     }
-    
-    /* Adjust to 0-based index */
-    start--;
     if (start + len > str_len) len = str_len - start;
     
     char *result = (char *)gwram_alloc(len + 1);
@@ -75,25 +76,41 @@ char *bistrs_mid(const char *str, int start, int len) {
     return result;
 }
 
-/* LEN - return length of string */
-int bistrs_len(const char *str) {
-    if (!str) return 0;
-    return (int)strlen(str);
-}
-
-/* ASC - return ASCII code of first character */
-int bistrs_asc(const char *str) {
-    if (!str || str[0] == '\0') return 0;
-    return (unsigned char)str[0];
-}
-
-/* CHR$ - return string of single character with given ASCII code */
-char *bistrs_chr(int code) {
-    char *result = (char *)gwram_alloc(2);
+/* UCASE$ - return uppercase version of string */
+char *bistrs_ucase(const char *str) {
+    if (!str) {
+        char *result = (char *)gwram_alloc(1);
+        if (result) result[0] = '\0';
+        return result;
+    }
+    
+    int len = strlen(str);
+    char *result = (char *)gwram_alloc(len + 1);
     if (!result) return NULL;
     
-    result[0] = (char)(code & 0xFF);
-    result[1] = '\0';
+    for (int i = 0; i < len; i++) {
+        result[i] = toupper((unsigned char)str[i]);
+    }
+    result[len] = '\0';
+    return result;
+}
+
+/* LCASE$ - return lowercase version of string */
+char *bistrs_lcase(const char *str) {
+    if (!str) {
+        char *result = (char *)gwram_alloc(1);
+        if (result) result[0] = '\0';
+        return result;
+    }
+    
+    int len = strlen(str);
+    char *result = (char *)gwram_alloc(len + 1);
+    if (!result) return NULL;
+    
+    for (int i = 0; i < len; i++) {
+        result[i] = tolower((unsigned char)str[i]);
+    }
+    result[len] = '\0';
     return result;
 }
 
@@ -102,7 +119,8 @@ char *bistrs_str(double val) {
     char *result = (char *)gwram_alloc(32);
     if (!result) return NULL;
     
-    sprintf(result, "%g", val);
+    /* GW-BASIC: STR$ of positive numbers has a leading space */
+    sprintf(result, "%s%g", (val >= 0) ? " " : "", val);
     return result;
 }
 
@@ -133,55 +151,23 @@ char *bistrs_space(int n) {
     return bistrs_string(n, ' ');
 }
 
-/* UCASE$ - return uppercase version of string */
-char *bistrs_ucase(const char *str) {
-    if (!str) {
+/* CHR$ - return character for ASCII code */
+char *bistrs_chr(int code) {
+    if (code < 0 || code > 255) {
         char *result = (char *)gwram_alloc(1);
         if (result) result[0] = '\0';
         return result;
     }
     
-    int len = strlen(str);
-    char *result = (char *)gwram_alloc(len + 1);
+    char *result = (char *)gwram_alloc(2);
     if (!result) return NULL;
     
-    for (int i = 0; i < len; i++) {
-        char c = str[i];
-        if (c >= 'a' && c <= 'z') {
-            result[i] = c - 'a' + 'A';
-        } else {
-            result[i] = c;
-        }
-    }
-    result[len] = '\0';
+    result[0] = (char)code;
+    result[1] = '\0';
     return result;
 }
 
-/* LCASE$ - return lowercase version of string */
-char *bistrs_lcase(const char *str) {
-    if (!str) {
-        char *result = (char *)gwram_alloc(1);
-        if (result) result[0] = '\0';
-        return result;
-    }
-    
-    int len = strlen(str);
-    char *result = (char *)gwram_alloc(len + 1);
-    if (!result) return NULL;
-    
-    for (int i = 0; i < len; i++) {
-        char c = str[i];
-        if (c >= 'A' && c <= 'Z') {
-            result[i] = c - 'A' + 'a';
-        } else {
-            result[i] = c;
-        }
-    }
-    result[len] = '\0';
-    return result;
-}
-
-/* MKI$ - convert integer to 2-byte string (little-endian) */
+/* MKI$ - convert integer to 2-byte string */
 char *bistrs_mki(int val) {
     char *result = (char *)gwram_alloc(3);  /* 2 bytes + null */
     if (!result) return NULL;
@@ -192,7 +178,7 @@ char *bistrs_mki(int val) {
     return result;
 }
 
-/* MKS$ - convert single precision float to 4-byte string (IEEE 754) */
+/* MKS$ - convert single precision float to 4-byte string */
 char *bistrs_mks(float val) {
     char *result = (char *)gwram_alloc(5);  /* 4 bytes + null */
     if (!result) return NULL;
@@ -229,4 +215,14 @@ float bistrs_cvs(const char *str) {
     return val;
 }
 
-/* Declaration for MKI$, MKS$, CVI, CVS in gweval.c */
+/* ASC - return ASCII code of first character */
+int bistrs_asc(const char *str) {
+    if (!str || !*str) return 0;
+    return (unsigned char)str[0];
+}
+
+/* LEN - return string length */
+int bistrs_len(const char *str) {
+    if (!str) return 0;
+    return strlen(str);
+}

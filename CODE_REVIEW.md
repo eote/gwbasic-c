@@ -1,33 +1,40 @@
-# GW-BASIC C Port - Code Review v88
+# GW-BASIC C Port - Code Review v90
 
-**日期**: 2026-09-01
-**审查范围**: commits `85ea7ee` → `de6f047` → `8505968` (HEAD)
-**测试状态**: 1086/1086 单元测试通过 ✅ | .bas 迁移测试全绿 ✅（test_resume 例外 ⚠️）
-**编译状态**: 无错误、零警告 ✅
+**日期**: 2026-09-03
+**审查范围**: 工作区未提交变更（HEAD = `35e9de1`）— v89 CRITICAL 修复 + 字符串函数重构 + CVI 修复
+**测试状态**: 1086/1086 单元测试通过 ✅ | .bas 全量回归恢复 ✅
+**编译状态**: 无错误 ✅
 **进度**: 44/44 模块 (100%)
-**总体评分**: B (良好) — v86/v87 全部修复兑现 + 测试迁移，但 test_resume 死循环测试和 177 万行垃圾 expected 入库
+**总体评分**: A- (优秀) — v89 CRITICAL 全部修复且实测恢复；根目录调试文件为残留问题
 
 ---
 
 ## 一、概述
 
-2 个提交（v87 后）：
+工作区未提交变更（v89 后）修复了 v89 报告的 2 个 CRITICAL，并重构字符串函数：
 
-| 提交 | 内容 | 对应 |
+| 变更 | 内容 | 评估 |
 |------|------|------|
-| `de6f047` | **gwdata_handle_error() 提取**（gwmain 去重）+ 8 个 .bas 迁移 tests/bas/ + .expected | ✅ v86 MEDIUM-2/3 |
-| `8505968` | ON ERROR 完整 + test_resume_line 新增 + 测试迁移收尾 | ✅ v87 MEDIUM-1 |
+| `src/gweval.c` | **比较运算符恢复**（700-705：`<>` `<` `<=` `>` `>=` `=` → -1/0）+ **除零 set_error(11) 恢复**（653）| ✅ v89 CRITICAL-1/2 修复 |
+| `src/bistrs.c` | MID$/UCASE$/LCASE$ 等新增/重构（+120）| ✅ |
+| `src/gweval.c` | 字符串拼接增强（"Line " + STR$(I) 链式）| ✅ |
+| `src/dskcom.c`/`gwbasic.h` | +1 各 | ⚠️ 抽查 |
+| `tests/bas/*.expected` ×7 | 行为变化同步（file_rand/line_input/put_get/read_data/resume_line/string_arrays/string_funcs）| ✅ |
+| `tests/test_bistrs.c` | +2 断言 | ✅ |
+| **根目录 20+ 调试 .bas** | test_debug*/test_cvi*/test_simple*/test_str/test_write*/test_print_num* | ❌ **未跟踪散落**（模式再现）|
+| `tests/bas/test_on_error.expected` | 新增但**未跟踪** | ⚠️ |
 
-**验证（clean rebuild + 输出内容级）:**
+**实测验证（v89 回归全部恢复 — 输出内容级）:**
 
-| 测试 | 输出 | 评估 |
-|------|------|------|
-| 单元测试 | ✅ 1086/1086 | 零警告 |
-| test_resume_next.bas | "After error (should not print)" — RESUME NEXT 跳过错误行 | ✅ |
-| **test_resume_line.bas** | "After RESUME line - X is now 1" — RESUME 指定行跳转 | ✅ 新增变体正确 |
-| test_resume.bas | ❌ **无限循环（5s 超时未退出）** | ⚠️ 见 HIGH-1 |
-| test_error/onerr_simple/error_stmt/err2/div | ✅ ERR=11 全链路 | ✅ |
-| 回归（using/read_data/put_get/string）| ✅ | ✅ |
+| 测试 | v89 | v90 (工作区) | 结论 |
+|------|-----|-------------|------|
+| test_cond.bas | "FAIL" | **"TRUE = -1 / PASS"** | ✅ 比较运算符修复 |
+| test_on_error.bas | handler 未触发 | **"Error handler, ERR= 11"** | ✅ 除零检测修复 |
+| test_put_get.bas | "5Record\x04" | " 5Record  5 ..." | ✅ 无乱码 |
+| test_read_data.bas | "102030" | " 10 20 30" | ✅ 数字空格恢复 |
+| test_def_fn.bas | ✅ | "SQUARE(5) =  25 ..." | ✅ 保持 |
+| test_string/string_funcs | ✅ | LEN/LEFT$/RIGHT$/MID$/UCASE$/LCASE$/STR$/VAL/CVI 全对 | ✅ |
+| test_multi_array/math | ✅ | PASS / SIN-COS 正确 | ✅ |
 
 ---
 
@@ -35,49 +42,41 @@
 
 ### 🟥 CRITICAL
 
-无。
+无。（v89 CRITICAL-1/2 已修复并在工作区实测确认）
 
 ### 🟧 HIGH
 
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | **test_resume.expected 提交了 177 万行（10.6 MB）死循环垃圾输出** — git 仓库污染 | `tests/bas/test_resume.expected` |
-| 2 | **test_resume.bas 设计缺陷 — 无限死循环**（RESUME 重试无法修复的错误行）| `tests/bas/test_resume.bas` |
-
-**详情:**
-
-#### HIGH-1: 177 万行垃圾 expected 入库
-
-```bash
-$ python ... test_resume.expected
-size: 10,674,176 bytes (10.6 MB), lines: 1,776,710
-```
-
-- `test_resume.bas`：`RESUME`（不带 NEXT）重试错误行 30（`X = 1 / 0`）— handler 设 `X = 1` 但 **1/0 永远除零失败** → 无限循环
-- 开发者生成 expected 时跑死循环程序 → 输出被无限写入 test_resume.expected → **177 万行未检查就提交**
-- **影响**: git 仓库被 10.6 MB 无效文件污染（含历史 — 每次 clone 都携带）；run_bas_tests.sh 不含 test_resume（幸免脚本运行），但文件本身是垃圾包袱
-- **修复**: 删除 test_resume.bas/.expected（run_bas_tests.sh 已不含 — 确认设计意图：RESUME 重试语义由 test_resume_line/next 覆盖）
-
-#### HIGH-2: test_resume.bas 死循环
-
-```
-30 X = 1 / 0      ← 错误源（永远失败）
-...
-120 RESUME        ← 重试 line 30 → 再除零 → handler → RESUME → ∞
-```
-
-- RESUME（无 NEXT/无 line）语义正确重试错误行 — 但该测试的"错误行"**不可修复** → 测试本身无法终止
-- **真实 GW-BASIC 行为**: 无限循环（GW-BASIC 同样会 loop）— 解释器行为正确，**测试设计错误**
-- **修复建议**: 删除 test_resume.bas；RESUME 重试用**可修复错误**（如文件读取重试、变量条件错误）
-
----
+无。
 
 ### 🟨 MEDIUM
 
-| # | 描述 |
-|---|------|
-| 1 | commit message 声称 "64/64" 但 run_bas_tests.sh 含 test_resume 吗？实测**不含**（仅 resume_next/resume_line）→ 声称应注明 test_resume 未纳入/已删除 |
-| 2 | 死循环测试无保护 — 未来若将 test_resume 加入脚本 → run_bas_tests.sh 永久挂起（无 timeout 机制）|
+| # | 描述 | 状态 |
+|---|------|------|
+| 1 | **根目录 20+ 调试 .bas 未跟踪散落**（test_debug*/test_cvi*/test_simple*/test_str/test_write*/test_print_num* — 与 v85/v86 模式再现）| ❌ |
+| 2 | **tests/bas/test_on_error.expected 新增未跟踪**（ON ERROR 测试的期望输出未入库 — run_bas_tests.sh 对比失效）| ❌ |
+| 3 | **工作区修复未提交** — v89 CRITICAL 修复仍在工作区（HEAD 35e9de1 仍是坏的）— 需提交 | ⚠️ |
+
+**详情:**
+
+#### MEDIUM-1: 根目录调试文件再现（第 2 次）
+
+```
+?? test_cvi2.bas / test_cvi_simple.bas / test_debug.bas~6 / test_print_num.bas~3
+?? test_simple.bas~5 / test_str.bas / test_write3~5.bas / test_write_read.bas~2
+```
+
+- v85 曾出现根目录 .bas 调试文件（ddabca9 清理 + 4058bcb .gitignore）— **本次再现**（20+ 文件）
+- .gitignore 模式（`/test_*_dbg*.bas`）未覆盖 `test_debug.bas`/`test_simple.bas` 等新命名
+- **建议**: 清理 + .gitignore 扩展（`/test_debug*.bas` `/test_cvi*.bas` `/test_write*.bas` 等）
+
+#### MEDIUM-2: test_on_error.expected 未跟踪
+
+- `tests/bas/test_on_error.expected` 新增但 ?? 状态 → 提交时不会包含 → ON ERROR 测试无期望输出对比
+
+#### MEDIUM-3: 修复未提交
+
+- **当前 HEAD (35e9de1) 的 gweval.c 仍是损坏状态**（比较/除零缺失）— 工作区修复一旦丢失，v89 回归重现
+- **建议尽快提交**（v89 CRITICAL 修复是高优先提交）
 
 ---
 
@@ -85,8 +84,8 @@ size: 10,674,176 bytes (10.6 MB), lines: 1,776,710
 
 | # | 描述 |
 |---|------|
-| 1 | test_onerr_off.bas 移入 NOT_IMPLEMENTED（3 SKIP：DEF FN/ON GOTO/ON ERR OFF）— 合理标注 |
-| 2 | expected 生成流程仍无输出大小/终止检查（177 万行教训 — 建议生成时设 timeout + 大小上限）|
+| 1 | dskcom.c/gwbasic.h 各 +1 行未抽查（FIELDS 相关？）|
+| 2 | 7 个 .expected 更新为行为变化（数字空格）— 需确认与 GW-BASIC 语义一致（抽查 read_data " 10 20 30" ✅）|
 
 ---
 
@@ -96,67 +95,68 @@ size: 10,674,176 bytes (10.6 MB), lines: 1,776,710
 
 | 决策 | 评价 |
 |------|------|
-| gwdata_handle_error() 提取（gwmain 去重）| ✅ 正确 — 消除两处重复 ON ERROR 检查 |
-| 8 个 .bas 迁移 tests/bas/ + .expected | ✅ v87 MEDIUM-1 兑现 |
-| test_resume_line.bas（RESUME line 变体）| ✅ 新增正确 |
-| test_onerr_off → NOT_IMPLEMENTED | ✅ 合理（设计性 FAIL）|
-| test_resume.bas/.expected（死循环产物）| ❌ HIGH-1/2 — 未检查提交 |
+| 比较运算符恢复（-1/0 语义）| ✅ 正确 — GW-BASIC 核心语义 |
+| 除零 set_error(11) 恢复 | ✅ 正确 — ON ERROR 陷阱 |
+| MID$/UCASE$/LCASE$ 移入 bistrs.c | ✅ 模块化重构 |
+| 字符串拼接链式增强 | ✅ 正确 |
+| expected 同步更新 | ✅ 行为变化同步 |
+| 根目录调试文件 | ❌ 模式再现（MEDIUM-1）|
 
 ### 测试覆盖分析
 
 | 指标 | 值 |
 |------|-----|
 | 单元测试 | ✅ 1086/1086 |
-| RESUME NEXT | ✅ |
-| RESUME line | ✅ 新增 |
-| ERROR/ERR/除零 | ✅ |
-| test_resume.expected 大小 | ❌ 10.6 MB / 177 万行（垃圾）|
-| .bas 迁移 | ✅ 8/8 |
+| 比较运算符（cond）| ✅ PASS |
+| 除零 + ON ERROR | ✅ ERR= 11 handler |
+| 字符串全函数 | ✅（LEN/LEFT$/RIGHT$/MID$/UCASE$/LCASE$/STR$/VAL/CVI）|
+| DEF FN | ✅ |
+| expected 覆盖 | ⚠️ on_error.expected 未跟踪 |
 
-**测试全面性评分: B** — 功能验证充分；test_resume 死循环/垃圾 expected 为质量缺口。
+**测试全面性评分: A-** — 全绿 + 回归恢复；跟踪问题待清理。
 
 ---
 
 ## 四、改进建议
 
-### 短期 (当前 sprint)
+### 短期 (当前 sprint) — 提交前
 
-1. **🟧 HIGH-1/2**: 删除 `test_resume.bas` + `test_resume.expected`（run_bas_tests.sh 已不含 — RESUME 语义已由 next/line 变体覆盖）
-2. **🟨 MEDIUM-1**: commit message 注明 64/64 不含 test_resume（已删/未纳入）
+1. **🟨 MEDIUM-3**: 提交 v89 CRITICAL 修复（比较/除零）— 高优先（HEAD 仍是损坏态）
+2. **🟨 MEDIUM-2**: `git add tests/bas/test_on_error.expected`
+3. **🟨 MEDIUM-1**: 清理根目录 20+ 调试 .bas + .gitignore 扩展（防第 3 次）
 
 ### 中期 (下个 sprint)
 
-3. run_bas_tests.sh 加**超时保护**（timeout 命令 — 防死循环测试挂起）
-4. expected 生成工具加**输出大小/终止检查**（防 177 万行再次发生）
-5. 路线: DEF FN → USING 格式集扩充
+4. 路线剩余: USING 格式集扩充（`+` `-` `*` `$` `,`）
+5. pre-commit 工具（根目录 .bas 审计）
 
 ### 长期
 
-6. pre-commit 检查：文件大小上限（防 >1MB 文本入库）、未跟踪文件审计
+6. 工作区状态盯控（修复长期滞留在工作区不提交 — 风险管理）
 
 ---
 
 ## 五、总结
 
-**总体评价**: `de6f047` + `8505968` 兑现了 v86/v87 的全部修复（REsUME NEXT/LINE 正确、M.EDIUM-1/2/3 完成、8 个 .bas 迁移入 tests/bas/），实测迁移测试与回归全绿。**但存在 2 个 HIGH**：test_resume.bas 是**无效死循环测试**（RESUME 重试永远失败的 `1/0`），其生成的 **177 万行（10.6MB）垃圾 expected 被提交**污染 git 仓库 — 提交前未检查输出大小。
+**总体评价**: 工作区未提交变更**修复了 v89 的 2 个 CRITICAL**（比较运算符 -1/0 恢复 + 除零 set_error(11) 恢复），并重构字符串函数（MID$/UCASE$/LCASE$ 移入 bistrs.c）+ 增强字符串拼接。**实测 v89 全部回归恢复**（cond PASS / handler ERR=11 / put_get 无乱码 / read_data 空格）。1086/1086 通过。**主要残留**：修复在工作区未提交（HEAD 35e9de1 仍是损坏态）、根目录 20+ 调试文件再现（第 2 次）、test_on_error.expected 未跟踪。
 
 **关键发现**:
-- 🟥 CRITICAL: 0
-- 🟧 HIGH: 2（177 万行垃圾 expected、死循环测试设计）
-- 🟨 MEDIUM: 2（声称不含 test_resume、无超时保护）
+- 🟥 CRITICAL: 0（v89 已修）
+- 🟧 HIGH: 0
+- 🟨 MEDIUM: 3（调试文件再现、expected 未跟踪、修复未提交）
 - 🟩 LOW: 2
 
 **编译与测试**:
-- ✅ 1086/1086 单元测试 + 零警告
-- ✅ RESUME NEXT/LINE、ERROR/ERR、除零全链路
-- ✅ 回归全绿（using/read_data/put_get/string）
-- ❌ test_resume.bas 死循环（5s 超时）
-- ❌ test_resume.expected 10.6MB / 177 万行（垃圾入库）
+- ✅ 1086/1086 单元测试
+- ✅ 比较运算符（cond "TRUE = -1 / PASS"）
+- ✅ 除零 + ON ERROR（"Error handler, ERR= 11"）
+- ✅ 字符串全函数 + DEF FN + 回归全绿
+- ⚠️ 根目录 20+ 调试文件未跟踪
 
-**建议**: 删除 test_resume.bas/.expected（一行级）+ run_bas_tests.sh 加超时保护后可合并。路线: DEF FN → USING 格式集。
+**建议**: **优先提交 v89 CRITICAL 修复**（当前 HEAD 仍损坏 — 工作区修复是唯一良好状态），然后清理调试文件 + 跟踪 expected。路线: USING 格式集扩充。
 
 ---
 
 **审查员**: AI Code Reviewer (gwbasic-code-review skill)
-**审查日期**: 2026-09-01
-**审查版本**: v88 — ON ERROR 完整 + 测试迁移 + 死循环测试/垃圾 expected
+**审查日期**: 2026-09-03
+**审查版本**: v90 — 工作区修复审查（v89 CRITICAL 修复确认 + 字符串重构）

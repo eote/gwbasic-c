@@ -26,6 +26,13 @@ test_output.log
 test_printf.c
 test_using_dbg*.bas
 test_print_space.bas
+test_debug*.bas
+test_cvi*.bas
+test_simple*.bas
+test_str*.bas
+test_write*.bas
+test_print*.bas
+test_debug*.bas
 
 # IDE/Editor
 .vscode/

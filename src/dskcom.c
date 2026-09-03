@@ -424,6 +424,7 @@ int dskcom_field(int filenum, const char *field_spec) {
             v = gwdata_alloc_variable(var_name, VT_STRING);
         }
         if (v) {
+            v->is_field = true;
             v->value.s.ptr = fd->field_buffer + current_offset;
             v->value.s.len = width;
             field_def->var = v;

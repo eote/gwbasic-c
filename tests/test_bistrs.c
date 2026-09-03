@@ -209,7 +209,7 @@ void test_bistrs_str_int(void) {
     char *result = bistrs_str(42.0);
     TEST_ASSERT(result != NULL, "STR$ result not NULL");
     if (result) {
-        TEST_ASSERT_EQ_STR(result, "42", "STR$(42) = '42'");
+        TEST_ASSERT_EQ_STR(result, " 42", "STR$(42) = ' 42'");
     }
     TEST_PASS("STR$ integer");
 }

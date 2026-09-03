@@ -71,9 +71,9 @@ static bool parser_match(parser_t *p, char c) {
 static float parse_expression(parser_t *p);
 static char *parse_string_expression(parser_t *p);
 
-/* String function helper: parse string expression until comma or closing paren
- * Supports string concatenation with + operator */
 static char *parse_string_expression(parser_t *p) {
+    char *result = NULL;
+    
     /* Try to parse as string literal first */
     char c = parser_peek(p);
     if (c == '\"') {
@@ -87,13 +87,12 @@ static char *parse_string_expression(parser_t *p) {
             p->pos++;  /* consume closing quote */
         }
         buf[i] = '\0';
-        char *result = gwdata_alloc_string(strlen(buf) + 1);
+        result = gwdata_alloc_string(strlen(buf) + 1);
         if (result) strcpy(result, buf);
-        return result;
     }
     
     /* Otherwise parse as general string expression (variable, array, function, concatenation) */
-    if (isalpha((unsigned char)c)) {
+    if (!result && isalpha((unsigned char)c)) {
         char name[41];
         size_t i = 0;
         while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_' || p->input[p->pos] == '$') && i < sizeof(name) - 1) {
@@ -229,16 +228,51 @@ static char *parse_string_expression(parser_t *p) {
         /* Scalar string variable */
         struct variable *v = gwdata_find_variable(name);
         if (v && v->type == VT_STRING && v->value.s.ptr) {
+            if (v->is_field) {
+                /* Field variables may not be null-terminated - create a copy */
+                char *result = gwdata_alloc_string(v->value.s.len + 1);
+                if (result) {
+                    memcpy(result, v->value.s.ptr, v->value.s.len);
+                    result[v->value.s.len] = '\0';
+                }
+                return result;
+            }
             return v->value.s.ptr;
         }
     }
     
     /* Check for string concatenation with + */
-    /* We need to handle cases like "Line " + STR$(I) */
-    /* The caller will handle this at a higher level */
+    /* Handle cases like "Line " + STR$(I) */
+    while (p->pos < p->len) {
+        /* Skip whitespace */
+        while (p->pos < p->len && isspace((unsigned char)p->input[p->pos])) p->pos++;
+        if (p->pos < p->len && p->input[p->pos] == '+') {
+            p->pos++;  /* consume '+' */
+            /* Skip whitespace after + */
+            while (p->pos < p->len && isspace((unsigned char)p->input[p->pos])) p->pos++;
+            
+            /* Parse right side of concatenation */
+            char *right = parse_string_expression(p);
+            if (right && result) {
+                /* Concatenate result + right */
+                size_t len1 = strlen(result);
+                size_t len2 = strlen(right);
+                char *concat = gwdata_alloc_string(len1 + len2 + 1);
+                if (concat) {
+                    strcpy(concat, result);
+                    strcat(concat, right);
+                    result = concat;
+                }
+            } else if (right) {
+                result = right;
+            }
+            continue;  /* Check for more + operators */
+        }
+        break;  /* No more + operators */
+    }
     
     /* Default: not a recognized string expression — return NULL so caller can try numeric eval */
-    return NULL;
+    return result;
 }
 
 static float parse_factor(parser_t *p) {
@@ -611,7 +645,14 @@ static float parse_term(parser_t *p) {
         } else if (c == '/') {
             parser_get(p);
             float right = parse_factor(p);
-            if (right != 0.0f) left /= right;
+            if (right != 0.0f) {
+                left /= right;
+            } else {
+                /* Division by zero - set error and return 0 */
+                if (g_state) {
+                    gwdata_set_error(11, g_state->current_line, 0);
+                }
+            }
         } else if (c == '\\') {
             parser_get(p);
             float right = parse_factor(p);
@@ -644,6 +685,26 @@ static float parse_expression(parser_t *p) {
         }
     }
     
+    /* Comparison operators: <, >, <=, >=, <>, = (return -1 for true, 0 for false) */
+    char op[3] = {0, 0, 0};
+    char c = parser_peek(p);
+    if (c == '<' || c == '>' || c == '=') {
+        op[0] = parser_get(p);
+        c = parser_peek(p);
+        if ((op[0] == '<' && c == '>') || (op[0] == '<' && c == '=') || (op[0] == '>' && c == '=')) {
+            op[1] = parser_get(p);
+        }
+        
+        float right = parse_expression(p);
+        
+        if (strcmp(op, "<>") == 0) left = (left != right) ? -1.0f : 0.0f;
+        else if (strcmp(op, "<") == 0) left = (left < right) ? -1.0f : 0.0f;
+        else if (strcmp(op, "<=") == 0) left = (left <= right) ? -1.0f : 0.0f;
+        else if (strcmp(op, ">") == 0) left = (left > right) ? -1.0f : 0.0f;
+        else if (strcmp(op, ">=") == 0) left = (left >= right) ? -1.0f : 0.0f;
+        else if (strcmp(op, "=") == 0) left = (left == right) ? -1.0f : 0.0f;
+    }
+    
     return left;
 }
 
@@ -669,13 +730,8 @@ char *gweval_eval_string(const char *expr) {
         return result;
     }
     
-    /* Fallback: try numeric expression and convert to string */
-    float num_val = gweval_eval_numeric(expr);
-    char num_buf[32];
-    sprintf(num_buf, "%g", num_val);
-    char *str_result = gwdata_alloc_string(strlen(num_buf) + 1);
-    if (str_result) strcpy(str_result, num_buf);
-    return str_result;
+    /* No fallback - return NULL for pure numeric expressions so caller can format properly */
+    return NULL;
 }
 
 void gweval_scan_var(const char **text, int *var_ptr) {
