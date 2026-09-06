@@ -183,7 +183,7 @@ void test_gwdata_fn_def(void) {
     struct variable *found = gwdata_find_fn_def("FNA");
     TEST_ASSERT(found == fn, "find_fn_def should find the FN definition");
     TEST_ASSERT(found->is_fn_def, "is_fn_def should be true");
-    TEST_ASSERT_EQ_INT(found->fn_text_ptr, 1234, "fn_text_ptr should match");
+    TEST_ASSERT_EQ_INTPTR(found->fn_text_ptr, 1234, "fn_text_ptr should match");
     
     /* Non-existent FN */
     struct variable *notfound = gwdata_find_fn_def("FNB");

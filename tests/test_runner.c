@@ -149,6 +149,16 @@ void test_call86_call_array_params(void);
 void test_call86_call_empty_parens(void);
 
 /* GWEVAL HELPER test functions */
+void test_gweval_scan_var_basic(void);
+void test_gweval_scan_var_array(void);
+void test_gweval_scan_var_empty(void);
+void test_gweval_frqint_basic(void);
+void test_gweval_chrgt2_basic(void);
+void test_gweval_chrgt2_empty(void);
+void test_gweval_synchr_match(void);
+void test_gweval_synchr_no_match(void);
+void test_gweval_synchr_eos(void);
+void test_gweval_synchr_null(void);
 
 /* ITSA86 test functions */
 void test_itsa86_init(void);
@@ -355,6 +365,14 @@ void test_ibmres_eval_extended(void);
 void test_ibmres_list_token(void);
 void test_ibmres_list_extended(void);
 void test_ibmres_term(void);
+/* Additional comprehensive IBMRES tests */
+void test_ibmres_all_core_statements(void);
+void test_ibmres_all_core_functions(void);
+void test_ibmres_all_extended_statements(void);
+void test_ibmres_all_extended_functions(void);
+void test_ibmres_operators(void);
+void test_ibmres_crunch_extended_comprehensive(void);
+void test_ibmres_eval_extended_comprehensive(void);
 
 /* OEMEV test functions */
 void test_oemev_init(void);
@@ -845,7 +863,19 @@ int main(void) {
     failed += run_test("math2_fix", test_math2_fix);
     failed += run_test("math_expression_eval", test_math_expression_eval);
 
-        /* ADVGRP tests */
+            /* GWEVAL HELPER tests */
+        failed += run_test("gweval_scan_var_basic", test_gweval_scan_var_basic);
+        failed += run_test("gweval_scan_var_array", test_gweval_scan_var_array);
+        failed += run_test("gweval_scan_var_empty", test_gweval_scan_var_empty);
+        failed += run_test("gweval_frqint_basic", test_gweval_frqint_basic);
+        failed += run_test("gweval_chrgt2_basic", test_gweval_chrgt2_basic);
+        failed += run_test("gweval_chrgt2_empty", test_gweval_chrgt2_empty);
+        failed += run_test("gweval_synchr_match", test_gweval_synchr_match);
+        failed += run_test("gweval_synchr_no_match", test_gweval_synchr_no_match);
+        failed += run_test("gweval_synchr_eos", test_gweval_synchr_eos);
+        failed += run_test("gweval_synchr_null", test_gweval_synchr_null);
+
+            /* ADVGRP tests */
     failed += run_test("advgrp_paint_basic", test_advgrp_paint_basic);
     failed += run_test("advgrp_paint_border_color", test_advgrp_paint_border_color);
     failed += run_test("advgrp_paint_out_of_bounds", test_advgrp_paint_out_of_bounds);
@@ -1064,24 +1094,32 @@ int main(void) {
                                 failed += run_test("biboot_lstvar", test_biboot_lstvar);
 
                                 /* IBMRES tests */
-                                failed += run_test("ibmres_init", test_ibmres_init);
-                                failed += run_test("ibmres_lookup_statement", test_ibmres_lookup_statement);
-                                failed += run_test("ibmres_lookup_function", test_ibmres_lookup_function);
-                                failed += run_test("ibmres_lookup_extended_stmt", test_ibmres_lookup_extended_stmt);
-                                failed += run_test("ibmres_lookup_extended_func", test_ibmres_lookup_extended_func);
-                                failed += run_test("ibmres_lookup_case_insensitive", test_ibmres_lookup_case_insensitive);
-                                failed += run_test("ibmres_lookup_not_found", test_ibmres_lookup_not_found);
-                                failed += run_test("ibmres_get_token", test_ibmres_get_token);
-                                failed += run_test("ibmres_get_token_name", test_ibmres_get_token_name);
-                                failed += run_test("ibmres_is_reserved_word", test_ibmres_is_reserved_word);
-                                failed += run_test("ibmres_get_keyword_type", test_ibmres_get_keyword_type);
-                                failed += run_test("ibmres_is_extended_token", test_ibmres_is_extended_token);
-                                failed += run_test("ibmres_get_token_length", test_ibmres_get_token_length);
-                                failed += run_test("ibmres_crunch_extended", test_ibmres_crunch_extended);
-                                failed += run_test("ibmres_eval_extended", test_ibmres_eval_extended);
-                                failed += run_test("ibmres_list_token", test_ibmres_list_token);
-                                failed += run_test("ibmres_list_extended", test_ibmres_list_extended);
-                                failed += run_test("ibmres_term", test_ibmres_term);
+                                                                failed += run_test("ibmres_init", test_ibmres_init);
+                                                                failed += run_test("ibmres_lookup_statement", test_ibmres_lookup_statement);
+                                                                failed += run_test("ibmres_lookup_function", test_ibmres_lookup_function);
+                                                                failed += run_test("ibmres_lookup_extended_stmt", test_ibmres_lookup_extended_stmt);
+                                                                failed += run_test("ibmres_lookup_extended_func", test_ibmres_lookup_extended_func);
+                                                                failed += run_test("ibmres_lookup_case_insensitive", test_ibmres_lookup_case_insensitive);
+                                                                failed += run_test("ibmres_lookup_not_found", test_ibmres_lookup_not_found);
+                                                                failed += run_test("ibmres_get_token", test_ibmres_get_token);
+                                                                failed += run_test("ibmres_get_token_name", test_ibmres_get_token_name);
+                                                                failed += run_test("ibmres_is_reserved_word", test_ibmres_is_reserved_word);
+                                                                failed += run_test("ibmres_get_keyword_type", test_ibmres_get_keyword_type);
+                                                                failed += run_test("ibmres_is_extended_token", test_ibmres_is_extended_token);
+                                                                failed += run_test("ibmres_get_token_length", test_ibmres_get_token_length);
+                                                                failed += run_test("ibmres_crunch_extended", test_ibmres_crunch_extended);
+                                                                failed += run_test("ibmres_eval_extended", test_ibmres_eval_extended);
+                                                                failed += run_test("ibmres_list_token", test_ibmres_list_token);
+                                                                failed += run_test("ibmres_list_extended", test_ibmres_list_extended);
+                                                                failed += run_test("ibmres_term", test_ibmres_term);
+                                                                /* Additional comprehensive IBMRES tests */
+                                                                failed += run_test("ibmres_all_core_statements", test_ibmres_all_core_statements);
+                                                                failed += run_test("ibmres_all_core_functions", test_ibmres_all_core_functions);
+                                                                failed += run_test("ibmres_all_extended_statements", test_ibmres_all_extended_statements);
+                                                                failed += run_test("ibmres_all_extended_functions", test_ibmres_all_extended_functions);
+                                                                failed += run_test("ibmres_operators", test_ibmres_operators);
+                                                                failed += run_test("ibmres_crunch_extended_comprehensive", test_ibmres_crunch_extended_comprehensive);
+                                                                failed += run_test("ibmres_eval_extended_comprehensive", test_ibmres_eval_extended_comprehensive);
 
                                 /* OEMEV tests */
                                 failed += run_test("oemev_init", test_oemev_init);

@@ -745,14 +745,26 @@ int gweval_frqint(void) {
 }
 
 void gweval_chrgt2(const char **text) {
-    /* Placeholder */
-    (void)text;
+    if (!text || !*text) return;
+    /* Advance pointer past whitespace, then one character */
+    while (**text && isspace((unsigned char)**text)) {
+        (*text)++;
+    }
+    if (**text) {
+        (*text)++;
+    }
 }
 
 void gweval_synchr(const char **text, char expected) {
-    /* Placeholder */
-    (void)text;
-    (void)expected;
+    if (!text || !*text) return;
+    /* Advance past whitespace, then check for expected character */
+    while (**text && isspace((unsigned char)**text)) {
+        (*text)++;
+    }
+    if (**text == expected) {
+        (*text)++;
+    }
+    /* If not matched, leave pointer at mismatch (GW-BASIC behavior) */
 }
 
 /* DEF FN function call support */

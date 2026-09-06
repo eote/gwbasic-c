@@ -2,6 +2,7 @@
 
 #include "test_framework.h"
 #include "../src/gwbasic.h"
+#include <math.h>
 
 void test_math1_init(void) {
     gwdata_init(); gwram_init(); gwinit_init();

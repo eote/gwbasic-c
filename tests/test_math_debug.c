@@ -1,5 +1,6 @@
 #include "test_framework.h"
 #include "../src/gwbasic.h"
+#include <math.h>
 
 void test_math_debug(void) {
     gwdata_init(); gwram_init(); gwinit_init();

@@ -33,8 +33,8 @@ static BYTE ATRMSK = 0;      /* Mask for current pixel */
 static BYTE ATRPAT = 0;      /* Bit pattern for current graphics attribute */
 static BYTE BORPAT = 0;      /* Border pattern for PAINT */
 static BYTE PGTSHF = 0;      /* Shift for PUT/GET alignment */
-static WORD PGTARY = 0;      /* Pointer to byte array for PUT/GET */
-static WORD PGTACT = 0;      /* Action function for PUT/GET */
+static intptr_t PGTARY = 0;  /* Pointer to byte array for PUT/GET (intptr_t for 64-bit) */
+static intptr_t PGTACT = 0;      /* Action function for PUT/GET (intptr_t for 64-bit) */
 static WORD CBFSEG = 0;      /* COM buffer segment */
 
 /* Screen mode variables */
@@ -714,9 +714,9 @@ int oem_pixsiz(void) {
 
 /* PGINIT - Initialize PUT/GET operation */
 void oem_pginit(int action, int *array_ptr, int bit_count) {
-    PGTARY = (int)array_ptr;
+    PGTARY = (intptr_t)array_ptr;
     PGTSHF = 0;
-    PGTACT = (int)pgt_actions[action];
+    PGTACT = (intptr_t)pgt_actions[action];
 }
 
 /* NREAD - Read horizontal pixels into array
@@ -1070,14 +1070,14 @@ void oem_set_atrpat(BYTE val) { ATRPAT = val; }
 BYTE oem_get_borpat(void) { return BORPAT; }
 void oem_set_borpat(BYTE val) { BORPAT = val; }
 
-WORD oem_get_pgtary(void) { return PGTARY; }
-void oem_set_pgtary(WORD val) { PGTARY = val; }
+intptr_t oem_get_pgtary(void) { return PGTARY; }
+void oem_set_pgtary(intptr_t val) { PGTARY = val; }
 
 WORD oem_get_pgtshf(void) { return PGTSHF; }
 void oem_set_pgtshf(WORD val) { PGTSHF = val; }
 
-WORD oem_get_pgtact(void) { return PGTACT; }
-void oem_set_pgtact(WORD val) { PGTACT = val; }
+intptr_t oem_get_pgtact(void) { return PGTACT; }
+void oem_set_pgtact(intptr_t val) { PGTACT = val; }
 
 BYTE oem_get_crtmod(void) { return CRTMOD; }
 void oem_set_crtmod(BYTE val) { CRTMOD = val; }

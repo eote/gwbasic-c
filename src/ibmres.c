@@ -228,6 +228,9 @@ static const struct keyword_entry g_core_keywords[] = {
 /* Token lookup tables */
 static const char *g_token_names[256] = {0};
 
+/* Forward declaration */
+static void ibmres_build_tables(void);
+
 /* Module initialization */
 void ibmres_init(void) {
     ibmres_build_tables();
