@@ -46,14 +46,20 @@ void test_gweval_frqint_basic(void) {
     TEST_PASS("gweval_frqint basic");
 }
 
-/* Test gweval_chrgt2 - advances pointer */
+/* Test gweval_chrgt2 - advances pointer only for chars < ':' (per ASM) */
 void test_gweval_chrgt2_basic(void) {
-    char text[] = "ABC";
-    char *p = text;
+    /* Test with char < ':' (space) - should skip spaces */
+    char text1[] = "  ABC";
+    char *p1 = text1;
+    gweval_chrgt2(&p1);
+    TEST_ASSERT(*p1 == 'A', "chrgt2 skips spaces for char < ':'");
     
-    gweval_chrgt2(&p);
+    /* Test with char >= ':' ('A') - should NOT advance */
+    char text2[] = "ABC";
+    char *p2 = text2;
+    gweval_chrgt2(&p2);
+    TEST_ASSERT(*p2 == 'A', "chrgt2 does not advance for char >= ':'");
     
-    TEST_ASSERT(*p == 'B', "chrgt2 advances pointer");
     TEST_PASS("gweval_chrgt2 basic");
 }
 
@@ -68,32 +74,40 @@ void test_gweval_chrgt2_empty(void) {
     TEST_PASS("gweval_chrgt2 empty");
 }
 
-/* Test gweval_synchr - matches expected char */
+/* Test gweval_synchr - matches expected char (no whitespace skip, per ASM) */
 void test_gweval_synchr_match(void) {
-    char text[] = "(EXPR)";
-    char *p = text;
+    /* Test with '(' which is < ':' - should skip spaces after match */
+    const char text1[] = "( EXPR)";
+    const char *p1 = text1;
     
-    gweval_synchr(&p, '(');
+    gweval_synchr(&p1, '(');
     
-    TEST_ASSERT(*p == 'E', "synchr matches and advances");
-    TEST_PASS("gweval_synchr match");
+    /* After matching '(', should advance and skip spaces */
+    TEST_ASSERT(*p1 == 'E', "synchr matches, advances, and skips spaces for char < ':'");
+    TEST_PASS("gweval_synchr match with space skip");
 }
 
-/* Test gweval_synchr - no match */
+/* Test gweval_synchr - no match sets syntax error */
 void test_gweval_synchr_no_match(void) {
-    char text[] = "EXPR)";
-    char *p = text;
+    const char text[] = "EXPR)";
+    const char *p = text;
+    int error_before = gwdata_get_error();
     
     gweval_synchr(&p, '(');
     
-    TEST_ASSERT(*p == 'E', "synchr doesn't advance on mismatch");
-    TEST_PASS("gweval_synchr no match");
+    int error_after = gwdata_get_error();
+    TEST_ASSERT(error_after == 2, "synchr mismatch sets error 2 (Syntax Error)");
+    TEST_ASSERT(*p == 'E', "synchr leaves pointer at mismatch");
+    
+    /* Reset error for next test */
+    gwdata_clear_error();
+    TEST_PASS("gweval_synchr no match sets error");
 }
 
 /* Test gweval_synchr - end of string */
 void test_gweval_synchr_eos(void) {
-    char text[] = "";
-    char *p = text;
+    const char text[] = "";
+    const char *p = text;
     
     gweval_synchr(&p, '(');
     
@@ -103,7 +117,7 @@ void test_gweval_synchr_eos(void) {
 
 /* Test gweval_synchr - null pointer */
 void test_gweval_synchr_null(void) {
-    char *p = NULL;
+    const char *p = NULL;
     
     gweval_synchr(&p, '(');
     

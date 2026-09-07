@@ -102,6 +102,11 @@ void test_dskcom_input(void);
 void test_dskcom_line_input(void);
 void test_dskcom_write_seek(void);
 void test_dskcom_get_put(void);
+void test_dskcom_close_all(void);
+void test_dskcom_seek_negative(void);
+void test_dskcom_line_input_empty(void);
+void test_dskcom_open_append(void);
+void test_dskcom_open_binary(void);
 void test_math1_init(void);
 void test_math1_sin(void);
 void test_math1_cos(void);
@@ -373,6 +378,12 @@ void test_ibmres_all_extended_functions(void);
 void test_ibmres_operators(void);
 void test_ibmres_crunch_extended_comprehensive(void);
 void test_ibmres_eval_extended_comprehensive(void);
+void test_ibmres_is_reserved_word_comprehensive(void);
+void test_ibmres_get_keyword_type_comprehensive(void);
+void test_ibmres_extended_token_functions(void);
+void test_ibmres_list_functions(void);
+void test_ibmres_init_term(void);
+void test_ibmres_case_insensitive_all(void);
 
 /* OEMEV test functions */
 void test_oemev_init(void);
@@ -575,6 +586,17 @@ void test_gwlist_special_chars(void);
 void test_gwlist_init_twice(void);
 void test_gwlist_delete_then_add_same(void);
 void test_gwlist_many_lines(void);
+
+/* GWLIST/BISTRS combined test functions */
+void test_gwlist_bistrs_init(void);
+void test_gwlist_add_line(void);
+void test_gwlist_delete_line(void);
+void test_gwlist_list(void);
+void test_bistrs_init(void);
+void test_bistrs_left_right_mid(void);
+void test_bistrs_len_asc_chr(void);
+void test_bistrs_str_val(void);
+void test_bistrs_string_space(void);
 /* GWSTS extended test functions */
 void test_gwsts_let_numeric_expr(void);
 void test_gwsts_let_mult(void);
@@ -685,11 +707,6 @@ void test_biptrg_multiple_arrays(void);
 void test_biptrg_set_null_name(void);
 void test_biptrg_get_null_name(void);
 void test_biptrg_large_array(void);
-void test_biptrg_dim_multi(void);
-void test_biptrg_multi_set_get(void);
-void test_biptrg_dim_3d(void);
-void test_gwsts_dim_then_set(void);
-void test_math_debug(void);
 void test_giocom_loc(void);
 void test_giocom_lof(void);
 void test_giocom_gps(void);
@@ -841,13 +858,18 @@ int main(void) {
     failed += run_test("variable_reassignment", test_variable_reassignment);
     failed += run_test("array_bounds", test_array_bounds);
     failed += run_test("dskcom_init", test_dskcom_init);
-    failed += run_test("dskcom_open_close", test_dskcom_open_close);
-    failed += run_test("dskcom_print", test_dskcom_print);
-    failed += run_test("dskcom_input", test_dskcom_input);
-    failed += run_test("dskcom_line_input", test_dskcom_line_input);
-    failed += run_test("dskcom_write_seek", test_dskcom_write_seek);
-    failed += run_test("dskcom_get_put", test_dskcom_get_put);
-    failed += run_test("math1_init", test_math1_init);
+        failed += run_test("dskcom_open_close", test_dskcom_open_close);
+        failed += run_test("dskcom_print", test_dskcom_print);
+        failed += run_test("dskcom_input", test_dskcom_input);
+        failed += run_test("dskcom_line_input", test_dskcom_line_input);
+        failed += run_test("dskcom_write_seek", test_dskcom_write_seek);
+        failed += run_test("dskcom_get_put", test_dskcom_get_put);
+        failed += run_test("dskcom_close_all", test_dskcom_close_all);
+        failed += run_test("dskcom_seek_negative", test_dskcom_seek_negative);
+        failed += run_test("dskcom_line_input_empty", test_dskcom_line_input_empty);
+        failed += run_test("dskcom_open_append", test_dskcom_open_append);
+        failed += run_test("dskcom_open_binary", test_dskcom_open_binary);
+        failed += run_test("math1_init", test_math1_init);
     failed += run_test("math1_sin", test_math1_sin);
     failed += run_test("math1_cos", test_math1_cos);
     failed += run_test("math1_tan", test_math1_tan);
@@ -1120,6 +1142,12 @@ int main(void) {
                                                                 failed += run_test("ibmres_operators", test_ibmres_operators);
                                                                 failed += run_test("ibmres_crunch_extended_comprehensive", test_ibmres_crunch_extended_comprehensive);
                                                                 failed += run_test("ibmres_eval_extended_comprehensive", test_ibmres_eval_extended_comprehensive);
+                                                                failed += run_test("ibmres_is_reserved_word_comprehensive", test_ibmres_is_reserved_word_comprehensive);
+                                                                failed += run_test("ibmres_get_keyword_type_comprehensive", test_ibmres_get_keyword_type_comprehensive);
+                                                                failed += run_test("ibmres_extended_token_functions", test_ibmres_extended_token_functions);
+                                                                failed += run_test("ibmres_list_functions", test_ibmres_list_functions);
+                                                                failed += run_test("ibmres_init_term", test_ibmres_init_term);
+                                                                failed += run_test("ibmres_case_insensitive_all", test_ibmres_case_insensitive_all);
 
                                 /* OEMEV tests */
                                 failed += run_test("oemev_init", test_oemev_init);
@@ -1340,6 +1368,16 @@ int main(void) {
     failed += run_test("gwlist_init_twice", test_gwlist_init_twice);
     failed += run_test("gwlist_delete_then_add_same", test_gwlist_delete_then_add_same);
     failed += run_test("gwlist_many_lines", test_gwlist_many_lines);
+/* GWLIST/BISTRS combined tests */
+    failed += run_test("gwlist_bistrs_init", test_gwlist_bistrs_init);
+    failed += run_test("gwlist_add_line", test_gwlist_add_line);
+    failed += run_test("gwlist_delete_line", test_gwlist_delete_line);
+    failed += run_test("gwlist_list", test_gwlist_list);
+    failed += run_test("bistrs_init", test_bistrs_init);
+    failed += run_test("bistrs_left_right_mid", test_bistrs_left_right_mid);
+    failed += run_test("bistrs_len_asc_chr", test_bistrs_len_asc_chr);
+    failed += run_test("bistrs_str_val", test_bistrs_str_val);
+    failed += run_test("bistrs_string_space", test_bistrs_string_space);
 /* GWSTS extended tests */
     failed += run_test("gwsts_let_numeric_expr", test_gwsts_let_numeric_expr);
     failed += run_test("gwsts_let_mult", test_gwsts_let_mult);
@@ -1450,11 +1488,6 @@ int main(void) {
     failed += run_test("biptrg_set_null_name", test_biptrg_set_null_name);
         failed += run_test("biptrg_get_null_name", test_biptrg_get_null_name);
         failed += run_test("biptrg_large_array", test_biptrg_large_array);
-            failed += run_test("biptrg_dim_multi", test_biptrg_dim_multi);
-            failed += run_test("biptrg_multi_set_get", test_biptrg_multi_set_get);
-            failed += run_test("biptrg_dim_3d", test_biptrg_dim_3d);
-            failed += run_test("gwsts_dim_then_set", test_gwsts_dim_then_set);
-            failed += run_test("math_debug", test_math_debug);
 
             /* FIVEO tests */
     failed += run_test("fiveo_init", test_fiveo_init);

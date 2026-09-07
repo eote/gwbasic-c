@@ -3,7 +3,7 @@
 #include "test_framework.h"
 #include "../src/gwbasic.h"
 
-void test_gwlist_init(void) {
+void test_gwlist_bistrs_init(void) {
     gwdata_init(); gwram_init(); gwinit_init();
     gwlist_init();
     

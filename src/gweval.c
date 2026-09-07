@@ -746,25 +746,37 @@ int gweval_frqint(void) {
 
 void gweval_chrgt2(const char **text) {
     if (!text || !*text) return;
-    /* Advance pointer past whitespace, then one character */
-    while (**text && isspace((unsigned char)**text)) {
-        (*text)++;
+    /* ASM CHRGT2: load char at pointer, check if < ':' */
+    char c = **text;
+    if (c == '\0') return;
+    /* If char < ':', advance to CHRCON behavior (skip spaces) */
+    if (c < ':') {
+        /* Skip spaces (CHRCON behavior) */
+        while (**text && **text == ' ') {
+            (*text)++;
+        }
     }
-    if (**text) {
-        (*text)++;
-    }
+    /* If char >= ':', return without advancing (caller will handle) */
 }
 
 void gweval_synchr(const char **text, char expected) {
     if (!text || !*text) return;
-    /* Advance past whitespace, then check for expected character */
-    while (**text && isspace((unsigned char)**text)) {
-        (*text)++;
+    /* ASM SYNCHR: expect exact character match, NO whitespace skipping */
+    if (**text != expected) {
+        /* ASM: JNZ SYNERR -> SNERR (Syntax Error) */
+        /* In C context, we set error and leave pointer at mismatch */
+        gwdata_set_error(2, 0, 0);  /* Error 2 = Syntax Error */
+        return;
     }
-    if (**text == expected) {
-        (*text)++;
+    /* Match: advance pointer */
+    (*text)++;
+    /* Check if char < ':' to decide whether to continue to CHRCON */
+    if (expected < ':') {
+        /* Skip spaces (CHRCON behavior) */
+        while (**text && **text == ' ') {
+            (*text)++;
+        }
     }
-    /* If not matched, leave pointer at mismatch (GW-BASIC behavior) */
 }
 
 /* DEF FN function call support */
