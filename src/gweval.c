@@ -770,8 +770,10 @@ void gweval_synchr(const char **text, char expected) {
     }
     /* Match: advance pointer */
     (*text)++;
-    /* Check if char < ':' to decide whether to continue to CHRCON */
-    if (expected < ':') {
+    /* Check if NEXT character (after match) < ':' to decide whether to continue to CHRCON
+     * ASM BIMISC.ASM:322: after match, MOV AL,[BX] then CMP AL,':' / JB SYNCON
+     * i.e., check the character AFTER the match */
+    if (**text && **text < ':') {
         /* Skip spaces (CHRCON behavior) */
         while (**text && **text == ' ') {
             (*text)++;

@@ -164,6 +164,7 @@ void test_gweval_synchr_match(void);
 void test_gweval_synchr_no_match(void);
 void test_gweval_synchr_eos(void);
 void test_gweval_synchr_null(void);
+void test_gweval_synchr_operator_eq(void);
 
 /* ITSA86 test functions */
 void test_itsa86_init(void);
@@ -707,6 +708,10 @@ void test_biptrg_multiple_arrays(void);
 void test_biptrg_set_null_name(void);
 void test_biptrg_get_null_name(void);
 void test_biptrg_large_array(void);
+void test_biptrg_dim_multi(void);
+void test_biptrg_multi_set_get(void);
+void test_biptrg_dim_3d(void);
+void test_gwsts_dim_then_set(void);
 void test_giocom_loc(void);
 void test_giocom_lof(void);
 void test_giocom_gps(void);
@@ -893,9 +898,10 @@ int main(void) {
         failed += run_test("gweval_chrgt2_basic", test_gweval_chrgt2_basic);
         failed += run_test("gweval_chrgt2_empty", test_gweval_chrgt2_empty);
         failed += run_test("gweval_synchr_match", test_gweval_synchr_match);
-        failed += run_test("gweval_synchr_no_match", test_gweval_synchr_no_match);
-        failed += run_test("gweval_synchr_eos", test_gweval_synchr_eos);
-        failed += run_test("gweval_synchr_null", test_gweval_synchr_null);
+                failed += run_test("gweval_synchr_no_match", test_gweval_synchr_no_match);
+                failed += run_test("gweval_synchr_eos", test_gweval_synchr_eos);
+                failed += run_test("gweval_synchr_null", test_gweval_synchr_null);
+                failed += run_test("gweval_synchr_operator_eq", test_gweval_synchr_operator_eq);
 
             /* ADVGRP tests */
     failed += run_test("advgrp_paint_basic", test_advgrp_paint_basic);
@@ -1488,6 +1494,10 @@ int main(void) {
     failed += run_test("biptrg_set_null_name", test_biptrg_set_null_name);
         failed += run_test("biptrg_get_null_name", test_biptrg_get_null_name);
         failed += run_test("biptrg_large_array", test_biptrg_large_array);
+        failed += run_test("biptrg_dim_multi", test_biptrg_dim_multi);
+        failed += run_test("biptrg_multi_set_get", test_biptrg_multi_set_get);
+        failed += run_test("biptrg_dim_3d", test_biptrg_dim_3d);
+        failed += run_test("gwsts_dim_then_set", test_gwsts_dim_then_set);
 
             /* FIVEO tests */
     failed += run_test("fiveo_init", test_fiveo_init);
