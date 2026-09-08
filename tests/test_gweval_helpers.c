@@ -112,6 +112,7 @@ void test_gweval_synchr_eos(void) {
     gweval_synchr(&p, '(');
     
     TEST_ASSERT(*p == '\0', "synchr handles EOS");
+    gwdata_clear_error();
     TEST_PASS("gweval_synchr end of string");
 }
 
