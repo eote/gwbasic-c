@@ -96,9 +96,9 @@ compare_output() {
         return 2  # No expected file
     fi
     
-    # Normalize line endings for comparison
-    local actual_norm=$(cat "$actual_file" | sed 's/\r$//')
-    local expected_norm=$(cat "$expected_file" | sed 's/\r$//')
+    # Normalize line endings for comparison: convert CRLF -> LF, then any remaining CR -> LF
+    local actual_norm=$(cat "$actual_file" | sed 's/\r\n/\n/g' | sed 's/\r/\n/g')
+    local expected_norm=$(cat "$expected_file" | sed 's/\r\n/\n/g' | sed 's/\r/\n/g')
     
     if [ "$actual_norm" = "$expected_norm" ]; then
         return 0  # Match
