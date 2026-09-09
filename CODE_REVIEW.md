@@ -1,40 +1,33 @@
-# GW-BASIC C Port - Code Review v90
+# GW-BASIC C Port - Code Review v98
 
-**日期**: 2026-09-03
-**审查范围**: 工作区未提交变更（HEAD = `35e9de1`）— v89 CRITICAL 修复 + 字符串函数重构 + CVI 修复
-**测试状态**: 1086/1086 单元测试通过 ✅ | .bas 全量回归恢复 ✅
-**编译状态**: 无错误 ✅
-**进度**: 44/44 模块 (100%)
-**总体评分**: A- (优秀) — v89 CRITICAL 全部修复且实测恢复；根目录调试文件为残留问题
+**日期**: 2026-09-09
+**审查范围**: commit `936a1ce`（v97 HIGH-1' synchr ASM 语义 bug + HIGH-2 多维数组/DIM 注册）独立验证
+**测试状态**: 单元测试 **1742/1742 通过**（706 注册函数，0 失败）✅ | .bas 集成 **65/67**（0 失败 + 2 预期跳过）✅
+**编译状态**: 干净重建成功（exit 0）| 警告 **107 条**（生产 52 / 测试 55，与上轮持平）
+**总体评分**: A- (优秀) — v97 全部 HIGH 项闭环，断言 +13 且多维数组/DIM 覆盖恢复；剩余仅 6 个低价值孤儿与风格/门槛项
 
 ---
 
 ## 一、概述
 
-工作区未提交变更（v89 后）修复了 v89 报告的 2 个 CRITICAL，并重构字符串函数：
+`936a1ce` 精确修复 v97 报告的两个 HIGH 项并补齐暴露测试。全部实测通过，提交信息与实际一致（首次），无新引入问题。
 
-| 变更 | 内容 | 评估 |
-|------|------|------|
-| `src/gweval.c` | **比较运算符恢复**（700-705：`<>` `<` `<=` `>` `>=` `=` → -1/0）+ **除零 set_error(11) 恢复**（653）| ✅ v89 CRITICAL-1/2 修复 |
-| `src/bistrs.c` | MID$/UCASE$/LCASE$ 等新增/重构（+120）| ✅ |
-| `src/gweval.c` | 字符串拼接增强（"Line " + STR$(I) 链式）| ✅ |
-| `src/dskcom.c`/`gwbasic.h` | +1 各 | ⚠️ 抽查 |
-| `tests/bas/*.expected` ×7 | 行为变化同步（file_rand/line_input/put_get/read_data/resume_line/string_arrays/string_funcs）| ✅ |
-| `tests/test_bistrs.c` | +2 断言 | ✅ |
-| **根目录 20+ 调试 .bas** | test_debug*/test_cvi*/test_simple*/test_str/test_write*/test_print_num* | ❌ **未跟踪散落**（模式再现）|
-| `tests/bas/test_on_error.expected` | 新增但**未跟踪** | ⚠️ |
+### 修复验收总表
 
-**实测验证（v89 回归全部恢复 — 输出内容级）:**
+| v97 项 | 声称 | 实测结果 | 结论 |
+|--------|------|----------|------|
+| HIGH-1' synchr 跳空格条件 | 改查匹配后字符 `**text < ':'` | ✅ 与 `BIMISC.ASM:322` (`MOV AL,[BX]; CMP AL,":"; JB SYNCON`) 逐行一致；`'= 42'` 用例断言指针落在 `'4'`（实际运行输出确认 PASS） | **已修复** |
+| HIGH-2 高价值孤儿注册 | 4 个（biptrg multi ×3 + gwsts dim_then_set） | ✅ 全部注册并**实际运行**（RUN 输出 4/4 PASS）：多维数组 DIM 2D/3D、multi set/get、DIM 语句解析+数组赋值均恢复覆盖 | **已修复** |
 
-| 测试 | v89 | v90 (工作区) | 结论 |
-|------|-----|-------------|------|
-| test_cond.bas | "FAIL" | **"TRUE = -1 / PASS"** | ✅ 比较运算符修复 |
-| test_on_error.bas | handler 未触发 | **"Error handler, ERR= 11"** | ✅ 除零检测修复 |
-| test_put_get.bas | "5Record\x04" | " 5Record  5 ..." | ✅ 无乱码 |
-| test_read_data.bas | "102030" | " 10 20 30" | ✅ 数字空格恢复 |
-| test_def_fn.bas | ✅ | "SQUARE(5) =  25 ..." | ✅ 保持 |
-| test_string/string_funcs | ✅ | LEN/LEFT$/RIGHT$/MID$/UCASE$/LCASE$/STR$/VAL/CVI 全对 | ✅ |
-| test_multi_array/math | ✅ | PASS / SIN-COS 正确 | ✅ |
+### 实测指标（vs v97）
+
+| 指标 | v97 | v98 |
+|------|-----|-----|
+| 注册测试函数 | 701 | **706**（+5：4 孤儿 + synchr_operator_eq） |
+| 断言（全部通过） | 1729 | **1742**（+13：multi 3 + dim_then_set + operator_eq） |
+| 孤儿（定义未注册） | 10 | **6**（全部低价值） |
+| .bas 集成 | 65/67 | **65/67** ✅ |
+| 警告 | 107 | 107 |
 
 ---
 
@@ -42,50 +35,29 @@
 
 ### 🟥 CRITICAL
 
-无。（v89 CRITICAL-1/2 已修复并在工作区实测确认）
+无。
 
 ### 🟧 HIGH
 
-无。
+无。（v97 的 2 个 HIGH 均已闭环，本提交无新 HIGH。）
 
 ### 🟨 MEDIUM
 
-| # | 描述 | 状态 |
-|---|------|------|
-| 1 | **根目录 20+ 调试 .bas 未跟踪散落**（test_debug*/test_cvi*/test_simple*/test_str/test_write*/test_print_num* — 与 v85/v86 模式再现）| ❌ |
-| 2 | **tests/bas/test_on_error.expected 新增未跟踪**（ON ERROR 测试的期望输出未入库 — run_bas_tests.sh 对比失效）| ❌ |
-| 3 | **工作区修复未提交** — v89 CRITICAL 修复仍在工作区（HEAD 35e9de1 仍是坏的）— 需提交 | ⚠️ |
-
-**详情:**
-
-#### MEDIUM-1: 根目录调试文件再现（第 2 次）
-
-```
-?? test_cvi2.bas / test_cvi_simple.bas / test_debug.bas~6 / test_print_num.bas~3
-?? test_simple.bas~5 / test_str.bas / test_write3~5.bas / test_write_read.bas~2
-```
-
-- v85 曾出现根目录 .bas 调试文件（ddabca9 清理 + 4058bcb .gitignore）— **本次再现**（20+ 文件）
-- .gitignore 模式（`/test_*_dbg*.bas`）未覆盖 `test_debug.bas`/`test_simple.bas` 等新命名
-- **建议**: 清理 + .gitignore 扩展（`/test_debug*.bas` `/test_cvi*.bas` `/test_write*.bas` 等）
-
-#### MEDIUM-2: test_on_error.expected 未跟踪
-
-- `tests/bas/test_on_error.expected` 新增但 ?? 状态 → 提交时不会包含 → ON ERROR 测试无期望输出对比
-
-#### MEDIUM-3: 修复未提交
-
-- **当前 HEAD (35e9de1) 的 gweval.c 仍是损坏状态**（比较/除零缺失）— 工作区修复一旦丢失，v89 回归重现
-- **建议尽快提交**（v89 CRITICAL 修复是高优先提交）
-
----
+| # | 描述 | 文件 | 行号 |
+|---|------|------|------|
+| 1 | **main() 缩进混乱恶化** — gweval 块新增的 3 行注册用 16 空格缩进（同块 `gweval_synchr_match` 为 8 空格，函数体基准为 4 空格），v95 起连续 4 轮指出未收敛；本次 diff 中 901-904 行缩进漂移 8→16 造成块内不一致 | `tests/test_runner.c` | 901-904 |
+| 2 | **6 个低价值孤儿待清理决策** — ① `test_gwdata_string_heap_impl`/`wrapper`（与已注册 `string_heap` 重复的中间版本，删）；② `test_gwlist_init`（已声明未注册，被 `init_twice` 替代，删或并入）；③ `test_math_debug`（与 `test_math.c:192` 重复，删）；④ `test_scnedt_inlin0_pinlin`/`inlin0_inlin`（空壳：仅调用函数后 `TEST_PASS` 无断言，若保留需补断言） | `tests/test_*.c` | — |
+| 3 | **test 错误状态泄漏持续**（v97 MEDIUM-5 未处理）— `test_gweval_synchr_eos` 空串场景设置 error 2 后无清理，残留到后续测试；当前无雷，但缺跑测试隔离机制 | `tests/test_gweval_helpers.c` | 96-103 |
+| 4 | **根 Makefile TEST_SRCS 死变量（第 4 轮）** / **gwbasic.h 缺 bimisc trap API 声明（第 3 轮）** — 均未处理；`test_gweval_helpers.c` 重复 ×2 仍在 | `Makefile`、`src/gwbasic.h` | 52-53 |
+| 5 | **107 条警告继续超零警告门槛 2 倍** — 生产 52（oem.c 31 未用函数/参数/恒真比较、gwsts 7、ibmres 2 sign-compare 等）、测试 55（next86 18 + call86 8 + gweval_helpers 7 const 指针、bimisc 6、framework 6） | 多处 | — |
 
 ### 🟩 LOW
 
-| # | 描述 |
-|---|------|
-| 1 | dskcom.c/gwbasic.h 各 +1 行未抽查（FIELDS 相关？）|
-| 2 | 7 个 .expected 更新为行为变化（数字空格）— 需确认与 GW-BASIC 语义一致（抽查 read_data " 10 20 30" ✅）|
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | `test_gweval_helpers.c` 末尾无换行符 + 新测试注释冗余（14 行描述重复 3 遍同一逻辑）；建议简化注释并补文件末换行 | `tests/test_gweval_helpers.c` 126-139 |
+| 2 | 新增测试名 `test_gweval_synchr_operator_eq` 与注册名 `gweval_synchr_operator_eq` 前缀规则一致 ✅；但测试内容集中验证 `'='` 单字符，可补 `':'`/`'<'` 参数化变体 | `tests/test_gweval_helpers.c` |
+| 3 | synchr 修复中 `**text && **text < ':'` 对 TAB（0x09 < ':' 且非空格）走分支但不消费（while 只认 `' '`）；与 ASM CHRCON 的 LOWCHR 路径（TAB→LOWCHR）有差异，当前无调用者无影响，可记录为已知边界 | `src/gweval.c` 774-780 |
 
 ---
 
@@ -95,68 +67,44 @@
 
 | 决策 | 评价 |
 |------|------|
-| 比较运算符恢复（-1/0 语义）| ✅ 正确 — GW-BASIC 核心语义 |
-| 除零 set_error(11) 恢复 | ✅ 正确 — ON ERROR 陷阱 |
-| MID$/UCASE$/LCASE$ 移入 bistrs.c | ✅ 模块化重构 |
-| 字符串拼接链式增强 | ✅ 正确 |
-| expected 同步更新 | ✅ 行为变化同步 |
-| 根目录调试文件 | ❌ 模式再现（MEDIUM-1）|
+| synchr 修复采用 `**text < ':'` | ✅ 严格对齐 ASM（注释引用 BIMISC.ASM:322），修复最小侵入（2 行） |
+| 暴露用例 `"= 42"` 验证运算符场景 | ✅ 类型正确：精确覆盖 v97 指出的 `expected >= ':'` 分支（`=` 0x3D），断言指向 `'4'` 而非空格 |
+| 孤儿注册顺序（声明+注册+运行验证） | ✅ 声明区、注册区、RUN 输出三处一致，`gwsts_dim_then_set` 注册名与函数名匹配 |
+| 提交信息口径 | ✅ 首次与实测完全一致（1742/1742、65/67 均验证属实） |
 
-### 测试覆盖分析
+### 测试覆盖分析（实测）
 
-| 指标 | 值 |
-|------|-----|
-| 单元测试 | ✅ 1086/1086 |
-| 比较运算符（cond）| ✅ PASS |
-| 除零 + ON ERROR | ✅ ERR= 11 handler |
-| 字符串全函数 | ✅（LEN/LEFT$/RIGHT$/MID$/UCASE$/LCASE$/STR$/VAL/CVI）|
-| DEF FN | ✅ |
-| expected 覆盖 | ⚠️ on_error.expected 未跟踪 |
+| 功能 | 状态 |
+|------|------|
+| gweval_synchr：匹配/不匹配(SNERR-eq)/EOS/空指针/运算符`=`跳空格 | ✅ 5 路径全覆盖 |
+| 多维数组：DIM 2D/3D、set/get multi | ✅ 覆盖恢复（RUN 3/3 PASS） |
+| DIM 语句解析 + 数组赋值（gwsts 集成） | ✅ 覆盖恢复（RUN PASS） |
+| 低价值孤儿 6 个 | ⚠️ 无价值增量（重复/空壳），待清理 |
 
-**测试全面性评分: A-** — 全绿 + 回归恢复；跟踪问题待清理。
+**测试全面性评分: A-** — 断言 1742 全绿、.bas 65/67、孤儿仅剩 6 个低价值；主要功能路径（数组含多维、DIM 解析、字符串、文件 I/O、ON ERROR、def FN）均有运行时验证。
 
 ---
 
 ## 四、改进建议
 
-### 短期 (当前 sprint) — 提交前
+### 短期（当前 sprint）
+1. 清理 6 个低价值孤儿：`string_heap_impl/wrapper`、`math_debug` 直接删除（重复）；`gwlist_init` 删除或并入 `init_twice`；`scnedt_inlin0_*` 补断言或删除 — 目标孤儿归零。
+2. 统一 main() 注册块缩进（建议全局一次性 clang-format，4 空格基准）。
+3. 补 `\n` 到 `test_gweval_helpers.c` 文件尾 + 精简冗余注释。
 
-1. **🟨 MEDIUM-3**: 提交 v89 CRITICAL 修复（比较/除零）— 高优先（HEAD 仍是损坏态）
-2. **🟨 MEDIUM-2**: `git add tests/bas/test_on_error.expected`
-3. **🟨 MEDIUM-1**: 清理根目录 20+ 调试 .bas + .gitignore 扩展（防第 3 次）
-
-### 中期 (下个 sprint)
-
-4. 路线剩余: USING 格式集扩充（`+` `-` `*` `$` `,`）
-5. pre-commit 工具（根目录 .bas 审计）
+### 中期（下个 sprint）
+4. 测试隔离：run_test 包装内重置 g_state（error_code/变量表），杜绝跨测试错误码泄漏。
+5. 删除根 Makefile TEST_SRCS 死变量；gwbasic.h 补 bimisc trap API 声明。
+6. 零警告冲刺（107 → ≤50 → 0）：先清理测试侧 const 指针（next86/call86/gweval_helpers 35 条）与 framework 格式串。
 
 ### 长期
-
-6. 工作区状态盯控（修复长期滞留在工作区不提交 — 风险管理）
+7. "定义↔注册一致性"自动校验入 CI（已建议 2 轮 — 人工核对成本已连续 5 轮）。
+8. ASM 直译函数"行为等价用例"制度推广到全部解析原语（本轮 synchr 即受益）。
 
 ---
 
 ## 五、总结
 
-**总体评价**: 工作区未提交变更**修复了 v89 的 2 个 CRITICAL**（比较运算符 -1/0 恢复 + 除零 set_error(11) 恢复），并重构字符串函数（MID$/UCASE$/LCASE$ 移入 bistrs.c）+ 增强字符串拼接。**实测 v89 全部回归恢复**（cond PASS / handler ERR=11 / put_get 无乱码 / read_data 空格）。1086/1086 通过。**主要残留**：修复在工作区未提交（HEAD 35e9de1 仍是损坏态）、根目录 20+ 调试文件再现（第 2 次）、test_on_error.expected 未跟踪。
-
-**关键发现**:
-- 🟥 CRITICAL: 0（v89 已修）
-- 🟧 HIGH: 0
-- 🟨 MEDIUM: 3（调试文件再现、expected 未跟踪、修复未提交）
-- 🟩 LOW: 2
-
-**编译与测试**:
-- ✅ 1086/1086 单元测试
-- ✅ 比较运算符（cond "TRUE = -1 / PASS"）
-- ✅ 除零 + ON ERROR（"Error handler, ERR= 11"）
-- ✅ 字符串全函数 + DEF FN + 回归全绿
-- ⚠️ 根目录 20+ 调试文件未跟踪
-
-**建议**: **优先提交 v89 CRITICAL 修复**（当前 HEAD 仍损坏 — 工作区修复是唯一良好状态），然后清理调试文件 + 跟踪 expected。路线: USING 格式集扩充。
-
----
-
-**审查员**: AI Code Reviewer (gwbasic-code-review skill)
-**审查日期**: 2026-09-03
-**审查版本**: v90 — 工作区修复审查（v89 CRITICAL 修复确认 + 字符串重构）
+**总体评价**: 收尾轮 — v97 全部 HIGH 项闭环、提交信息首次与实测完全一致、新的暴露用例（`'= 42'`）精准命中修复点；多维数组与 DIM 语句覆盖恢复，断言 1742 全绿、.bas 65/67 保持。
+**关键发现**: 0 CRITICAL / 0 HIGH / 5 MEDIUM / 3 LOW。全项目进入"无 HIGH"状态，剩余均为风格、门槛（零警告/缩进/死代码清理）与 6 个低价值孤儿问题。
+**建议**: 短期清孤儿与缩进；中期零警告冲刺 + 死变量/声明补齐 + 测试隔离；长期 CI 自动化一致性校验。下轮关注：孤儿归零、警告 ≤50。
