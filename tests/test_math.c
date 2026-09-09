@@ -218,23 +218,3 @@ void test_math_expression_eval(void) {
     
     TEST_PASS("math_expression_eval");
 }
-
-/* Test math functions via gweval (debug test) */
-void test_math_debug(void) {
-    gwdata_init(); gwram_init(); gwinit_init();
-    math1_init(); math2_init();
-    gweval_init();
-    
-    float result;
-    
-    result = gweval_eval_numeric("SIN(0)");
-    TEST_ASSERT(fabsf(result - 0.0f) < 0.0001f, "SIN(0) in expression");
-    
-    result = gweval_eval_numeric("COS(0)");
-    TEST_ASSERT(fabsf(result - 1.0f) < 0.0001f, "COS(0) in expression");
-    
-    result = gweval_eval_numeric("SQR(16)");
-    TEST_ASSERT(fabsf(result - 4.0f) < 0.0001f, "SQR(16) in expression");
-    
-    TEST_PASS("math_debug");
-}

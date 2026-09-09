@@ -102,6 +102,7 @@ void test_scnedt_get_buf_len(void) {
 void test_scnedt_inlin0_pinlin(void) {
     scnedt_init();
     scnedt_pinlin();  /* Use public PINLIN function */
+    /* PINLIN should set up line input mode without error */
     TEST_PASS("scnedt_inlin0_pinlin");
 }
 
@@ -109,5 +110,6 @@ void test_scnedt_inlin0_pinlin(void) {
 void test_scnedt_inlin0_inlin(void) {
     scnedt_init();
     scnedt_inlin();  /* Use public INLIN function */
+    /* INLIN should set up line input mode without error */
     TEST_PASS("scnedt_inlin0_inlin");
 }

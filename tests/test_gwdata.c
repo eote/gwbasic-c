@@ -193,17 +193,11 @@ void test_gwdata_fn_def(void) {
     TEST_PASS("DEF FN support works");
 }
 
-/* NO main() function - test_runner.c provides the main entry point */
-
-/* Compatibility wrappers for test_runner.c expected test names */
+/* Compatibility wrapper for test_runner.c expected test names */
 void test_gwdata_init(void) {
     test_gwdata_init_state();
 }
 
 void test_gwdata_variable_table(void) {
     test_gwdata_variable_alloc_find();
-}
-
-void test_gwdata_string_heap_wrapper(void) {
-    test_gwdata_string_heap();
 }
