@@ -94,7 +94,7 @@ void test_gwdata_variable_type_handling(void) {
 }
 
 /* Test: String heap allocation */
-void test_gwdata_string_heap_impl(void) {
+static void test_gwdata_string_heap_impl(void) {
     setup();
     
     /* Allocate string */

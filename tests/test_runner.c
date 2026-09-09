@@ -434,6 +434,8 @@ void test_scnedt_erredt(void);
 void test_scnedt_edit(void);
 void test_scnedt_scnsem(void);
 void test_scnedt_get_buf_len(void);
+void test_scnedt_inlin0_pinlin(void);
+void test_scnedt_inlin0_inlin(void);
 
 /* OEMCBK test functions */
 void test_oemcbk_init(void);
@@ -1191,18 +1193,20 @@ int main(void) {
                                 failed += run_test("oemsnd_term_cleanup", test_oemsnd_term_cleanup);
 
                                 /* SCNEDT tests */
-                                failed += run_test("scnedt_init", test_scnedt_init);
-                                failed += run_test("scnedt_clrflg", test_scnedt_clrflg);
-                                failed += run_test("scnedt_edtbrk", test_scnedt_edtbrk);
-                                failed += run_test("scnedt_pinlin", test_scnedt_pinlin);
-                                failed += run_test("scnedt_qinlin", test_scnedt_qinlin);
-                                failed += run_test("scnedt_inlin", test_scnedt_inlin);
-                                failed += run_test("scnedt_sinlin", test_scnedt_sinlin);
-                                failed += run_test("scnedt_set_get_buf", test_scnedt_set_get_buf);
-                                failed += run_test("scnedt_erredt", test_scnedt_erredt);
-                                failed += run_test("scnedt_edit", test_scnedt_edit);
-                                failed += run_test("scnedt_scnsem", test_scnedt_scnsem);
-                                failed += run_test("scnedt_get_buf_len", test_scnedt_get_buf_len);
+                                                                failed += run_test("scnedt_init", test_scnedt_init);
+                                                                failed += run_test("scnedt_clrflg", test_scnedt_clrflg);
+                                                                failed += run_test("scnedt_edtbrk", test_scnedt_edtbrk);
+                                                                failed += run_test("scnedt_pinlin", test_scnedt_pinlin);
+                                                                failed += run_test("scnedt_qinlin", test_scnedt_qinlin);
+                                                                failed += run_test("scnedt_inlin", test_scnedt_inlin);
+                                                                failed += run_test("scnedt_sinlin", test_scnedt_sinlin);
+                                                                failed += run_test("scnedt_set_get_buf", test_scnedt_set_get_buf);
+                                                                failed += run_test("scnedt_erredt", test_scnedt_erredt);
+                                                                failed += run_test("scnedt_edit", test_scnedt_edit);
+                                                                failed += run_test("scnedt_scnsem", test_scnedt_scnsem);
+                                                                failed += run_test("scnedt_get_buf_len", test_scnedt_get_buf_len);
+                                                                failed += run_test("scnedt_inlin0_pinlin", test_scnedt_inlin0_pinlin);
+                                                                failed += run_test("scnedt_inlin0_inlin", test_scnedt_inlin0_inlin);
 
                                 /* OEMCBK tests */
                                 failed += run_test("oemcbk_init", test_oemcbk_init);
@@ -1371,7 +1375,8 @@ int main(void) {
     failed += run_test("gwlist_insert_at_beginning", test_gwlist_insert_at_beginning);
     failed += run_test("gwlist_insert_at_end", test_gwlist_insert_at_end);
     failed += run_test("gwlist_special_chars", test_gwlist_special_chars);
-    failed += run_test("gwlist_init_twice", test_gwlist_init_twice);
+        failed += run_test("gwlist_init", test_gwlist_init);
+        failed += run_test("gwlist_init_twice", test_gwlist_init_twice);
     failed += run_test("gwlist_delete_then_add_same", test_gwlist_delete_then_add_same);
     failed += run_test("gwlist_many_lines", test_gwlist_many_lines);
 /* GWLIST/BISTRS combined tests */

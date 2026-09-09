@@ -125,17 +125,14 @@ void test_gweval_synchr_null(void) {
     TEST_PASS("gweval_synchr null pointer");
 }
 
-/* Test gweval_synchr - operator '=' (>= ':') should skip spaces if NEXT char < ':'
- * Note: ASM checks the NEXT character after the match, not the expected character.
- * For "= 42", after matching '=', the next char is space (0x20) < ':', so it WILL skip spaces. */
+/* Test gweval_synchr - operator '=': ASM checks NEXT char after match.
+ * For "= 42", next char is space (0x20) < ':', so it skips spaces. */
 void test_gweval_synchr_operator_eq(void) {
-    /* Test with '=' - next char is space (0x20) < ':', so it WILL skip spaces (ASM behavior) */
     const char text[] = "= 42";
     const char *p = text;
     
     gweval_synchr(&p, '=');
     
-    /* After matching '=', next char is space (0x20) < ':', so it WILL skip spaces */
-    TEST_ASSERT(*p == '4', "synchr with '=' should skip spaces when next char is space");
+    TEST_ASSERT(*p == '4', "synchr with '=' skips spaces when next char is space");
     TEST_PASS("gweval_synchr operator = skips spaces (ASM behavior)");
 }
