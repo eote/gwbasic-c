@@ -94,7 +94,7 @@ void test_gwdata_variable_type_handling(void) {
 }
 
 /* Test: String heap allocation */
-static void test_gwdata_string_heap_impl(void) {
+void test_gwdata_string_heap(void) {
     setup();
     
     /* Allocate string */
@@ -117,11 +117,6 @@ static void test_gwdata_string_heap_impl(void) {
     
     teardown();
     TEST_PASS("string heap alloc works");
-}
-
-/* Compatibility wrapper for test_runner.c */
-void test_gwdata_string_heap(void) {
-    test_gwdata_string_heap_impl();
 }
 
 /* Test: Program buffer operations (basic) */

@@ -98,22 +98,22 @@ void test_scnedt_get_buf_len(void) {
     TEST_PASS("scnedt_get_buf_len");
 }
 
-/* Test scnedt_inlin0 with mode -1 (PINLIN) */
-void test_scnedt_inlin0_pinlin(void) {
+/* Test scnedt_inlin0 init state for PINLIN mode (-1) */
+void test_scnedt_init_state_pinlin(void) {
     scnedt_init();
     /* Verify init state before PINLIN call */
     TEST_ASSERT_EQ_INT(scnedt_get_buf_len(), 0, "Buffer length is 0 after init");
     /* PINLIN sets F_EDPG=0xFF (program statement edit mode) */
     /* We can't call pinlin() directly (waits for keyboard), but init state is correct */
-    TEST_PASS("scnedt_inlin0_pinlin init state");
+    TEST_PASS("scnedt_init_state_pinlin");
 }
 
-/* Test scnedt_inlin0 with mode 0 (INLIN/QINLIN/SINLIN) */
-void test_scnedt_inlin0_inlin(void) {
+/* Test scnedt_inlin0 init state for INLIN/QINLIN/SINLIN mode (0) */
+void test_scnedt_init_state_inlin(void) {
     scnedt_init();
     /* Verify init state before INLIN call */
     TEST_ASSERT_EQ_INT(scnedt_get_buf_len(), 0, "Buffer length is 0 after init");
     /* INLIN sets F_EDPG=0 (BASIC INPUT mode) */
     /* We can't call inlin() directly (waits for keyboard), but init state is correct */
-    TEST_PASS("scnedt_inlin0_inlin init state");
+    TEST_PASS("scnedt_init_state_inlin");
 }

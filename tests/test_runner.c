@@ -434,8 +434,8 @@ void test_scnedt_erredt(void);
 void test_scnedt_edit(void);
 void test_scnedt_scnsem(void);
 void test_scnedt_get_buf_len(void);
-void test_scnedt_inlin0_pinlin(void);
-void test_scnedt_inlin0_inlin(void);
+void test_scnedt_init_state_pinlin(void);
+void test_scnedt_init_state_inlin(void);
 
 /* OEMCBK test functions */
 void test_oemcbk_init(void);
@@ -1205,8 +1205,8 @@ int main(void) {
                                                                 failed += run_test("scnedt_edit", test_scnedt_edit);
                                                                 failed += run_test("scnedt_scnsem", test_scnedt_scnsem);
                                                                 failed += run_test("scnedt_get_buf_len", test_scnedt_get_buf_len);
-                                                                failed += run_test("scnedt_inlin0_pinlin", test_scnedt_inlin0_pinlin);
-                                                                failed += run_test("scnedt_inlin0_inlin", test_scnedt_inlin0_inlin);
+                                                                failed += run_test("scnedt_init_state_pinlin", test_scnedt_init_state_pinlin);
+                                                                failed += run_test("scnedt_init_state_inlin", test_scnedt_init_state_inlin);
 
                                 /* OEMCBK tests */
                                 failed += run_test("oemcbk_init", test_oemcbk_init);
