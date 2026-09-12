@@ -32,6 +32,9 @@ static int parse_using_format(const char *fmt, int *int_digits, int *frac_digits
     const char *p = fmt;
     bool in_frac = false;
     bool seen_digit = false;
+    (void)seen_digit;
+    int temp = 0;
+    (void)temp;
     
     while (*p) {
         if (*p == '#') {
@@ -66,6 +69,7 @@ static int parse_using_format(const char *fmt, int *int_digits, int *frac_digits
 /* Format number with comma separators */
 static void format_with_commas(char *buf, const char *num_str) {
     char temp[64];
+    (void)temp;
     int len = strlen(num_str);
     int comma_pos = len % 3;
     if (comma_pos == 0) comma_pos = 3;

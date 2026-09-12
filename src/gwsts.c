@@ -33,7 +33,11 @@ void gwsts_init(void) {
 
 /* FIELD statement: FIELD #filenum, width AS var$, width AS var$, ... */
 int gwsts_handle_field(const char *trimmed) {
-    char *rest = trimmed + 6;  /* Skip "FIELD " */
+    /* Make a mutable copy since we need to modify the string */
+    char buf[256];
+    strncpy(buf, trimmed, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    char *rest = buf + 6;  /* Skip "FIELD " */
     while (*rest && isspace((unsigned char)*rest)) rest++;
     
     if (*rest == '#') {
@@ -62,7 +66,11 @@ int gwsts_handle_field(const char *trimmed) {
 
 /* LSET statement: LSET var$ = value */
 int gwsts_handle_lset(const char *trimmed) {
-    char *rest = trimmed + 5;  /* Skip "LSET " */
+    /* Make a mutable copy since we need to modify the string */
+    char buf[256];
+    strncpy(buf, trimmed, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    char *rest = buf + 5;  /* Skip "LSET " */
     while (*rest && isspace((unsigned char)*rest)) rest++;
     
     char *eq = strchr(rest, '=');
@@ -103,7 +111,11 @@ int gwsts_handle_lset(const char *trimmed) {
 
 /* RSET statement: RSET var$ = value */
 int gwsts_handle_rset(const char *trimmed) {
-    char *rest = trimmed + 5;  /* Skip "RSET " */
+    /* Make a mutable copy since we need to modify the string */
+    char buf[256];
+    strncpy(buf, trimmed, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    char *rest = buf + 5;  /* Skip "RSET " */
     while (*rest && isspace((unsigned char)*rest)) rest++;
     
     char *eq = strchr(rest, '=');
@@ -144,7 +156,11 @@ int gwsts_handle_rset(const char *trimmed) {
 
 /* PUT statement: PUT #filenum, [record] */
 int gwsts_handle_put(const char *trimmed) {
-    char *rest = trimmed + 4;  /* Skip "PUT " */
+    /* Make a mutable copy since we need to modify the string */
+    char buf[256];
+    strncpy(buf, trimmed, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    char *rest = buf + 4;  /* Skip "PUT " */
     while (*rest && isspace((unsigned char)*rest)) rest++;
     
     if (*rest == '#') {
@@ -181,7 +197,11 @@ int gwsts_handle_put(const char *trimmed) {
 
 /* GET statement: GET #filenum, [record] */
 int gwsts_handle_get(const char *trimmed) {
-    char *rest = trimmed + 4;  /* Skip "GET " */
+    /* Make a mutable copy since we need to modify the string */
+    char buf[256];
+    strncpy(buf, trimmed, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    char *rest = buf + 4;  /* Skip "GET " */
     while (*rest && isspace((unsigned char)*rest)) rest++;
     
     if (*rest == '#') {
@@ -936,7 +956,7 @@ int gwsts_exec_statement(const char *text) {
             if (starts_with(rest, "NEXT")) {
                 /* RESUME NEXT - continue after error line */
                 int err_line = gwdata_get_error_line();
-                int err_text = gwdata_get_error_text_ptr();
+                (void)gwdata_get_error_text_ptr();
                 
                 /* Find the line after the error line */
                 extern struct program_line *gwlist_get_first_line(void);
@@ -955,7 +975,7 @@ int gwsts_exec_statement(const char *text) {
             } else if (*rest == '\0') {
                 /* RESUME - retry the line that caused error */
                 int err_line = gwdata_get_error_line();
-                int err_text = gwdata_get_error_text_ptr();
+                (void)gwdata_get_error_text_ptr();
                 gwdata_clear_error();
                 gwdata_exit_error_handler();
                 result = err_line;  /* Jump to error line */

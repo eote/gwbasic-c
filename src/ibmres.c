@@ -246,7 +246,7 @@ void ibmres_build_tables(void) {
     }
     
     /* Populate from core keywords */
-    for (i = 0; i < NUM_CORE_KEYWORDS; i++) {
+    for (i = 0; i < (int)NUM_CORE_KEYWORDS; i++) {
         const struct keyword_entry *kw = &g_core_keywords[i];
         
         if (kw->type == TK_STMT && kw->token < 256) {
@@ -274,7 +274,7 @@ int ibmres_get_token_length(BYTE first_byte) {
 const struct keyword_entry* ibmres_lookup_keyword(const char *name) {
     if (!name) return NULL;
     
-    for (int i = 0; i < NUM_CORE_KEYWORDS; i++) {
+    for (int i = 0; i < (int)NUM_CORE_KEYWORDS; i++) {
         if (strcasecmp(g_core_keywords[i].name, name) == 0) {
             return &g_core_keywords[i];
         }

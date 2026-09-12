@@ -97,7 +97,7 @@ int next86_pop_for(struct for_entry *entry) {
 }
 
 /* Find matching FOR entry for a NEXT statement */
-struct for_entry* next86_find_for(const char *var_name, WORD next_text_ptr) {
+struct for_entry* next86_find_for(const char *var_name) {
     /* Search from top of stack down - match by variable name */
     for (int i = g_for_sp - 1; i >= 0; i--) {
         struct for_entry *entry = &g_for_stack[i];
@@ -129,7 +129,7 @@ int next86_next(const char **text) {
             entry = &g_for_stack[g_for_sp - 1];
         }
     } else {
-        entry = next86_find_for(var_name, g_nxttxt);
+        entry = next86_find_for(var_name);
     }
     
     if (!entry) {

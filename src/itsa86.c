@@ -45,7 +45,6 @@ static WORD g_maxmem_seg = 0;  /* MAXMEM segment */
 static WORD g_topmem_seg = 0;  /* TOPMEM segment */
 static WORD g_stklow_seg = 0;  /* STKLOW segment */
 static WORD g_filtab = 0;      /* FILTAB */
-static WORD g_memsiz_val = 0;  /* MEMSIZ value */
 static WORD g_freflg = 0;      /* FREFLG - bytes free message flag */
 static WORD g_cpmmem = 0;      /* CPMMEM */
 static WORD g_stklow_val = 0;  /* STKLOW value */
@@ -152,10 +151,14 @@ void itsa86_mapini(void) {
 /* MAPCLC - Calculate final memory map limits */
 void itsa86_mapclc(void) {
     WORD dx, cx, bx;
-    
+    (void)dx;
+    (void)cx;
+    (void)bx;
+
     /* Validate/get COM buffer size */
     /* DX = COM buffer size (from OEM) */
     WORD dx_val = 0; /* Would come from OEM SETCBF */
+    (void)dx_val;
     
     /* Calculate NEWDS (New DS segment) */
     /* NEWDS = (D + 15/16) + CS: */

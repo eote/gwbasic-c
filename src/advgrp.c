@@ -54,9 +54,6 @@ static int queue_in = 0;
 static int queue_out = 0;
 static int psnlen = 0;
 
-/* Forward declarations */
-static void map_xyc(void);
-
 /* Module initialization */
 void advgrp_init(void) {
     /* Initialize default values */
@@ -148,6 +145,9 @@ void advgrp_paint(int x, int y, int fill_color, int border_color) {
 /* CIRCLE - Draw circle with aspect ratio and angles */
 /* Syntax: CIRCLE (x,y),radius[,color[,start_angle[,end_angle[,aspect]]]] */
 void advgrp_circle(int x, int y, int radius, int color, float start_angle, float end_angle, float aspect) {
+    (void)start_angle;
+    (void)end_angle;
+    (void)aspect;
     if (g_screen_mode == 0) return;  /* Text mode */
     if (radius <= 0) return;
     

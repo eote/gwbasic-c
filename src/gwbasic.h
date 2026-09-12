@@ -560,7 +560,7 @@ int next86_push_for(BYTE token, intptr_t var_ptr, WORD next_text_ptr,
                     BYTE step_sign, BYTE var_type, float step, float limit,
                     WORD for_line, WORD for_next_line, const char *var_name);
 int next86_pop_for(struct for_entry *entry);
-struct for_entry* next86_find_for(const char *var_name, WORD next_text_ptr);
+struct for_entry* next86_find_for(const char *var_name);
 int next86_next(const char **text);
 int next86_for(const char **text);
 int next86_get_for_depth(void);
