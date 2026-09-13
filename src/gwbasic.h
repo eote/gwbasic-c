@@ -389,7 +389,16 @@ int bimisc_is_file_io(void);
 void bimisc_stack_init(void);
 void bimisc_get_stack(int entries);
 
-/* READ/DATA support functions */
+/* BIMISC trap API */
+void bimisc_trap_on(unsigned char *trap_flag_ptr);
+void bimisc_trap_off(unsigned char *trap_flag_ptr);
+void bimisc_trap_stop(unsigned char *trap_flag_ptr);
+void bimisc_trap_reset(unsigned char *trap_flag_ptr);
+void bimisc_trap_request(unsigned char *trap_flag_ptr);
+void bimisc_trap_free(unsigned char *trap_flag_ptr);
+int bimisc_check_traps(void);
+void bimisc_set_trap_address(int trap_num, int line_number);
+
 void bimisc_data_init(void);  /* Initialize DATA pointer at program start */
 int bimisc_read(const char **text, int var_count, char **var_names);  /* READ statement */
 

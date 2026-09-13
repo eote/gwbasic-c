@@ -330,7 +330,12 @@ static int scnedt_inlin0(int mode) {
                     }
                 }
                 
-                if (CSRX <= BUFLEN) {
+                /* In C, BYTE is 0-255, BUFLEN=255 so CSRX<=BUFLEN is always true for valid CSRX.
+ * The logic handles overflow via CSRX++ wrapping. Keep comparison but suppress warning. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtype-limits"
+                if (CSRX <= (BYTE)BUFLEN) {
+#pragma GCC diagnostic pop
                     g_buf[CSRX-1] = ch;
                     if (CSRX > g_buf_len) g_buf_len = CSRX;
                     CSRX++;

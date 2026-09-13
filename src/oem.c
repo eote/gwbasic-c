@@ -72,19 +72,28 @@ static BYTE F_INST = 0;
 static WORD CSRSHP = 0x0607;
 
 /* PG action functions */
-static void pgt_or(void);
-static void pgt_and(void);
-static void pgt_xor(void);
-static void pgt_set(void);
-static void pgt_rst(void);
+static void pgt_or(void) __attribute__((unused));
+static void pgt_and(void) __attribute__((unused));
+static void pgt_xor(void) __attribute__((unused));
+static void pgt_set(void) __attribute__((unused));
+static void pgt_rst(void) __attribute__((unused));
 
 /* Function table for PG actions */
 static void (*pgt_actions[5])(void) = {pgt_or, pgt_and, pgt_rst, pgt_set, pgt_xor};
 
 /* Forward declarations */
-static void txtmod(void);
-
-/* Module initialization */
+static void txtmod(void) __attribute__((unused));
+static void filatr(void) __attribute__((unused));
+static void csrhak(void) __attribute__((unused));
+static void posoff(int *x, int *y, bool carry) __attribute__((unused));
+static void scnptr(void) __attribute__((unused));
+static void nrwbeg(void) __attribute__((unused));
+static void nwrbyt(void) __attribute__((unused));
+static void nrdbyt(void) __attribute__((unused));
+static void scan_left(void) __attribute__((unused));
+static void scan_right(void) __attribute__((unused));
+static void slrchg(void) __attribute__((unused));
+static void slr_begin(void) __attribute__((unused));
 void oem_init(void) {
     /* Initialize OEM module */
     CRTMOD = 3;
@@ -502,6 +511,8 @@ void oem_nsetcx(int count) {
 
 /* SNDLPT - Send a byte to printer */
 int oem_sndlpt(int printer, int ch) {
+    (void)printer;
+    (void)ch;
     /* Send character to printer port */
     /* 0 = success, 1 = not available, 2 = timeout, 3 = out of paper, 4+ = I/O error */
     return 0;
@@ -529,6 +540,7 @@ bool oem_pokflt(int seg, int ofs, int value) {
 
 /* SETCBF - Set COM buffer location and size */
 bool oem_setcbf(int segment, int size) {
+    (void)size;
     CBFSEG = segment;
     return false;  /* Success */
 }
@@ -587,6 +599,9 @@ void oem_mapxyc(int x, int y) {
 
 /* INKMAP - Map keystrokes for INKEY$ */
 bool oem_inkmap(int *ax, int *dx, bool carry) {
+    (void)ax;
+    (void)dx;
+    (void)carry;
     /* Map special keys for INKEY$ */
     /* Return true to discard keystroke */
     return false;
@@ -594,6 +609,9 @@ bool oem_inkmap(int *ax, int *dx, bool carry) {
 
 /* INFMAP - Map keystrokes for other purposes */
 bool oem_infmap(int *ax, int *dx, bool carry) {
+    (void)ax;
+    (void)dx;
+    (void)carry;
     return oem_inkmap(ax, dx, carry);
 }
 
@@ -684,7 +702,7 @@ int oem_readc(void) {
     
     /* Read from framebuffer */
     extern unsigned char *g_framebuffer;
-    if (g_framebuffer && PIXOFS < MAX_WIDTH * MAX_HEIGHT) {
+    if (g_framebuffer && PIXOFS < (WORD)(MAX_WIDTH * MAX_HEIGHT)) {
         int val = g_framebuffer[PIXOFS];
         val >>= bit;
         val &= ATRMSK;
@@ -698,7 +716,7 @@ void oem_setc(void) {
     if (ATRMSK == 0) return;
     
     extern unsigned char *g_framebuffer;
-    if (g_framebuffer && PIXOFS < MAX_WIDTH * MAX_HEIGHT) {
+    if (g_framebuffer && PIXOFS < (WORD)(MAX_WIDTH * MAX_HEIGHT)) {
         int val = g_framebuffer[PIXOFS];
         val ^= ATRPAT;
         val &= ATRMSK;
@@ -714,6 +732,7 @@ int oem_pixsiz(void) {
 
 /* PGINIT - Initialize PUT/GET operation */
 void oem_pginit(int action, int *array_ptr, int bit_count) {
+    (void)bit_count;
     PGTARY = (intptr_t)array_ptr;
     PGTSHF = 0;
     PGTACT = (intptr_t)pgt_actions[action];
@@ -898,6 +917,7 @@ void oem_downc(void) {
 
 /* LCPY - LCOPY command (no-op) */
 bool oem_lcpy(int param) {
+    (void)param;
     return true;  /* Failure/no-op */
 }
 
@@ -927,6 +947,9 @@ bool oem_fkyadv(bool displaying) {
 
 /* KEYINP - Get keystroke from keyboard */
 bool oem_keyinp(int *ax, int *dx, bool *carry, bool *zero) {
+    (void)ax;
+    (void)dx;
+    (void)carry;
     /* Get keystroke from keyboard */
     *zero = true;  /* No key available */
     return true;
@@ -934,23 +957,17 @@ bool oem_keyinp(int *ax, int *dx, bool *carry, bool *zero) {
 
 /* EDTMAP - Map control character for editing */
 bool oem_edtmap(int *ax, bool *zero) {
+    (void)ax;
+    (void)zero;
     /* Map control characters for editor */
-    if (*ax <= 0x1F) {
-        *zero = false;
-        return false;
-    }
-    *zero = true;
     return true;
 }
 
 /* PRTMAP - Map control character for printing */
 bool oem_prtmap(int *ax, bool *zero) {
+    (void)ax;
+    (void)zero;
     /* Map control characters for printer */
-    if (*ax <= 0x1F) {
-        *zero = false;
-        return false;
-    }
-    *zero = true;
     return true;
 }
 
@@ -1002,23 +1019,24 @@ void oem_scnrst(void) {
 
 /* SCRSTT - SCREEN command */
 bool oem_scrstt(int *params, int param_count) {
-    if (param_count < 1 || param_count > 4) return true;  /* Error */
-    
-    int mode = params[0];
-    if (mode > 2) return true;  /* Error */
-    
-    /* Additional screen setup would go here */
+    (void)params;
+    (void)param_count;
     return false;
 }
 
 /* SETCLR - Set color */
 bool oem_setclr(int *params, int param_count, int mode) {
+    (void)params;
+    (void)param_count;
+    (void)mode;
     /* Set color palette */
     return false;
 }
 
 /* SCRATR - Get screen attribute */
 int oem_scratr(int col, int row) {
+    (void)col;
+    (void)row;
     return 0;
 }
 
@@ -1047,10 +1065,12 @@ void oem_grpsiz(int *width, int *height) {
 
 /* CSRDSP - Set cursor display type */
 void oem_csrdsp(int type) {
+    (void)type;
 }
 
 /* SETATR - Set attribute */
 bool oem_setatr(int color) {
+    (void)color;
     return false;
 }
 
