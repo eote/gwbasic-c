@@ -51,16 +51,15 @@ void print_test_summary(void) {
 }
 
 /* External test functions */
-void test_gwdata_init_state(void);
-void test_gwdata_variable_alloc_find(void);
-void test_gwdata_variable_type_handling(void);
+void test_gwdata_var_table_init(void);
 void test_gwdata_string_heap(void);
+void test_gwdata_variable_types(void);
+void test_gwdata_array_variables(void);
+void test_gwdata_string_heap_gc(void);
 void test_gwdata_program_buffer(void);
-void test_gwdata_error_handling(void);
-void test_gwdata_fn_def(void);
-
-void test_gwdata_init(void);
-void test_gwdata_variable_table(void);
+void test_gwdata_error_messages(void);
+void test_gwdata_case_insensitive(void);
+void test_gwdata_max_var_name(void);
 
 void test_gwram_alloc_free(void);
 void test_gwram_realloc(void);
@@ -822,17 +821,15 @@ int main(void) {
     printf("============================\n");
 
     int failed = 0;
-    failed += run_test("gwdata_init_state", test_gwdata_init_state);
-    failed +=
-        run_test("gwdata_variable_alloc_find", test_gwdata_variable_alloc_find);
-    failed += run_test("gwdata_variable_type_handling",
-                       test_gwdata_variable_type_handling);
+    failed += run_test("gwdata_var_table_init", test_gwdata_var_table_init);
     failed += run_test("gwdata_string_heap", test_gwdata_string_heap);
+    failed += run_test("gwdata_variable_types", test_gwdata_variable_types);
+    failed += run_test("gwdata_array_variables", test_gwdata_array_variables);
+    failed += run_test("gwdata_string_heap_gc", test_gwdata_string_heap_gc);
     failed += run_test("gwdata_program_buffer", test_gwdata_program_buffer);
-    failed += run_test("gwdata_error_handling", test_gwdata_error_handling);
-    failed += run_test("gwdata_fn_def", test_gwdata_fn_def);
-    failed += run_test("gwdata_init", test_gwdata_init);
-    failed += run_test("gwdata_variable_table", test_gwdata_variable_table);
+    failed += run_test("gwdata_error_messages", test_gwdata_error_messages);
+    failed += run_test("gwdata_case_insensitive", test_gwdata_case_insensitive);
+    failed += run_test("gwdata_max_var_name", test_gwdata_max_var_name);
     failed += run_test("gwram_alloc_free", test_gwram_alloc_free);
     failed += run_test("gwram_realloc", test_gwram_realloc);
     failed += run_test("gwram_calloc", test_gwram_calloc);

@@ -13,7 +13,10 @@ struct _runtime_state *g_state = NULL;
 static unsigned int hash_name(const char *name) {
     unsigned int hash = 0;
     while (*name) {
-        hash = hash * 31 + (unsigned char)(*name);
+        char c = *name;
+        /* Convert to uppercase for case-insensitive hashing */
+        if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
+        hash = hash * 31 + (unsigned char)c;
         name++;
     }
     return hash % MAX_VARIABLES;
@@ -107,7 +110,7 @@ struct variable *gwdata_find_variable(const char *name) {
     struct variable *v = g_state->var_table[idx];
     
     while (v) {
-        if (strcmp(v->name, name) == 0) {
+        if (strcasecmp(v->name, name) == 0) {
             return v;
         }
         v = v->next;
@@ -221,6 +224,87 @@ bool gwdata_handle_error(uint16_t line) {
     /* No ON ERROR handler or handler not found */
     printf("Error at line %d\n", line);
     return false;
+}
+
+/* DEF FN support */
+struct variable *gwdata_alloc_array(const char *name, var_type_t type, int dim_count, const int *dims) {
+    if (!g_state || dim_count <= 0 || dim_count > 8) return NULL;
+    
+    struct variable *v = gwdata_alloc_variable(name, type);
+    if (!v) return NULL;
+    
+    v->is_array = true;
+    v->dim_count = dim_count;
+    
+    /* Calculate total elements */
+    int total_elements = 1;
+    for (int i = 0; i < dim_count; i++) {
+        if (dims[i] <= 0) return NULL;
+        v->dims[i] = dims[i];
+        total_elements *= dims[i];
+    }
+    
+    /* Calculate element size based on type */
+    size_t elem_size = 0;
+    switch (type) {
+        case VT_INTEGER: elem_size = sizeof(int32_t); break;
+        case VT_SINGLE:  elem_size = sizeof(float); break;
+        case VT_DOUBLE:  elem_size = sizeof(double); break;
+        case VT_STRING:  elem_size = sizeof(char*); break;  /* String descriptor pointer */
+        default: elem_size = sizeof(float); break;
+    }
+    
+    size_t total_size = total_elements * elem_size;
+    v->array_data = calloc(total_elements, elem_size);
+    if (!v->array_data) return NULL;
+    
+    return v;
+}
+
+char *gwdata_get_txttab(void) {
+    if (!g_state) return NULL;
+    return g_state->prog_buf.data;
+}
+
+const char *gwdata_get_error_message(int err_code) {
+    /* Error messages from GWDATA.ASM ERRTAB */
+    static const char *messages[] = {
+        [1]  = "Syntax error",
+        [2]  = "NEXT without FOR",
+        [3]  = "RETURN without GOSUB",
+        [4]  = "Out of DATA",
+        [5]  = "Illegal function call",
+        [6]  = "Division by zero",
+        [7]  = "Overflow",
+        [8]  = "Out of memory",
+        [9]  = "Undefined line number",
+        [10] = "Subscript out of range",
+        [11] = "Duplicate Definition",
+        [12] = "Illegal direct",
+        [12] = "Type mismatch",
+        [13] = "Out of string space",
+        [14] = "String too long",
+        [15] = "String formula too complex",
+        [16] = "Can't continue",
+        [17] = "Undefined user function",
+        [18] = "No RESUME",
+        [19] = "RESUME without error",
+        [20] = "Unprintable error",
+        [21] = "Missing operand",
+        [22] = "Line buffer overflow",
+        [23] = "Device Timeout",
+        [24] = "Device Fault",
+        [25] = "FOR Without NEXT",
+        [26] = "Out of Paper",
+        [27] = "?",
+        [28] = "WHILE without WEND",
+        [29] = "WEND without WHILE",
+    };
+    
+    if (err_code >= 1 && err_code < (int)(sizeof(messages) / sizeof(messages[0]))) {
+        return messages[err_code];
+    }
+    return "Unknown error";
 }
 
 /* DEF FN support */

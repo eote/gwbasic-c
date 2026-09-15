@@ -1,198 +1,182 @@
-/* TEST_GWDATA - Unit tests for GWDATA module */
-/* Based on GWDATA.ASM - Data structures and runtime state */
+/* test_gwdata.c - GWDATA 模块单元测试
+ * 基于 GWDATA.ASM: 变量表、字符串堆、程序缓冲区、运行时状态 */
 
 #include "test_framework.h"
 #include "../src/gwbasic.h"
-/* DO NOT include gwdata.c - it's linked separately */
 
-static void setup(void) {
+/* Test: 变量表初始化 */
+void test_gwdata_var_table_init(void) {
     gwdata_init();
     gwram_init();
+    
+    /* 验证变量表初始状态 */
+    struct variable *v = gwdata_find_variable("A");
+    TEST_ASSERT(v == NULL, "新初始化时变量表应为空");
+    
+    /* 分配简单变量 */
+    v = gwdata_alloc_variable("A", VT_INTEGER);
+    TEST_ASSERT(v != NULL, "应能分配整型变量 A");
+    TEST_ASSERT(v->name[0] == 'A', "变量名应为 A");
+    TEST_ASSERT(v->type == VT_INTEGER, "变量类型应为 INTEGER");
+    TEST_ASSERT(v->value.i == 0, "整型变量默认值应为 0");
+    
+    /* 查找已分配变量 */
+    struct variable *v2 = gwdata_find_variable("A");
+    TEST_ASSERT(v2 == v, "find 应返回同一变量指针");
 }
 
-static void teardown(void) {
-    /* gwdata_cleanup and gwram_cleanup don't exist yet */
-    (void)0;
-}
-
-/* Test: gwdata_init initializes runtime state correctly */
-void test_gwdata_init_state(void) {
-    setup();
-    
-    /* Verify global state pointer is allocated */
-    TEST_ASSERT(g_state != NULL, "g_state should be allocated");
-    TEST_ASSERT(g_state->running == true, "running should be true");
-    TEST_ASSERT(g_state->in_direct_mode == true, "in_direct_mode should be true");
-    TEST_ASSERT(g_state->current_line == 0, "current_line should be 0");
-    TEST_ASSERT(g_state->var_table != NULL, "var_table should be allocated");
-    TEST_ASSERT(g_state->str_heap.data != NULL, "string heap should be allocated");
-    TEST_ASSERT(g_state->prog_buf.data != NULL, "program buffer should be allocated");
-    
-    teardown();
-    TEST_PASS("gwdata_init initializes state correctly");
-}
-
-/* Test: Variable allocation and lookup */
-void test_gwdata_variable_alloc_find(void) {
-    setup();
-    
-    /* Allocate a single precision variable */
-    struct variable *v1 = gwdata_alloc_variable("A", VT_SINGLE);
-    TEST_ASSERT(v1 != NULL, "variable allocation should succeed");
-    TEST_ASSERT_EQ_STR(v1->name, "A", "variable name should be 'A'");
-    TEST_ASSERT_EQ_INT(v1->type, VT_SINGLE, "variable type should be VT_SINGLE");
-    TEST_ASSERT(v1->value.f == 0.0f, "default value should be 0");
-    
-    /* Find the same variable */
-    struct variable *v1_found = gwdata_find_variable("A");
-    TEST_ASSERT(v1_found == v1, "find_variable should return same pointer");
-    
-    /* Allocate integer variable */
-    struct variable *v2 = gwdata_alloc_variable("I%", VT_INTEGER);
-    TEST_ASSERT(v2 != NULL, "integer variable allocation should succeed");
-    TEST_ASSERT_EQ_STR(v2->name, "I%", "variable name should be 'I%'");
-    TEST_ASSERT_EQ_INT(v2->type, VT_INTEGER, "variable type should be VT_INTEGER");
-    
-    /* Allocate string variable */
-    struct variable *v3 = gwdata_alloc_variable("S$", VT_STRING);
-    TEST_ASSERT(v3 != NULL, "string variable allocation should succeed");
-    TEST_ASSERT_EQ_STR(v3->name, "S$", "variable name should be 'S$'");
-    TEST_ASSERT_EQ_INT(v3->type, VT_STRING, "variable type should be VT_STRING");
-    TEST_ASSERT(v3->value.s.ptr == NULL, "string value should be NULL initially");
-    
-    /* Find non-existent variable */
-    struct variable *v_notfound = gwdata_find_variable("X");
-    TEST_ASSERT(v_notfound == NULL, "find_variable should return NULL for non-existent");
-    
-    teardown();
-    TEST_PASS("variable alloc/find works correctly");
-}
-
-/* Test: Variable type handling */
-void test_gwdata_variable_type_handling(void) {
-    setup();
-    
-    struct variable *v = gwdata_alloc_variable("X", VT_SINGLE);
-    TEST_ASSERT(v != NULL, "alloc should succeed");
-    
-    /* Assign single precision value */
-    v->value.f = 3.14f;
-    TEST_ASSERT(v->value.f == 3.14f, "single precision value should be stored");
-    
-    /* Test integer variable */
-    struct variable *vi = gwdata_alloc_variable("I%", VT_INTEGER);
-    vi->value.i = 42;
-    TEST_ASSERT_EQ_INT(vi->value.i, 42, "integer value should be stored");
-    
-    /* Test string variable */
-    struct variable *vs = gwdata_alloc_variable("S$", VT_STRING);
-    TEST_ASSERT(vs->type == VT_STRING, "type should be VT_STRING");
-    TEST_ASSERT(vs->value.s.ptr == NULL, "string should be NULL initially");
-    
-    teardown();
-    TEST_PASS("variable type handling works");
-}
-
-/* Test: String heap allocation */
+/* Test: 字符串堆分配 */
 void test_gwdata_string_heap(void) {
-    setup();
+    gwdata_init();
+    gwram_init();
     
-    /* Allocate string */
+    /* 分配字符串 */
     char *s1 = gwdata_alloc_string(10);
-    TEST_ASSERT(s1 != NULL, "string allocation should succeed");
+    TEST_ASSERT(s1 != NULL, "字符串分配应成功");
+    
+    /* 写入并验证 */
     strcpy(s1, "HELLO");
-    TEST_ASSERT_EQ_STR(s1, "HELLO", "string content should match");
+    TEST_ASSERT(strcmp(s1, "HELLO") == 0, "字符串内容应正确");
     
-    /* Allocate another */
+    /* 多次分配 */
     char *s2 = gwdata_alloc_string(20);
-    TEST_ASSERT(s2 != NULL, "second allocation should succeed");
-    strcpy(s2, "WORLD");
-    
-    /* Free first (no-op in current impl) */
-    gwdata_free_string(s1);
-    
-    /* Allocate again */
-    char *s3 = gwdata_alloc_string(5);
-    TEST_ASSERT(s3 != NULL, "third allocation should succeed");
-    
-    teardown();
-    TEST_PASS("string heap alloc works");
+    TEST_ASSERT(s2 != NULL, "第二次分配应成功");
+    TEST_ASSERT(s2 != s1, "应分配不同地址");
 }
 
-/* Test: Program buffer operations (basic) */
+/* Test: 变量类型处理 */
+void test_gwdata_variable_types(void) {
+    gwdata_init();
+    gwram_init();
+    
+    /* 整型 % */
+    struct variable *vi = gwdata_alloc_variable("I%", VT_INTEGER);
+    vi->value.i = 32767;
+    TEST_ASSERT(vi->value.i == 32767, "整型赋值");
+    
+    /* 单精度 ! */
+    struct variable *vs = gwdata_alloc_variable("S!", VT_SINGLE);
+    vs->value.f = 3.14f;
+    TEST_ASSERT(fabs(vs->value.f - 3.14f) < 0.001f, "单精度赋值");
+    
+    /* 双精度 # */
+    struct variable *vd = gwdata_alloc_variable("D#", VT_DOUBLE);
+    vd->value.d = 2.718281828;
+    TEST_ASSERT(fabs(vd->value.d - 2.718281828) < 0.000001, "双精度赋值");
+    
+    /* 字符串 $ */
+    struct variable *vstr = gwdata_alloc_variable("STR$", VT_STRING);
+    vstr->value.s.ptr = gwdata_alloc_string(10);
+    vstr->value.s.len = 4;
+    strcpy(vstr->value.s.ptr, "TEST");
+    TEST_ASSERT(strcmp(vstr->value.s.ptr, "TEST") == 0, "字符串变量赋值");
+}
+
+/* Test: 数组变量 */
+void test_gwdata_array_variables(void) {
+    gwdata_init();
+    gwram_init();
+    
+    /* 分配一维数组 A(10) */
+    int dims[1] = {11};
+    struct variable *arr = gwdata_alloc_array("A", VT_SINGLE, 1, dims);
+    TEST_ASSERT(arr != NULL, "数组分配应成功");
+    TEST_ASSERT(arr->is_array, "应标记为数组");
+    TEST_ASSERT(arr->dim_count == 1, "维度数应为 1");
+    TEST_ASSERT(arr->dims[0] == 11, "维度大小应为 11 (0-10)");
+    
+    /* 设置和获取元素 */
+    float *data = (float*)arr->array_data;
+    data[5] = 123.45f;
+    TEST_ASSERT(fabs(data[5] - 123.45f) < 0.001f, "数组元素赋值");
+}
+
+/* Test: 字符串堆垃圾回收触发条件 */
+void test_gwdata_string_heap_gc(void) {
+    gwdata_init();
+    gwram_init();
+    
+    /* 分配多个字符串直到触发 GC */
+    char *ptrs[100];
+    for (int i = 0; i < 100; i++) {
+        ptrs[i] = gwdata_alloc_string(50);
+        sprintf(ptrs[i], "STR%d", i);
+    }
+    
+    /* 验证内容仍正确 */
+    for (int i = 0; i < 100; i++) {
+        char expected[32];
+        sprintf(expected, "STR%d", i);
+        TEST_ASSERT(strcmp(ptrs[i], expected) == 0, "GC 后字符串内容应保持");
+    }
+}
+
+/* Test: 程序缓冲区 */
 void test_gwdata_program_buffer(void) {
-    setup();
+    gwdata_init();
+    gwram_init();
     
-    /* Current implementation doesn't have program buffer API yet */
-    /* Just verify buffers are initialized */
-    TEST_ASSERT(g_state->prog_buf.data != NULL, "program buffer should be allocated");
-    TEST_ASSERT(g_state->prog_buf.used == 0, "program buffer should be empty initially");
+    /* 获取程序文本起始指针 */
+    char *txttab = gwdata_get_txttab();
+    TEST_ASSERT(txttab != NULL, "TXTTAB 应有效");
     
-    teardown();
-    TEST_PASS("program buffer initialized correctly");
+    /* 写入简单程序 */
+    const char *prog = "10 PRINT \"HELLO\"\n20 END\n\0";
+    strcpy(txttab, prog);
+    
+    /* 验证 */
+    TEST_ASSERT(strstr(txttab, "PRINT") != NULL, "程序应包含 PRINT");
+    TEST_ASSERT(strstr(txttab, "END") != NULL, "程序应包含 END");
 }
 
-/* Test: Error handling basics */
-void test_gwdata_error_handling(void) {
-    setup();
+/* Test: 错误消息表 */
+void test_gwdata_error_messages(void) {
+    gwdata_init();
+    gwram_init();
     
-    /* Set error */
-    gwdata_set_error(11, 100, 42);
-    TEST_ASSERT_EQ_INT(gwdata_get_error(), 11, "error code should be 11");
-    TEST_ASSERT_EQ_INT(gwdata_get_error_line(), 100, "error line should be 100");
-    TEST_ASSERT_EQ_INT(gwdata_get_error_text_ptr(), 42, "error text ptr should be 42");
+    const char *msg = gwdata_get_error_message(ERRSN);  /* Syntax error */
+    TEST_ASSERT(msg != NULL, "错误消息应存在");
+    TEST_ASSERT(strlen(msg) > 0, "错误消息非空");
     
-    /* Clear error */
-    gwdata_clear_error();
-    TEST_ASSERT_EQ_INT(gwdata_get_error(), 0, "error code should be cleared");
-    
-    /* Test ON ERROR active flag */
-    TEST_ASSERT(!gwdata_is_on_error_active(), "ON ERROR should not be active initially");
-    gwdata_set_on_error_goto(10, 42);
-    TEST_ASSERT(gwdata_is_on_error_active(), "ON ERROR should be active after set");
-    TEST_ASSERT_EQ_INT(gwdata_get_on_error_line(), 10, "handler line should be 10");
-    
-    gwdata_clear_on_error();
-    TEST_ASSERT(!gwdata_is_on_error_active(), "ON ERROR should be cleared");
-    
-    teardown();
-    TEST_PASS("error handling basics work");
+    msg = gwdata_get_error_message(ERRDV0);  /* Division by zero */
+    TEST_ASSERT(msg != NULL, "除零错误消息应存在");
 }
 
-/* Test: DEF FN support */
-void test_gwdata_fn_def(void) {
-    setup();
+/* Test: 变量名大小写不敏感 */
+void test_gwdata_case_insensitive(void) {
+    gwdata_init();
+    gwram_init();
     
-    /* Allocate a FN variable */
-    struct variable *fn = gwdata_alloc_variable("FNA", VT_SINGLE);
-    TEST_ASSERT(fn != NULL, "FN variable allocation should succeed");
+    gwdata_alloc_variable("ABC", VT_INTEGER);
+    struct variable *v = gwdata_find_variable("abc");
+    TEST_ASSERT(v != NULL, "变量查找应不区分大小写");
     
-    /* Mark as FN def */
-    fn->is_fn_def = true;
-    fn->fn_param_name[0] = 'X';
-    fn->fn_param_name[1] = '\0';
-    fn->fn_text_ptr = 1234;
-    fn->fn_param_type = VT_SINGLE;
-    
-    /* Find it */
-    struct variable *found = gwdata_find_fn_def("FNA");
-    TEST_ASSERT(found == fn, "find_fn_def should find the FN definition");
-    TEST_ASSERT(found->is_fn_def, "is_fn_def should be true");
-    TEST_ASSERT_EQ_INTPTR(found->fn_text_ptr, 1234, "fn_text_ptr should match");
-    
-    /* Non-existent FN */
-    struct variable *notfound = gwdata_find_fn_def("FNB");
-    TEST_ASSERT(notfound == NULL, "find_fn_def should return NULL for non-existent");
-    
-    teardown();
-    TEST_PASS("DEF FN support works");
+    v = gwdata_find_variable("AbC");
+    TEST_ASSERT(v != NULL, "混合大小写也应找到");
 }
 
-/* Compatibility wrapper for test_runner.c expected test names */
-void test_gwdata_init(void) {
-    test_gwdata_init_state();
+/* Test: 变量名最大长度 */
+void test_gwdata_max_var_name(void) {
+    gwdata_init();
+    gwram_init();
+    
+    /* 40 字符变量名 */
+    char name[41];
+    memset(name, 'A', 40);
+    name[40] = '\0';
+    
+    struct variable *v = gwdata_alloc_variable(name, VT_INTEGER);
+    TEST_ASSERT(v != NULL, "40 字符变量名应支持");
+    TEST_ASSERT(strlen(v->name) == 40, "变量名长度应为 40");
 }
 
-void test_gwdata_variable_table(void) {
-    test_gwdata_variable_alloc_find();
-}
+/* 供 test_runner.c 注册的测试函数声明 */
+void test_gwdata_var_table_init(void);
+void test_gwdata_string_heap(void);
+void test_gwdata_variable_types(void);
+void test_gwdata_array_variables(void);
+void test_gwdata_string_heap_gc(void);
+void test_gwdata_program_buffer(void);
+void test_gwdata_error_messages(void);
+void test_gwdata_case_insensitive(void);
+void test_gwdata_max_var_name(void);

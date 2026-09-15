@@ -4,6 +4,8 @@
 #ifndef GWBASIC_H
 #define GWBASIC_H
 
+#include <math.h>
+
 /* Standard headers FIRST */
 #include <stdint.h>
 #include <stdbool.h>
@@ -88,6 +90,11 @@ struct variable {
     intptr_t fn_text_ptr;     /* Text pointer to the function body (formula) */
     char fn_param_name[MAX_VAR_NAME + 1];  /* Parameter variable name */
     var_type_t fn_param_type; /* Parameter type */
+
+    /* Array support */
+    int dim_count;            /* Number of dimensions (0 = scalar) */
+    int dims[8];              /* Dimension sizes (max 8 dimensions) */
+    void *array_data;         /* Pointer to array data */
 
     union {
         int32_t  i;
@@ -174,6 +181,8 @@ struct variable *gwdata_alloc_variable(const char *name, var_type_t type);
 struct variable *gwdata_find_variable(const char *name);
 char *gwdata_alloc_string(size_t len);
 void gwdata_free_string(char *s);
+struct variable *gwdata_alloc_array(const char *name, var_type_t type, int dim_count, const int *dims);
+char *gwdata_get_txttab(void);
 
 /* GWDATA module - ON ERROR / RESUME / ERROR support */
 void gwdata_set_error(int code, uint16_t line, int text_ptr);
@@ -189,6 +198,13 @@ void gwdata_exit_error_handler(void);
 bool gwdata_is_in_error_handler(void);
 int gwdata_get_on_error_line(void);
 bool gwdata_handle_error(uint16_t line);
+
+/* Error message support */
+const char *gwdata_get_error_message(int err_code);
+
+/* Error codes from GWDATA.ASM ERRTAB */
+#define ERRSN   1   /* Syntax error */
+#define ERRDV0  6   /* Division by zero */
 
 /* GWRAM module functions */
 void gwram_init(void);

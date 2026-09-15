@@ -26,8 +26,8 @@ static BYTE SEMFLG = 0;      /* Semicolon flag for INPUT; */
 static BYTE F_INST = 0;      /* Insert mode flag */
 static BYTE F_EDIT = 0;      /* Edit active flag */
 static WORD AUTFLG = 0;      /* AUTO mode flag */
-static BYTE CSRX = 1;        /* Cursor column (1-based) */
-static BYTE CSRY = 1;        /* Cursor row (1-based) */
+static int CSRX = 1;         /* Cursor column (1-based) */
+static int CSRY = 1;         /* Cursor row (1-based) */
 
 /* Line buffer */
 #define BUFLEN 255
