@@ -226,10 +226,10 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     }
     
     if (!v->is_array) {
-        /* Allocate string buffer */
-        if (v->type == VT_STRING && v->value.s.ptr) {
-            gwram_free(v->value.s.ptr);
-        }
+        /* Allocate string buffer.
+         * NOTE: old string pointer may point into the static string heap —
+         * do NOT gwram_free it (invalid free). Just overwrite the descriptor;
+         * the heap is reclaimed wholesale by CLEAR/NEW via str_heap.used = 0. */
         v->value.s.ptr = (char *)gwram_alloc(total_bytes + 2);  /* +2 for safety + null */
         if (!v->value.s.ptr) return ERROR;
         v->value.s.len = total_bytes + 2;

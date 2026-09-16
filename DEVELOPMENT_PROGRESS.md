@@ -5,8 +5,8 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 - 基础设施 |
-| **当前模块** | GWDATA (核心层第 1 个) |
-| **依赖顺序** | GWDATA → GWRAM → GWINIT → GWMAIN → ... |
+| **当前模块** | GWRAM (核心层第 2 个) |
+| **依赖顺序** | GWDATA ✅ → GWRAM (进行中) → GWINIT → GWMAIN |
 | **TDD 工作流步骤** | 7 步标准化流程 |
 
 ---
@@ -15,7 +15,7 @@
 
 | 里程碑 | 名称 | 包含模块 | 状态 |
 |--------|------|----------|------|
-| **M0** | 基础设施 | GWDATA, GWRAM, GWINIT, GWMAIN | GWDATA ✅ 进行中 |
+| **M0** | 基础设施 | GWDATA, GWRAM, GWINIT, GWMAIN | GWDATA ✅ / GWRAM 进行中 |
 | **M1** | 核心引擎 | GWSTS, GWEVAL, BIMISC | 待开始 |
 | **M2** | 程序与字符串 | GWLIST, GENGRP, BISTRS | 待开始 |
 | **M3** | I/O 完整 | 10 个 I/O 模块 | 待开始 |
@@ -26,31 +26,33 @@
 
 ---
 
-## GWDATA 模块 - 7 步 TDD 工作流执行记录
+## GWRAM 模块 - 7 步 TDD 工作流执行记录
 
 | 步骤 | PLAN_FRESH.md 描述 | 执行状态 | 产出物 |
 |------|-------------------|----------|--------|
-| 1 | 读对应 .ASM 理解行为 | ✅ 完成 | 已读 GWDATA.ASM (1565 行) |
-| 2 | **根据 ASM 代码逻辑编写单测** (tests/test_<module>.c) - 先红 | ✅ 完成 | tests/test_gwdata.c (2121 断言) |
-| 3 | **根据 ASM 行为编写 .bas 集成测** (tests/bas/test_<feature>.bas) | ✅ 完成 | tests/bas/test_gwdata.bas (7 场景) |
-| 4 | 实现 src/<module>.c - 至绿，严格复刻 ASM 逻辑 | ✅ 完成 | src/gwdata.c 核心功能 |
-| 5 | 运行 mingw32-make test - 全绿 | ✅ 完成 | 2121/2121 PASS |
-| 6 | 交互验证 ./gwbasic.exe 跑 .bas | ✅ 完成 | test_gwdata.bas 全绿 |
+| 1 | 读对应 .ASM 理解行为 | ✅ 完成 | 已读 GWRAM.ASM (466 行: R/RINIT 宏、DSEG 变量布局) |
+| 2 | 根据 ASM 编写单测 - 先红 | ✅ 完成 | tests/test_gwram.c (8 个测试函数) |
+| 3 | 根据 ASM 行为编写 .bas 集成测 | ✅ 完成 | tests/bas/test_gwram.bas (6 场景) |
+| 4 | 实现 src/gwram.c - 至绿 | ✅ 完成 | gwram_alloc/realloc/calloc/free + FRE 函数 |
+| 5 | mingw32-make test - 全绿 | ✅ 完成 | 2120/2120 PASS |
+| 6 | 交互验证 ./gwbasic.exe | ✅ 完成 | test_gwram.bas 全场景通过 |
 | 7 | 提交 + CODE_REVIEW 等待批准 | ⏳ 待提交 | - |
+
+## 本轮发现并修复的 CRITICAL bug
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| **CLEAR 后崩溃 (rc=127)** | 字符串指针指向静态字符串堆 `str_heap.data`，但 CLEAR/NEW/RUN 调用 `gwram_free(s.ptr)` → 无效 free | 移除 3 处 `gwram_free(v->value.s.ptr)` (bimisc.c CLEAR/NEW/RUN + advgrp.c GET)，堆通过 `str_heap.used=0` 整体重收 |
+| **FRE() 未实现** | BISTRS.ASM FRE 函数 (L1097: FREFAC + GARBA2 + STREND-FRETOP) 无 C 对应 | 新增 `bistrs_fre()` (返回 str_heap 空闲字节)，gweval.c 注册 FRE() 函数调用 |
+| **gwsts.c CLEAR 语句缺失** | gwsts_exec_statement 无 CLEAR 分支，语句报错 | 新增 CLEAR 分支 (解析 [,max_mem][,stack_size] → bimisc_clear_with_args) |
 
 ---
 
-## 核心实现细节 (对应 GWDATA.ASM 关键数据结构)
+## GWDATA 模块记录 (上轮，已完成)
 
-| ASM 结构 | C 实现 | 验收测试 |
-|----------|--------|----------|
-| 变量表 (256 桶哈希) | `g_state->var_table[256]` | 2121 断言全绿 |
-| 字符串堆 (16KB bump alloc) | `g_state->str_heap` | 字符串分配/GC 测试通过 |
-| 程序缓冲区 (32KB) | `g_state->prog_buf` | 程序读写测试通过 |
-| 错误消息表 (ERRTAB) | `gwdata_get_error_message()` | 错误码 1/6 等验证通过 |
-| 变量类型 (INTEGER/SINGLE/DOUBLE/STRING) | `var_type_t` enum | 4 种类型赋值测试通过 |
-| 数组支持 (多维) | `dim_count`, `dims[8]`, `array_data` | 1D/2D 数组测试通过 |
-| 大小写不敏感 | `hash_name()` 大写 + `strcasecmp` | 大小写混合查找通过 |
+| 步骤 | 状态 |
+|------|------|
+| 1-7 TDD 全流程 | ✅ 完成 (commit ceabce9) |
 
 ---
 
@@ -58,24 +60,27 @@
 
 | 测试类型 | 命令 | 结果 | 说明 |
 |----------|------|------|------|
-| 单元测试 | `mingw32-make test` | **2121/2121 PASS** | 零失败 |
-| 集成测试 | `./gwbasic.exe tests/bas/test_gwdata.bas` | **7/7 PASS** | 全场景绿灯 |
-| 核心回归 | test_cond/test_on_error/test_def_fn | **全绿** | 无退化 |
-| 编译警告 | `mingw32-make clean && mingw32-make` | **0 条** | 零警告门槛达成 |
-| 孤儿测试 | 声明 vs 注册一致性 | **0 个** | 709=709 |
+| 单元测试 | `mingw32-make test` | **2120/2120 PASS** | 零失败 |
+| 集成测试 | `./gwbasic.exe tests/bas/test_gwram.bas` | **6/6 场景通过** | FRE/CLEAR/大数组全绿 |
+| 核心回归 | test_cond/test_on_error/test_def_fn/test_gwdata | **全绿** | 无退化 |
+| 编译警告 | `mingw32-make clean && mingw32-make` | **0 条** | 零警告保持 |
+| CRITICAL bug | CLEAR 字符串崩溃 | **已修复** | 3 处无效 free 移除 |
 
 ---
 
-## 变更文件清单 (本轮)
+## 变更文件清单 (本轮 GWRAM)
 
 | 文件 | 变更类型 | 说明 |
 |------|----------|------|
-| `src/gwbasic.h` | 修改 | 补充声明、错误码、math.h、数组结构体字段 |
-| `src/gwdata.c` | 修改 | 核心实现 (变量表、字符串堆、数组、错误消息、大小写不敏感) |
-| `src/scnedt.c` | 修改 | 消除 #pragma 警告抑制 (CSRX/CSRY 改为 int) |
-| `tests/test_gwdata.c` | 新增 | 2121 个单元测试断言 (9 个测试函数) |
-| `tests/bas/test_gwdata.bas` | 新增 | 7 个集成测试场景 |
-| `tests/test_runner.c` | 修改 | 注册 GWDATA 新测试 |
+| `src/gwbasic.h` | 修改 | 新增 `bistrs_fre` 声明 (double 返回) |
+| `src/bistrs.c` | 修改 | 新增 `bistrs_fre()` 实现 (ASM FRE 对应) |
+| `src/gweval.c` | 修改 | 注册 FRE() 函数 (is_str_numeric + 调用分支) |
+| `src/bimisc.c` | 修改 | 修复 CLEAR/NEW/RUN 无效 free (CRITICAL)；gwsts CLEAR 分支调用路径验证 |
+| `src/advgrp.c` | 修改 | 修复 GET 无效 free |
+| `src/gwsts.c` | 修改 | 新增 CLEAR 语句分支 |
+| `tests/test_gwram.c` | 修改 | 8 个测试函数 (移除 main，供 test_runner 注册) |
+| `tests/test_runner.c` | 修改 | 注册 gwram 新测试 + gwinit_constants 声明修复 |
+| `tests/bas/test_gwram.bas` | 新增 | 6 个集成测试场景 |
 
 ---
 
@@ -83,15 +88,14 @@
 
 | 模块 | 依赖 | 预估步骤 |
 |------|------|----------|
-| **GWRAM** | GWDATA | 读 GWRAM.ASM → test_gwram.c → test_gwram.bas → src/gwram.c |
-| **GWINIT** | GWDATA, GWRAM | ... |
+| **GWINIT** | GWDATA, GWRAM | 读 GWINIT.ASM → test_gwinit 扩展 → src/gwinit.c |
 | **GWMAIN** | GWINIT, GWSTS | ... |
 
 ---
 
 ## 更新时间
-2026-09-15
+2026-09-17
 
 ---
 
-**原则**: 严格按 PLAN_FRESH.md "每模块 7 步 TDD 工作流" 执行，每步有产出物可验证，单模块一提交。
+**原则**: 严格按 PLAN_FRESH.md "每模块 7 步 TDD 工作流" 执行。实现前先查 ASM 源码定位实现位置；添加测试/实现前先查是否已存在。

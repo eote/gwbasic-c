@@ -509,6 +509,35 @@ int gwsts_exec_statement(const char *text) {
     else if (starts_with(trimmed, "DATA")) {
         result = SUCCESS;
     }
+    /* CLEAR statement: CLEAR [,[max_mem][,stack_size]] */
+    else if (starts_with(trimmed, "CLEAR")) {
+        char *rest = trimmed + 5;  /* Skip "CLEAR" */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        if (*rest == ',') {
+            rest++;  /* Skip first comma */
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+            
+            int max_mem = 0;
+            int stack_size = 0;
+            
+            if (*rest) {
+                max_mem = (int)gweval_eval_numeric(rest);
+                char *comma = strchr(rest, ',');
+                if (comma) {
+                    rest = comma + 1;
+                    while (*rest && isspace((unsigned char)*rest)) rest++;
+                    if (*rest) {
+                        stack_size = (int)gweval_eval_numeric(rest);
+                    }
+                }
+            }
+            bimisc_clear_with_args(stack_size, max_mem);
+        } else {
+            bimisc_clear();
+        }
+        result = SUCCESS;
+    }
     /* RESTORE statement: RESTORE [line] */
     else if (starts_with(trimmed, "RESTORE")) {
         char *rest = trimmed + 7;  /* Skip "RESTORE" */

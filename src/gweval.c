@@ -388,11 +388,12 @@ static float parse_factor(parser_t *p) {
             bool is_tab_spc = (strcasecmp_ascii(name, "TAB") == 0 ||
                                strcasecmp_ascii(name, "SPC") == 0);
             
-            /* Check for string functions that return numeric: LEN, ASC, VAL, EOF */
+            /* Check for string functions that return numeric: LEN, ASC, VAL, EOF, FRE */
             bool is_str_numeric = (strcasecmp_ascii(name, "LEN") == 0 ||
                                    strcasecmp_ascii(name, "ASC") == 0 ||
                                    strcasecmp_ascii(name, "VAL") == 0 ||
-                                   strcasecmp_ascii(name, "EOF") == 0);
+                                   strcasecmp_ascii(name, "EOF") == 0 ||
+                                   strcasecmp_ascii(name, "FRE") == 0);
             
             /* Check for string functions that return string: LEFT$, RIGHT$, MID$, UCASE$, LCASE$, STR$, CHR$, SPACE$, STRING$, MKI$, MKS$ */
             bool is_str_func = (strcasecmp_ascii(name, "LEFT") == 0 || strcasecmp_ascii(name, "LEFT$") == 0 ||
@@ -532,6 +533,13 @@ static float parse_factor(parser_t *p) {
                     float fn = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return (float)dskcom_eof((int)fn);
+                    }
+                }
+                /* FRE(arg) - return free memory (arg: 0 for numeric, non-zero for string) */
+                else if (strcasecmp_ascii(name, "FRE") == 0) {
+                    float arg = parse_expression(p);
+                    if (parser_match(p, ')')) {
+                        return (float)bistrs_fre((int)arg);
                     }
                 }
                 /* CVI(string) - convert 2-byte string to integer */

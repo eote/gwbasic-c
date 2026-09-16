@@ -55,9 +55,9 @@ void bimisc_new(void) {
             if (v->is_array) {
                 biptrg_free_array(v);
             }
-            if (v->type == VT_STRING && v->value.s.ptr) {
-                gwram_free(v->value.s.ptr);
-            }
+            /* NOTE: string pointers point into the static string heap —
+             * never pass them to gwram_free (invalid free). The heap is
+             * reclaimed wholesale below via str_heap.used = 0. */
             gwram_free(v);
             v = next;
         }
@@ -102,9 +102,10 @@ void bimisc_clear_with_args(int stack_size, int max_mem) {
             if (v->is_array) {
                 biptrg_free_array(v);
             }
-            if (v->type == VT_STRING && v->value.s.ptr) {
-                gwram_free(v->value.s.ptr);
-            }
+            /* NOTE: string pointers point into the static string heap
+             * (g_state->str_heap.data) — they must NOT be passed to
+             * gwram_free (invalid free). The heap is reclaimed wholesale
+             * below via str_heap.used = 0. */
             gwram_free(v);
             v = next;
         }
@@ -134,9 +135,9 @@ void bimisc_run_setup(void) {
             if (v->is_array) {
                 biptrg_free_array(v);
             }
-            if (v->type == VT_STRING && v->value.s.ptr) {
-                gwram_free(v->value.s.ptr);
-            }
+            /* NOTE: string pointers point into the static string heap —
+             * never pass them to gwram_free (invalid free). The heap is
+             * reclaimed wholesale below via str_heap.used = 0. */
             gwram_free(v);
             v = next;
         }

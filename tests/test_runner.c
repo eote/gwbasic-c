@@ -65,6 +65,7 @@ void test_gwram_alloc_free(void);
 void test_gwram_realloc(void);
 void test_gwram_calloc(void);
 void test_gwram_oom_handling(void);
+
 void test_gwinit_basic(void);
 void test_gwinit_constants(void);
 void test_gwinit_function_table(void);

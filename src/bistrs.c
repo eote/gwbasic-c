@@ -226,3 +226,22 @@ int bistrs_len(const char *str) {
     if (!str) return 0;
     return strlen(str);
 }
+
+/* FRE - return free memory (arg: 0 for numeric, non-zero for string space) */
+double bistrs_fre(int arg) {
+    if (!g_state) {
+        return 0.0;
+    }
+    
+    size_t free_mem = 0;
+    if (arg == 0) {
+        /* FRE(0) - return free numeric memory (approximate) */
+        /* Use string heap free space as approximation */
+        free_mem = STRING_HEAP_SIZE - g_state->str_heap.used;
+    } else {
+        /* FRE(string) - return free string space */
+        free_mem = STRING_HEAP_SIZE - g_state->str_heap.used;
+    }
+    
+    return (double)free_mem;
+}

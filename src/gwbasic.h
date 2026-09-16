@@ -323,6 +323,12 @@ void bistrs_init(void);
 char *bistrs_left(const char *str, int n);
 char *bistrs_right(const char *str, int n);
 char *bistrs_mid(const char *str, int start, int len);
+char *bistrs_ucase(const char *str);
+char *bistrs_lcase(const char *str);
+char *bistrs_mki(int val);      /* MKI$ - integer to 2-byte string */
+char *bistrs_mks(float val);    /* MKS$ - single to 4-byte string */
+int bistrs_cvi(const char *str);  /* CVI - 2-byte string to integer */
+float bistrs_cvs(const char *str);  /* CVS - 4-byte string to single */
 int bistrs_len(const char *str);
 int bistrs_asc(const char *str);
 char *bistrs_chr(int code);
@@ -330,8 +336,7 @@ char *bistrs_str(double val);
 double bistrs_val(const char *str);
 char *bistrs_string(int n, char ch);
 char *bistrs_space(int n);
-char *bistrs_ucase(const char *str);
-char *bistrs_lcase(const char *str);
+double bistrs_fre(int arg);  /* FRE - free memory (returns numeric) */
 
 /* Random file I/O conversion functions */
 char *bistrs_mki(int val);      /* MKI$ - integer to 2-byte string */
