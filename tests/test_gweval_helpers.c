@@ -7,7 +7,7 @@
 /* Test gweval_scan_var - basic variable scanning */
 void test_gweval_scan_var_basic(void) {
     char text[] = "VARIABLE";
-    char *p = text;
+    const char *p = text;
     int var_ptr = 0;
     
     gweval_scan_var(&p, &var_ptr);
@@ -19,7 +19,7 @@ void test_gweval_scan_var_basic(void) {
 /* Test gweval_scan_var - with array reference */
 void test_gweval_scan_var_array(void) {
     char text[] = "ARRAY(5)";
-    char *p = text;
+    const char *p = text;
     int var_ptr = 0;
     
     gweval_scan_var(&p, &var_ptr);
@@ -30,7 +30,7 @@ void test_gweval_scan_var_array(void) {
 /* Test gweval_scan_var - empty */
 void test_gweval_scan_var_empty(void) {
     char text[] = "";
-    char *p = text;
+    const char *p = text;
     int var_ptr = 0;
     
     gweval_scan_var(&p, &var_ptr);
@@ -50,13 +50,13 @@ void test_gweval_frqint_basic(void) {
 void test_gweval_chrgt2_basic(void) {
     /* Test with char < ':' (space) - should skip spaces */
     char text1[] = "  ABC";
-    char *p1 = text1;
+    const char *p1 = text1;
     gweval_chrgt2(&p1);
     TEST_ASSERT(*p1 == 'A', "chrgt2 skips spaces for char < ':'");
     
     /* Test with char >= ':' ('A') - should NOT advance */
     char text2[] = "ABC";
-    char *p2 = text2;
+    const char *p2 = text2;
     gweval_chrgt2(&p2);
     TEST_ASSERT(*p2 == 'A', "chrgt2 does not advance for char >= ':'");
     
@@ -66,7 +66,7 @@ void test_gweval_chrgt2_basic(void) {
 /* Test gweval_chrgt2 - empty string */
 void test_gweval_chrgt2_empty(void) {
     char text[] = "";
-    char *p = text;
+    const char *p = text;
     
     gweval_chrgt2(&p);
     
@@ -91,7 +91,7 @@ void test_gweval_synchr_match(void) {
 void test_gweval_synchr_no_match(void) {
     const char text[] = "EXPR)";
     const char *p = text;
-    int error_before = gwdata_get_error();
+    (void)gwdata_get_error();  // Error state not needed before the call
     
     gweval_synchr(&p, '(');
     

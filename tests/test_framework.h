@@ -30,8 +30,8 @@ extern int g_tests_failed;
         g_tests_run++; \
         if ((actual) != (expected)) { \
             g_tests_failed++; \
-            fprintf(stderr, "  FAIL [%s:%d] %s: got %d, expected %d\n", \
-                    __FILE__, __LINE__, msg, (actual), (expected)); \
+            fprintf(stderr, "  FAIL [%s:%d] %s: got %lld, expected %lld\n", \
+                    __FILE__, __LINE__, msg, (long long)(actual), (long long)(expected)); \
         } else { \
             g_tests_passed++; \
             printf("  PASS: %s\n", msg); \

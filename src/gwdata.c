@@ -255,6 +255,7 @@ struct variable *gwdata_alloc_array(const char *name, var_type_t type, int dim_c
     }
     
     size_t total_size = total_elements * elem_size;
+    (void)total_size;  /* Reserved for future heap-quota checks */
     v->array_data = calloc(total_elements, elem_size);
     if (!v->array_data) return NULL;
     
@@ -267,40 +268,69 @@ char *gwdata_get_txttab(void) {
 }
 
 const char *gwdata_get_error_message(int err_code) {
-    /* Error messages from GWDATA.ASM ERRTAB */
+    /* Error messages from GWDATA.ASM ERRTAB (1:1 order).
+     * DCL macro: QQ=QQ+1 per entry, 1-indexed.
+     * Non-disk errors: 1..30 (DCL count before QQ=49D).
+     * Disk errors start at 50 ("FIELD overflow" .. "Rename across disks").
+     * Slots 31..49 are unused in the original table. */
     static const char *messages[] = {
-        [1]  = "Syntax error",
-        [2]  = "NEXT without FOR",
+        [1]  = "NEXT without FOR",
+        [2]  = "Syntax error",
         [3]  = "RETURN without GOSUB",
         [4]  = "Out of DATA",
         [5]  = "Illegal function call",
-        [6]  = "Division by zero",
-        [7]  = "Overflow",
-        [8]  = "Out of memory",
-        [9]  = "Undefined line number",
-        [10] = "Subscript out of range",
-        [11] = "Duplicate Definition",
+        [6]  = "Overflow",
+        [7]  = "Out of memory",
+        [8]  = "Undefined line number",
+        [9]  = "Subscript out of range",
+        [10] = "Duplicate Definition",
+        [11] = "Division by zero",
         [12] = "Illegal direct",
-        [12] = "Type mismatch",
-        [13] = "Out of string space",
-        [14] = "String too long",
-        [15] = "String formula too complex",
-        [16] = "Can't continue",
-        [17] = "Undefined user function",
-        [18] = "No RESUME",
-        [19] = "RESUME without error",
-        [20] = "Unprintable error",
-        [21] = "Missing operand",
-        [22] = "Line buffer overflow",
-        [23] = "Device Timeout",
-        [24] = "Device Fault",
-        [25] = "FOR Without NEXT",
-        [26] = "Out of Paper",
-        [27] = "?",
-        [28] = "WHILE without WEND",
-        [29] = "WEND without WHILE",
+        [13] = "Type mismatch",
+        [14] = "Out of string space",
+        [15] = "String too long",
+        [16] = "String formula too complex",
+        [17] = "Can't continue",
+        [18] = "Undefined user function",
+        [19] = "No RESUME",
+        [20] = "RESUME without error",
+        [21] = "Unprintable error",
+        [22] = "Missing operand",
+        [23] = "Line buffer overflow",
+        [24] = "Device Timeout",
+        [25] = "Device Fault",
+        [26] = "FOR Without NEXT",
+        [27] = "Out of Paper",
+        [28] = "?",
+        [29] = "WHILE without WEND",
+        [30] = "WEND without WHILE",
+        [50] = "FIELD overflow",
+        [51] = "Internal error",
+        [52] = "Bad file number",
+        [53] = "File not found",
+        [54] = "Bad file mode",
+        [55] = "File already open",
+        [56] = "?",
+        [57] = "Device I/O Error",
+        [58] = "File already exists",
+        [59] = "?",
+        [60] = "?",
+        [61] = "Disk full",
+        [62] = "Input past end",
+        [63] = "Bad record number",
+        [64] = "Bad file name",
+        [65] = "?",
+        [66] = "Direct statement in file",
+        [67] = "Too many files",
+        [68] = "Device Unavailable",
+        [69] = "Communication buffer overflow",
+        [70] = "Disk write protected",
+        [71] = "Disk not Ready",
+        [72] = "Disk media error",
+        [73] = "Advanced Feature",
+        [74] = "Rename across disks",
     };
-    
+
     if (err_code >= 1 && err_code < (int)(sizeof(messages) / sizeof(messages[0]))) {
         return messages[err_code];
     }

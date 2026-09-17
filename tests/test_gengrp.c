@@ -78,7 +78,7 @@ void test_gengrp_point(void) {
     gengrp_pset(100, 100, 1);
     
     /* Read it back - in test env, just verify no crash */
-    int attr = gengrp_point(100, 100);
+    (void)gengrp_point(100, 100);
     TEST_PASS("gengrp_point");
 }
 
@@ -228,9 +228,9 @@ void test_gengrp_multiple_ops(void) {
     gengrp_pset(30, 30, 3);
     
     /* Read them back - in test env, just verify no crash */
-    int a1 = gengrp_point(10, 10);
-    int a2 = gengrp_point(20, 20);
-    int a3 = gengrp_point(30, 30);
+    (void)gengrp_point(10, 10);
+    (void)gengrp_point(20, 20);
+    (void)gengrp_point(30, 30);
     
     TEST_PASS("gengrp_multiple_ops");
 }

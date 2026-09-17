@@ -202,7 +202,7 @@ void test_gwsts_null_input(void) {
 /* Test empty string input */
 void test_gwsts_empty_input(void) {
     setup();
-    int rc = gwsts_exec_statement("");
+    (void)gwsts_exec_statement("");
     /* Should not crash */
     TEST_PASS("empty input handling");
 }
@@ -234,7 +234,7 @@ void test_gwsts_chained_ops(void) {
 /* Test PRINT without arguments */
 void test_gwsts_print_empty(void) {
     setup();
-    int rc = gwsts_exec_statement("PRINT");
+    (void)gwsts_exec_statement("PRINT");
     /* PRINT alone prints a newline, should succeed or be handled gracefully */
     TEST_PASS("PRINT empty");
 }

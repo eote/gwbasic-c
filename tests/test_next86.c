@@ -21,7 +21,7 @@ void test_next86_for_basic(void) {
     
     /* Position text after variable name "I" - use modifiable buffer */
     char text[] = "=1 TO 10";
-    char *p = text;
+    const char *p = text;
     int result = next86_for(&p);
     
     TEST_ASSERT_EQ_INT(result, 0, "FOR returns success");
@@ -36,7 +36,7 @@ void test_next86_for_with_step(void) {
     next86_init();
     
     char text[] = "=1 TO 10 STEP 2";
-    char *p = text;
+    const char *p = text;
     int result = next86_for(&p);
     
     TEST_ASSERT_EQ_INT(result, 0, "FOR with STEP returns success");
@@ -50,11 +50,11 @@ void test_next86_for_nested(void) {
     next86_init();
     
     char text1[] = "=1 TO 10";
-    char *p1 = text1;
+    const char *p1 = text1;
     next86_for(&p1);
     
     char text2[] = "=1 TO 5";
-    char *p2 = text2;
+    const char *p2 = text2;
     next86_for(&p2);
     
     TEST_ASSERT_EQ_INT(next86_get_for_depth(), 2, "Nested FOR depth is 2");
@@ -67,11 +67,11 @@ void test_next86_next_basic(void) {
     next86_init();
     
     char text[] = "=1 TO 10";
-    char *p = text;
+    const char *p = text;
     next86_for(&p);
     
     char next_text[] = "I";
-    char *np = next_text;
+    const char *np = next_text;
     int result = next86_next(&np);
     
     /* Should return error since NEXT var_ptr doesn't match FOR */
@@ -85,11 +85,11 @@ void test_next86_next_termination(void) {
     next86_init();
     
     char text[] = "=1 TO 1";
-    char *p = text;
+    const char *p = text;
     next86_for(&p);
     
     char next_text[] = "I";
-    char *np = next_text;
+    const char *np = next_text;
     int result = next86_next(&np);
     
     /* Returns error due to var_ptr mismatch */
@@ -104,7 +104,7 @@ void test_next86_next_no_for(void) {
     next86_init();
     
     char next_text[] = "I";
-    char *np = next_text;
+    const char *np = next_text;
     int result = next86_next(&np);
     
     TEST_ASSERT_EQ_INT(result, -1, "NEXT without FOR returns error");
@@ -117,7 +117,7 @@ void test_next86_clear_for_stack(void) {
     next86_init();
     
     char text[] = "=1 TO 10";
-    char *p = text;
+    const char *p = text;
     next86_for(&p);
     
     TEST_ASSERT_EQ_INT(next86_get_for_depth(), 1, "FOR depth 1 before clear");
@@ -137,12 +137,12 @@ void test_next86_get_for_depth(void) {
     TEST_ASSERT_EQ_INT(next86_get_for_depth(), 0, "Depth 0 initially");
     
     char text1[] = "=1 TO 10";
-    char *p1 = text1;
+    const char *p1 = text1;
     next86_for(&p1);
     TEST_ASSERT_EQ_INT(next86_get_for_depth(), 1, "Depth 1 after one FOR");
     
     char text2[] = "=1 TO 5";
-    char *p2 = text2;
+    const char *p2 = text2;
     next86_for(&p2);
     TEST_ASSERT_EQ_INT(next86_get_for_depth(), 2, "Depth 2 after nested FOR");
     
@@ -159,7 +159,7 @@ void test_next86_inside_for(void) {
     TEST_ASSERT_EQ_INT(next86_inside_for(), 0, "Not inside FOR initially");
     
     char text[] = "=1 TO 10";
-    char *p = text;
+    const char *p = text;
     next86_for(&p);
     TEST_ASSERT_EQ_INT(next86_inside_for(), 1, "Inside FOR after FOR");
     
@@ -177,14 +177,14 @@ void test_next86_for_max_depth(void) {
     
     for (int i = 0; i < max_depth; i++) {
         char text[] = "=1 TO 10";
-        char *p = text;
+        const char *p = text;
         int result = next86_for(&p);
         TEST_ASSERT_EQ_INT(result, 0, "FOR success");
     }
     
     /* Next FOR should also succeed (var_index wraps around) */
     char text[] = "=1 TO 10";
-    char *p = text;
+    const char *p = text;
     int result = next86_for(&p);
     TEST_ASSERT_EQ_INT(result, 0, "FOR still succeeds (var_index wrapped)");
     
@@ -197,14 +197,14 @@ void test_next86_variable_types(void) {
     
     /* Integer variable */
     char text1[] = "=1 TO 10";
-    char *p1 = text1;
+    const char *p1 = text1;
     next86_for(&p1);
     TEST_ASSERT_EQ_INT(next86_get_for_depth(), 1, "Integer FOR works");
     next86_clear_for_stack();
     
     /* Float variable */
     char text2[] = "=1 TO 10";
-    char *p2 = text2;
+    const char *p2 = text2;
     next86_for(&p2);
     TEST_ASSERT_EQ_INT(next86_get_for_depth(), 1, "Float FOR works");
     next86_clear_for_stack();
@@ -217,7 +217,7 @@ void test_next86_step_negative(void) {
     next86_init();
     
     char text[] = "=10 TO 1 STEP -1";
-    char *p = text;
+    const char *p = text;
     int result = next86_for(&p);
     
     TEST_ASSERT_EQ_INT(result, 0, "FOR with negative STEP");

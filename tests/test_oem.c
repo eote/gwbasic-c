@@ -225,7 +225,7 @@ void test_oem_mapxyc(void) {
     
     SET_PIXBTS(2);
     oem_mapxyc(10, 20);
-    int bit = (10 & 3) * 2;
+    (void)((10 & 3) * 2);
     TEST_PASS("oem_mapxyc 2bpp");
 }
 

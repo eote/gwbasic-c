@@ -202,9 +202,22 @@ bool gwdata_handle_error(uint16_t line);
 /* Error message support */
 const char *gwdata_get_error_message(int err_code);
 
-/* Error codes from GWDATA.ASM ERRTAB */
-#define ERRSN   1   /* Syntax error */
-#define ERRDV0  6   /* Division by zero */
+/* Error codes from GWDATA.ASM ERRTAB (QQ counter, 1-indexed).
+ * DCL macro increments QQ per entry; ERRTAB order is 1:1 with ASM. */
+#define ERRNF   1   /* NEXT without FOR */
+#define ERRSN   2   /* Syntax error */
+#define ERRRG   3   /* RETURN without GOSUB */
+#define ERROD   4   /* Out of DATA */
+#define ERRFC   5   /* Illegal function call */
+#define ERROV   6   /* Overflow */
+#define ERROM   7   /* Out of memory */
+#define ERRUL   8   /* Undefined line number */
+#define ERRBS   9   /* Subscript out of range */
+#define ERRDD   10  /* Duplicate Definition */
+#define ERRDV0  11  /* Division by zero */
+#define ERRID   12  /* Illegal direct */
+#define ERRTM   13  /* Type mismatch */
+#define ERRSO   14  /* Out of string space */
 
 /* GWRAM module functions */
 void gwram_init(void);
@@ -402,6 +415,7 @@ void bimisc_end(void);
 void bimisc_cont(void);
 void bimisc_tron(void);
 void bimisc_troff(void);
+int bimisc_get_trace_flag(void);
 void bimisc_swap(const char *var1, const char *var2);
 void bimisc_erase(const char *var_name);
 int bimisc_is_letter(char c);

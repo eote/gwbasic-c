@@ -8,7 +8,7 @@
 /* Test CALL statement basic parsing */
 void test_call86_call_basic(void) {
     char text[] = "CALL MYROUTINE";
-    char *p = text;
+    const char *p = text;
     
     /* Test that CALL statement can be parsed without crash */
     call86_call(&p);
@@ -19,7 +19,7 @@ void test_call86_call_basic(void) {
 /* Test CALL statement with parameters */
 void test_call86_call_with_params(void) {
     char text[] = "CALL MYROUTINE(A, B, C)";
-    char *p = text;
+    const char *p = text;
     
     call86_call(&p);
     
@@ -29,7 +29,7 @@ void test_call86_call_with_params(void) {
 /* Test CALLS statement (segment:offset format) */
 void test_call86_calls_basic(void) {
     char text[] = "CALLS MYROUTINE";
-    char *p = text;
+    const char *p = text;
     
     call86_calls(&p);
     
@@ -39,7 +39,7 @@ void test_call86_calls_basic(void) {
 /* Test CALLS with parameters */
 void test_call86_calls_with_params(void) {
     char text[] = "CALLS MYROUTINE(A, B)";
-    char *p = text;
+    const char *p = text;
     
     call86_calls(&p);
     
@@ -49,7 +49,7 @@ void test_call86_calls_with_params(void) {
 /* Test CALL with no parameters */
 void test_call86_call_no_params(void) {
     char text[] = "CALL ROUTINE";
-    char *p = text;
+    const char *p = text;
     
     call86_call(&p);
     
@@ -103,7 +103,7 @@ void test_call86_defusr_invalid(void) {
 /* Test CALL with variable reference */
 void test_call86_call_variable(void) {
     char text[] = "CALL ROUTINE(X, Y%)";
-    char *p = text;
+    const char *p = text;
     
     call86_call(&p);
     
@@ -113,7 +113,7 @@ void test_call86_call_variable(void) {
 /* Test CALL with array element parameters */
 void test_call86_call_array_params(void) {
     char text[] = "CALL ROUTINE(A(5), B%(3))";
-    char *p = text;
+    const char *p = text;
     
     call86_call(&p);
     
@@ -123,7 +123,7 @@ void test_call86_call_array_params(void) {
 /* Test CALL with empty parens */
 void test_call86_call_empty_parens(void) {
     char text[] = "CALL ROUTINE()";
-    char *p = text;
+    const char *p = text;
     
     call86_call(&p);
     
