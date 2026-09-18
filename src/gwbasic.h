@@ -68,6 +68,7 @@ typedef uint32_t  UDWORD;
 /* Memory limits */
 #define MAX_LINE_LEN    255
 #define MAX_VAR_NAME    40
+#define KBUF_SIZE       256   /* Keyboard/direct-mode input buffer (GWINIT.ASM KBUF) */
 
 /* Variable types (matching GW-BASIC) */
 typedef enum {
@@ -228,6 +229,10 @@ void gwram_free(void *ptr);
 
 /* GWINIT module functions */
 void gwinit_init(void);
+int gwinit_get_initfg(void);        /* INITFG: init complete flag (ASM L426-427) */
+const char *gwinit_get_kbuf(void);  /* KBUF-1: colon-initialized (ASM L133-134) */
+int gwinit_get_stack_size(void);    /* Computed stack size (ASM L359-364) */
+int gwinit_cmderr(const char *message);  /* CMDERR: pre-init error (ASM L432-449) */
 
 /* GWEVAL module functions */
 void gweval_init(void);
