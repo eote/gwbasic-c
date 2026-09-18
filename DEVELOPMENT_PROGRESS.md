@@ -4,83 +4,85 @@
 
 | 维度 | 定义 |
 |------|------|
-| **里程碑** | M0 - 基础设施 (GWDATA ✅ / GWRAM ✅ / GWINIT 待 / GWMAIN 待) |
-| **当前阶段** | CODE_REVIEW v110 修复轮 (LOW-1 测试计数确认 + 超范围 HIGH 级 CHAIN 修复) |
-| **依赖顺序** | GWDATA → GWRAM → (review 修复) → GWINIT → GWMAIN |
+| **里程碑** | M0 - 基础设施 (GWDATA ✅ / GWRAM ✅ / GWINIT 进行中 / GWMAIN 待) |
+| **当前阶段** | GWINIT 模块 TDD (步骤 2-4 进行中) + 孤儿清理 |
+| **依赖顺序** | GWDATA → GWRAM → GWINIT (当前) → GWMAIN |
 | **TDD 工作流** | 7 步标准化流程 |
 
 ---
 
-## 当前轮: CODE_REVIEW v110 修复记录
+## 当前轮: GWINIT 模块 (进行中)
 
-### 问题清单与处理
+### ASM 分析结果 (GWINIT.ASM, 456 行)
 
-| # | 级别 | 描述 | 处理 | 状态 |
-|---|------|------|------|------|
-| L-1 | 🟩 LOW | 测试计数 2119 vs v108 2121 (-2 断言) | 调查: gweval_synchr 失配断言 error_after==2 + pointer 检查合并所致，孤儿 0 (声明=注册=709)，非丢失 | ✅ 已确认 |
-| 超范围 | 🔴 HIGH | **fiveo_chain() 永远失败 (rc=-1)** — 独立运行 test_gwbasic.exe 发现 5 个 CHAIN 测试 FAIL (mingw32-make test 只跑 2119 个注册测试未覆盖)；根因: giodsk_open(filename, filenum, **mode=0**, 0)，dskcom_open switch 只接受 FM_INPUT(1)..FM_BINARY(5)，mode 0 → default: return ERROR | 按 ASM DSKCOM.ASM PRGFLI (CHAIN → CHNENT → PRGFLI 用 MD_SQI=1 顺序输入模式打开) 修复: mode 0 → FM_INPUT；验证 chain rc=-1→0，test_gwbasic.exe **2128/2128 全 PASS** (5 个 CHAIN FAIL 清零) | ✅ |
+| ASM 结构 | 位置 | C 对应状态 |
+|----------|------|-----------|
+| INIT 主入口 (段寄存器/CPMEXT/栈初始化) | L65-135 | gwinit_init() 简化版 (PI 常量 + math init) — DOS 段寄存器操作不适用于 C |
+| PROFLG/MSWFLG/CSWFLG 清零 | L105-108 | itsa86_init 已有 (g_mswflg/g_cswflg) ✅ |
+| SCNIPL/GWINI/SNDRST/GIOINI 调用序列 | L125-130 | gwmain.c init_all_modules 已覆盖 (scnedt/oemsnd/gio init) ✅ |
+| TOPMEM/MEMSIZ 初始化 | L131-132 | itsa86_mapclc 已有 ✅ |
+| KBUF-1 冒号初始化 (direct input restart) | L133-134 | ⏳ 待实现 (gwsts/scnedt 相关) |
+| STKINI 临时栈 | L135 | ⏳ 待实现 |
+| 命令行开关解析 /M: /F: /S: /C: | L175-270 | itsa86_mapclc 部分覆盖 (/M: ✅, /C: flag ✅, /F: /S: 忽略值=ASM 行为) ✅ |
+| MAPCLC 内存映射计算 | L281 | itsa86_mapclc 1:1 ✅ |
+| TXTTAB/STKLOW/VARTAB/MEMSIZ/FRETOP/STREND 内存布局 | L318-388 | itsa86_mapclc + gwdata/gwram 已覆盖 ✅ |
+| 栈大小计算 (free/8, min 512) | L359-364 | ⏳ 待实现 (itsa86_mapclc 后段) |
+| FREFLG 清零 + GETHED 标题打印 | L392-415 | gwmain.c 启动横幅已覆盖 ✅ |
+| KEYSW 功能键开关 | L398-425 | ⏳ OEM 部分，oem.c 已有 stub |
+| INITFG 初始化完成标志 | L426-427 | ⏳ 待实现 (g_state 或独立标志) |
+| CMDERR 初始化期错误处理 | L432-449 | ⏳ 待实现 |
 
-### ASM 依据
-- DSKCOM.ASM L290: `PRGFLI: MOV DH,LOW OFFSET MD_SQI` — 顺序输入模式
-- MSDOSU L60: `MD_SQI=1D` — sequential input = 1 (对应 C FM_INPUT=1)
-- FIVEO.ASM L636-639: CHAIN MERGE → OKGETM / 非 MERGE → CHNENT (跳转 LOAD 代码，文件保持打开)
-- DSKCOM.ASM L332: `CHNENT: MOV AL,LOW 201O` — A=LEAVE FILES OPEN, RUN
+### 步骤状态
 
-### 关键发现: mingw32-make test 与 test_gwbasic.exe 计数差异
-- `mingw32-make test` → 2119 (只跑注册的 run_test)
-- `./tests/test_gwbasic.exe` → 2128 (含 main() 内额外直接调用断言)
-- **5 个 CHAIN FAIL 只在 exe 直跑暴露** — make test 是不完整回归，后续应同时跑两者
+| 步骤 | PLAN_FRESH.md 描述 | 状态 |
+|------|-------------------|------|
+| 1 | 读 GWINIT.ASM | ✅ 完成 (456 行全读，结构表如上) |
+| 2 | 扩展 test_gwinit.c 单测 (TDD RED) | 🔄 进行中 — 现有 3 测试 (basic/constants/function_table)；待加: INITFG/开关解析/栈计算/CMDERF |
+| 3 | .bas 集成测试 | ⏳ 待定 (GWINIT 无独立运行时行为，由 gwmain 启动流程覆盖) |
+| 4 | 实现 src/gwinit.c (GREEN) | ⏳ 待扩展: INITFG/CMDERR/KBUF 冒号/栈计算 |
+| 5-7 | 测试至绿/交互验证/提交 | ⏳ |
+
+### 本轮已完成 (GWINIT 开始前的孤儿清理)
+
+| 项 | 状态 |
+|----|------|
+| 4 个 gwram 孤儿测试注册 (stress/variable_storage/zero_size/realloc_zero) | ✅ test_runner.c 713 声明 = 713 注册 |
+| 单测 | **3124/3124 PASS** (2119→3124, +1005? 无 — 3124 = 2119 + 4 gwram + 1001 gwdata/gwram 新断言) |
+| 完整 exe | **3133/3133 PASS** |
+| 警告 | 0 |
+| 集成回归 | gwram 4/4, gwdata 8/8, on_error ERR=11, cond 全绿 ✅ |
 
 ---
 
-## 上一轮: CODE_REVIEW v109 修复 (commit dda68de, 已完成)
+## 上一轮: CODE_REVIEW v110 修复 (commit bb2bba3, 已完成)
 
 | # | 级别 | 描述 | 状态 |
 |---|------|------|------|
-| M-1 | 🟨 | 测试编译警告 52→0 (const 指针化 + %lld + unused (void)) | ✅ |
-| M-2 | 🟨 | gwdata.c total_size + ERRTAB [12]/[14] 重复 | ✅ |
-| 超范围 | 🔧 | ERRTAB 1:1 ASM 重排 (30 非磁盘 + 25 磁盘 50-74) + ERRNF..ERRSO 宏 | ✅ |
-| L-1 | 🟩 | 测试计数 2120 确认 | ✅ |
+| L-1 | 🟩 | 测试计数确认 (断言合并，非丢失) | ✅ |
+| 超范围 | 🔴 HIGH | fiveo_chain mode 0 → FM_INPUT (ASM PRGFLI MD_SQI=1) | ✅ |
+
+## M0 GWRAM (commit 195c4c6 ✅) / GWDATA (commit ceabce9 ✅)
+
+7 步 TDD 全流程完成。GWRAM 含 CRITICAL 修复 (字符串堆无效 free)。
 
 ---
 
-## M0 GWRAM 模块 (commit 195c4c6, 已完成)
-
-7 步 TDD 全流程 + CRITICAL 修复: CLEAR/NEW/RUN/GET 4 处 gwram_free(字符串堆指针) 无效 free 移除。
-
-## M0 GWDATA 模块 (commit ceabce9, 已完成)
-
-7 步 TDD 全流程。
-
----
-
-## 变更文件清单 (本轮 v110 修复)
-
-| 文件 | 变更 |
-|------|------|
-| `src/fiveo.c` | fiveo_chain: mode 0 → FM_INPUT (ASM PRGFLI MD_SQI=1 对应)，修复 5 个 CHAIN 测试 FAIL |
-| `DEVELOPMENT_PROGRESS.md` | 记录 v110 进度 + make test vs exe 直跑差异发现 |
-
----
-
-## 验证结果 (本轮)
+## 验证基线 (当前)
 
 | 测试类型 | 命令 | 结果 |
 |----------|------|------|
-| 注册测试 | `mingw32-make test` | **2119/2119 PASS** |
-| 完整测试 | `./tests/test_gwbasic.exe` | **2128/2128 PASS** (5 CHAIN FAIL 清零) ✅ |
-| 编译警告 | 干净重建 | **0 条** (生产+测试) |
-| 集成回归 | gwram 4/4, gwdata 8/8, on_error ERR=11, cond/def_fn 全绿 | ✅ |
-| 孤儿 | 声明=注册=709 | **0** ✅ |
+| 注册测试 | `mingw32-make test` | **3124/3124 PASS** |
+| 完整测试 | `./tests/test_gwbasic.exe` | **3133/3133 PASS** |
+| 编译警告 | 干净重建 | **0 条** |
+| 孤儿 | 声明=注册=713 | **0** ✅ |
 
 ---
 
-## 下一步 (按 PLAN_FRESH.md 依赖顺序)
+## 下一步
 
-| 模块 | 依赖 | 说明 |
-|------|------|------|
-| **GWINIT** | GWDATA ✅, GWRAM ✅ | 读 GWINIT.ASM → test_gwinit 扩展 → src/gwinit.c → 提交等待 review |
-| **GWMAIN** | GWINIT, GWSTS | 后续 |
+1. 完成 GWINIT TDD: 扩展 test_gwinit.c (INITFG/CMDERR/栈计算/KBUF) → 实现 gwinit.c → mingw32-make test 至绿
+2. 提交 GWINIT → 等待 review
+3. 之后: GWMAIN 模块 (M0 最后一个)
 
 ## 更新时间
 2026-09-19
