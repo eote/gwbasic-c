@@ -345,7 +345,9 @@ int fiveo_chain(const char *filename, int line_number, bool merge, bool all_vars
     if (filenum == 0) {
         return -1;  /* No free file numbers */
     }
-    int rc = giodsk_open(filename, filenum, 0, 0);  /* Mode 0 = input */
+    /* ASM DSKCOM.ASM PRGFLI: CHAIN opens the file in sequential input
+     * mode (MD_SQI=1) with internal file number 0. FM_INPUT=1 here. */
+    int rc = giodsk_open(filename, filenum, FM_INPUT, 0);
     if (rc != 0) {
         return -1;  /* File not found or open error */
     }
