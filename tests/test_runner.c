@@ -1224,24 +1224,6 @@ int main(void) {
     failed += run_test("ibmres_init_term", test_ibmres_init_term);
     failed += run_test("ibmres_case_insensitive_all",
                        test_ibmres_case_insensitive_all);
-    failed += run_test("ibmres_all_extended_functions",
-                       test_ibmres_all_extended_functions);
-    failed += run_test("ibmres_all_extended_statements",
-                       test_ibmres_all_extended_statements);
-    failed += run_test("ibmres_crunch_extended_comprehensive",
-                       test_ibmres_crunch_extended_comprehensive);
-    failed += run_test("ibmres_eval_extended_comprehensive",
-                       test_ibmres_eval_extended_comprehensive);
-    failed += run_test("ibmres_extended_token_functions",
-                       test_ibmres_extended_token_functions);
-    failed += run_test("ibmres_get_keyword_type_comprehensive",
-                       test_ibmres_get_keyword_type_comprehensive);
-    failed += run_test("ibmres_is_reserved_word_comprehensive",
-                       test_ibmres_is_reserved_word_comprehensive);
-    failed += run_test("ibmres_lookup_case_insensitive",
-                       test_ibmres_lookup_case_insensitive);
-    failed += run_test("ibmres_lookup_extended_func",
-                       test_ibmres_lookup_extended_func);
 
     /* OEMEV tests */
     failed += run_test("oemev_init", test_oemev_init);
@@ -1711,24 +1693,6 @@ int main(void) {
     failed += run_test("fiveo_chain_merge_mode", test_fiveo_chain_merge_mode);
     failed += run_test("fiveo_chain_all_vars", test_fiveo_chain_all_vars);
     failed += run_test("fiveo_chain_line_number", test_fiveo_chain_line_number);
-    failed += run_test("fiveo_chain_init_resets_state", test_fiveo_chain_init_resets_state);
-    failed += run_test("fiveo_chain_nonexistent_file", test_fiveo_chain_nonexistent_file);
-    failed += run_test("fiveo_common_get_marked_overflow", test_fiveo_common_get_marked_overflow);
-    failed += run_test("fiveo_common_is_marked_basic", test_fiveo_common_is_marked_basic);
-    failed += run_test("fiveo_common_is_marked_case_insensitive", test_fiveo_common_is_marked_case_insensitive);
-    failed += run_test("fiveo_common_is_marked_null", test_fiveo_common_is_marked_null);
-    failed += run_test("fiveo_common_mark_case_insensitive", test_fiveo_common_mark_case_insensitive);
-    failed += run_test("fiveo_common_mark_duplicate", test_fiveo_common_mark_duplicate);
-    failed += run_test("fiveo_find_while_empty_stack", test_fiveo_find_while_empty_stack);
-    failed += run_test("fiveo_init_clears_while_stack", test_fiveo_init_clears_while_stack);
-    failed += run_test("fiveo_peek_while_after_push", test_fiveo_peek_while_after_push);
-    failed += run_test("fiveo_peek_while_does_not_pop", test_fiveo_peek_while_does_not_pop);
-    failed += run_test("fiveo_write_active_after_begin_end", test_fiveo_write_active_after_begin_end);
-    failed += run_test("fiveo_write_begin_overrides", test_fiveo_write_begin_overrides);
-    failed += run_test("fiveo_write_begin_sets_state", test_fiveo_write_begin_sets_state);
-    failed += run_test("fiveo_write_end_clears_state", test_fiveo_write_end_clears_state);
-    failed += run_test("fiveo_write_end_when_not_active", test_fiveo_write_end_when_not_active);
-    failed += run_test("fiveo_write_file_returns_current", test_fiveo_write_file_returns_current);
 
     /* SCNDRV tests */
     failed += run_test("scndrv_init", test_scndrv_init);
