@@ -924,36 +924,28 @@ int main(void) {
     failed += run_test("gweval_synchr_no_match", test_gweval_synchr_no_match);
     failed += run_test("gweval_synchr_eos", test_gweval_synchr_eos);
     failed += run_test("gweval_synchr_null", test_gweval_synchr_null);
-    failed +=
-        run_test("gweval_synchr_operator_eq", test_gweval_synchr_operator_eq);
+    failed += run_test("gweval_synchr_operator_eq", test_gweval_synchr_operator_eq);
 
     /* ADVGRP tests */
     failed += run_test("advgrp_paint_basic", test_advgrp_paint_basic);
-    failed +=
-        run_test("advgrp_paint_border_color", test_advgrp_paint_border_color);
-    failed +=
-        run_test("advgrp_paint_out_of_bounds", test_advgrp_paint_out_of_bounds);
+    failed += run_test("advgrp_paint_border_color", test_advgrp_paint_border_color);
+    failed += run_test("advgrp_paint_out_of_bounds", test_advgrp_paint_out_of_bounds);
     failed += run_test("advgrp_circle_basic", test_advgrp_circle_basic);
-    failed +=
-        run_test("advgrp_circle_zero_radius", test_advgrp_circle_zero_radius);
+    failed += run_test("advgrp_circle_zero_radius", test_advgrp_circle_zero_radius);
     failed += run_test("advgrp_get_basic", test_advgrp_get_basic);
     failed += run_test("advgrp_get_null_array", test_advgrp_get_null_array);
-    failed += run_test("advgrp_get_data_correctness",
-                       test_advgrp_get_data_correctness);
-    failed +=
-        run_test("advgrp_get_put_roundtrip", test_advgrp_get_put_roundtrip);
+    failed += run_test("advgrp_get_data_correctness", test_advgrp_get_data_correctness);
+    failed += run_test("advgrp_get_put_roundtrip", test_advgrp_get_put_roundtrip);
     failed += run_test("advgrp_put_basic", test_advgrp_put_basic);
     failed += run_test("advgrp_put_xor", test_advgrp_put_xor);
-    failed +=
-        run_test("advgrp_paint_after_circle", test_advgrp_paint_after_circle);
+    failed += run_test("advgrp_paint_after_circle", test_advgrp_paint_after_circle);
 
     /* CALL86 tests */
     failed += run_test("call86_init", test_call86_init);
     failed += run_test("call86_call_basic", test_call86_call_basic);
     failed += run_test("call86_call_with_params", test_call86_call_with_params);
     failed += run_test("call86_calls_basic", test_call86_calls_basic);
-    failed +=
-        run_test("call86_calls_with_params", test_call86_calls_with_params);
+    failed += run_test("call86_calls_with_params", test_call86_calls_with_params);
     failed += run_test("call86_call_no_params", test_call86_call_no_params);
     failed += run_test("call86_usr_basic", test_call86_usr_basic);
     failed += run_test("call86_usr_all_indices", test_call86_usr_all_indices);
@@ -961,35 +953,25 @@ int main(void) {
     failed += run_test("call86_defusr_basic", test_call86_defusr_basic);
     failed += run_test("call86_defusr_invalid", test_call86_defusr_invalid);
     failed += run_test("call86_call_variable", test_call86_call_variable);
-    failed +=
-        run_test("call86_call_array_params", test_call86_call_array_params);
-    failed +=
-        run_test("call86_call_empty_parens", test_call86_call_empty_parens);
+    failed += run_test("call86_call_array_params", test_call86_call_array_params);
+    failed += run_test("call86_call_empty_parens", test_call86_call_empty_parens);
 
     /* GWEVAL HELPER tests */
 
     /* ITSA86 tests */
     failed += run_test("itsa86_init", test_itsa86_init);
-    failed += run_test("itsa86_basvar_read_uninitialized",
-                       test_itsa86_basvar_read_uninitialized);
-    failed += run_test("itsa86_basvar_write_uninitialized",
-                       test_itsa86_basvar_write_uninitialized);
-    failed += run_test("itsa86_basvar_invalid_index",
-                       test_itsa86_basvar_invalid_index);
-    failed += run_test("itsa86_basvar_all_indices_uninitialized",
-                       test_itsa86_basvar_all_indices_uninitialized);
-    failed +=
-        run_test("itsa86_mapclc_no_options", test_itsa86_mapclc_no_options);
-    failed += run_test("itsa86_mapclc_m_option_valid",
-                       test_itsa86_mapclc_m_option_valid);
-    failed += run_test("itsa86_mapclc_m_option_too_large",
-                       test_itsa86_mapclc_m_option_too_large);
+    failed += run_test("itsa86_basvar_read_uninitialized", test_itsa86_basvar_read_uninitialized);
+    failed += run_test("itsa86_basvar_write_uninitialized", test_itsa86_basvar_write_uninitialized);
+    failed += run_test("itsa86_basvar_invalid_index", test_itsa86_basvar_invalid_index);
+    failed += run_test("itsa86_basvar_all_indices_uninitialized", test_itsa86_basvar_all_indices_uninitialized);
+    failed += run_test("itsa86_mapclc_no_options", test_itsa86_mapclc_no_options);
+    failed += run_test("itsa86_mapclc_m_option_valid", test_itsa86_mapclc_m_option_valid);
+    failed += run_test("itsa86_mapclc_m_option_too_large", test_itsa86_mapclc_m_option_too_large);
     failed += run_test("itsa86_mapclc_c_option", test_itsa86_mapclc_c_option);
     failed += run_test("itsa86_seg_off_valid", test_itsa86_seg_off_valid);
     failed += run_test("itsa86_seg_off_below_ds", test_itsa86_seg_off_below_ds);
     failed += run_test("itsa86_seg_off_at_ds", test_itsa86_seg_off_at_ds);
-    failed +=
-        run_test("itsa86_seg_off_64k_limit", test_itsa86_seg_off_64k_limit);
+    failed += run_test("itsa86_seg_off_64k_limit", test_itsa86_seg_off_64k_limit);
     failed += run_test("itsa86_get_memory_info", test_itsa86_get_memory_info);
     failed += run_test("itsa86_set_c_option", test_itsa86_set_c_option);
     failed += run_test("itsa86_set_m_option", test_itsa86_set_m_option);
@@ -1071,8 +1053,7 @@ int main(void) {
     failed += run_test("giotbl_lookup_device", test_giotbl_lookup_device);
     failed += run_test("giotbl_get_dispatch", test_giotbl_get_dispatch);
     failed += run_test("giotbl_get_name_table", test_giotbl_get_name_table);
-    failed +=
-        run_test("giotbl_get_dispatch_table", test_giotbl_get_dispatch_table);
+    failed += run_test("giotbl_get_dispatch_table", test_giotbl_get_dispatch_table);
     failed += run_test("giotbl_find_device", test_giotbl_find_device);
     failed += run_test("giotbl_init_all", test_giotbl_init_all);
 
@@ -1124,42 +1105,29 @@ int main(void) {
     failed += run_test("oem_grpsiz", test_oem_grpsiz);
     failed += run_test("oem_csrdsp", test_oem_csrdsp);
     failed += run_test("oem_setatr", test_oem_setatr);
-    failed += run_test("oem_clrscn_al0_clears_screen",
-                       test_oem_clrscn_al0_clears_screen);
-    failed += run_test("oem_clrscn_al1_clears_framebuffer",
-                       test_oem_clrscn_al1_clears_framebuffer);
-    failed += run_test("oem_clrscn_al2_window_clear",
-                       test_oem_clrscn_al2_window_clear);
-    failed += run_test("oem_clrscn_al2_clamps_to_screen",
-                       test_oem_clrscn_al2_clamps_to_screen);
-    failed +=
-        run_test("oem_clreol_valid_position", test_oem_clreol_valid_position);
-    failed +=
-        run_test("oem_clreol_out_of_bounds", test_oem_clreol_out_of_bounds);
+    failed += run_test("oem_clrscn_al0_clears_screen", test_oem_clrscn_al0_clears_screen);
+    failed += run_test("oem_clrscn_al1_clears_framebuffer", test_oem_clrscn_al1_clears_framebuffer);
+    failed += run_test("oem_clrscn_al2_window_clear", test_oem_clrscn_al2_window_clear);
+    failed += run_test("oem_clrscn_al2_clamps_to_screen", test_oem_clrscn_al2_clamps_to_screen);
+    failed += run_test("oem_clreol_valid_position", test_oem_clreol_valid_position);
+    failed += run_test("oem_clreol_out_of_bounds", test_oem_clreol_out_of_bounds);
     failed += run_test("oem_clreol_at_last_col", test_oem_clreol_at_last_col);
     failed += run_test("oem_scroll_up", test_oem_scroll_up);
     failed += run_test("oem_scroll_down", test_oem_scroll_down);
     failed += run_test("oem_scroll_left", test_oem_scroll_left);
     failed += run_test("oem_scroll_right", test_oem_scroll_right);
     failed += run_test("oem_scroll_no_movement", test_oem_scroll_no_movement);
-    failed += run_test("oem_scroll_invalid_dimensions",
-                       test_oem_scroll_invalid_dimensions);
-    failed +=
-        run_test("oem_scroll_out_of_bounds", test_oem_scroll_out_of_bounds);
-    failed +=
-        run_test("oem_scrinp_valid_position", test_oem_scrinp_valid_position);
-    failed +=
-        run_test("oem_scrinp_out_of_bounds", test_oem_scrinp_out_of_bounds);
+    failed += run_test("oem_scroll_invalid_dimensions", test_oem_scroll_invalid_dimensions);
+    failed += run_test("oem_scroll_out_of_bounds", test_oem_scroll_out_of_bounds);
+    failed += run_test("oem_scrinp_valid_position", test_oem_scrinp_valid_position);
+    failed += run_test("oem_scrinp_out_of_bounds", test_oem_scrinp_out_of_bounds);
     failed += run_test("oem_nsetcx_zero_count", test_oem_nsetcx_zero_count);
-    failed +=
-        run_test("oem_nsetcx_negative_count", test_oem_nsetcx_negative_count);
+    failed += run_test("oem_nsetcx_negative_count", test_oem_nsetcx_negative_count);
     failed += run_test("oem_nsetcx_zero_atrmsk", test_oem_nsetcx_zero_atrmsk);
     failed += run_test("oem_nsetcx_pixbts1", test_oem_nsetcx_pixbts1);
     failed += run_test("oem_nsetcx_pixbts2", test_oem_nsetcx_pixbts2);
-    failed +=
-        run_test("oem_nsetcx_pixbts2_clear", test_oem_nsetcx_pixbts2_clear);
-    failed += run_test("oem_nsetcx_crosses_byte_boundary",
-                       test_oem_nsetcx_crosses_byte_boundary);
+    failed += run_test("oem_nsetcx_pixbts2_clear", test_oem_nsetcx_pixbts2_clear);
+    failed += run_test("oem_nsetcx_crosses_byte_boundary", test_oem_nsetcx_crosses_byte_boundary);
     failed += run_test("oem_nread_zero_count", test_oem_nread_zero_count);
     failed += run_test("oem_nread_null_array", test_oem_nread_null_array);
     failed += run_test("oem_nread_pixbts1", test_oem_nread_pixbts1);
@@ -1169,8 +1137,7 @@ int main(void) {
     failed += run_test("oem_nwrite_null_array", test_oem_nwrite_null_array);
     failed += run_test("oem_nwrite_pixbts1", test_oem_nwrite_pixbts1);
     failed += run_test("oem_nwrite_pixbts2", test_oem_nwrite_pixbts2);
-    failed +=
-        run_test("oem_nread_nwrite_roundtrip", test_oem_nread_nwrite_roundtrip);
+    failed += run_test("oem_nread_nwrite_roundtrip", test_oem_nread_nwrite_roundtrip);
     failed += run_test("oem_nwrite_partial_byte", test_oem_nwrite_partial_byte);
 
     /* BIBOOT tests */
@@ -1181,19 +1148,15 @@ int main(void) {
     failed += run_test("ibmres_init", test_ibmres_init);
     failed += run_test("ibmres_lookup_statement", test_ibmres_lookup_statement);
     failed += run_test("ibmres_lookup_function", test_ibmres_lookup_function);
-    failed += run_test("ibmres_lookup_extended_stmt",
-                       test_ibmres_lookup_extended_stmt);
-    failed += run_test("ibmres_lookup_extended_func",
-                       test_ibmres_lookup_extended_func);
-    failed += run_test("ibmres_lookup_case_insensitive",
-                       test_ibmres_lookup_case_insensitive);
+    failed += run_test("ibmres_lookup_extended_stmt", test_ibmres_lookup_extended_stmt);
+    failed += run_test("ibmres_lookup_extended_func", test_ibmres_lookup_extended_func);
+    failed += run_test("ibmres_lookup_case_insensitive", test_ibmres_lookup_case_insensitive);
     failed += run_test("ibmres_lookup_not_found", test_ibmres_lookup_not_found);
     failed += run_test("ibmres_get_token", test_ibmres_get_token);
     failed += run_test("ibmres_get_token_name", test_ibmres_get_token_name);
     failed += run_test("ibmres_is_reserved_word", test_ibmres_is_reserved_word);
     failed += run_test("ibmres_get_keyword_type", test_ibmres_get_keyword_type);
-    failed +=
-        run_test("ibmres_is_extended_token", test_ibmres_is_extended_token);
+    failed += run_test("ibmres_is_extended_token", test_ibmres_is_extended_token);
     failed += run_test("ibmres_get_token_length", test_ibmres_get_token_length);
     failed += run_test("ibmres_crunch_extended", test_ibmres_crunch_extended);
     failed += run_test("ibmres_eval_extended", test_ibmres_eval_extended);
@@ -1201,29 +1164,19 @@ int main(void) {
     failed += run_test("ibmres_list_extended", test_ibmres_list_extended);
     failed += run_test("ibmres_term", test_ibmres_term);
     /* Additional comprehensive IBMRES tests */
-    failed +=
-        run_test("ibmres_all_core_statements", test_ibmres_all_core_statements);
-    failed +=
-        run_test("ibmres_all_core_functions", test_ibmres_all_core_functions);
-    failed += run_test("ibmres_all_extended_statements",
-                       test_ibmres_all_extended_statements);
-    failed += run_test("ibmres_all_extended_functions",
-                       test_ibmres_all_extended_functions);
+    failed += run_test("ibmres_all_core_statements", test_ibmres_all_core_statements);
+    failed += run_test("ibmres_all_core_functions", test_ibmres_all_core_functions);
+    failed += run_test("ibmres_all_extended_statements", test_ibmres_all_extended_statements);
+    failed += run_test("ibmres_all_extended_functions", test_ibmres_all_extended_functions);
     failed += run_test("ibmres_operators", test_ibmres_operators);
-    failed += run_test("ibmres_crunch_extended_comprehensive",
-                       test_ibmres_crunch_extended_comprehensive);
-    failed += run_test("ibmres_eval_extended_comprehensive",
-                       test_ibmres_eval_extended_comprehensive);
-    failed += run_test("ibmres_is_reserved_word_comprehensive",
-                       test_ibmres_is_reserved_word_comprehensive);
-    failed += run_test("ibmres_get_keyword_type_comprehensive",
-                       test_ibmres_get_keyword_type_comprehensive);
-    failed += run_test("ibmres_extended_token_functions",
-                       test_ibmres_extended_token_functions);
+    failed += run_test("ibmres_crunch_extended_comprehensive", test_ibmres_crunch_extended_comprehensive);
+    failed += run_test("ibmres_eval_extended_comprehensive", test_ibmres_eval_extended_comprehensive);
+    failed += run_test("ibmres_is_reserved_word_comprehensive", test_ibmres_is_reserved_word_comprehensive);
+    failed += run_test("ibmres_get_keyword_type_comprehensive", test_ibmres_get_keyword_type_comprehensive);
+    failed += run_test("ibmres_extended_token_functions", test_ibmres_extended_token_functions);
     failed += run_test("ibmres_list_functions", test_ibmres_list_functions);
     failed += run_test("ibmres_init_term", test_ibmres_init_term);
-    failed += run_test("ibmres_case_insensitive_all",
-                       test_ibmres_case_insensitive_all);
+    failed += run_test("ibmres_case_insensitive_all", test_ibmres_case_insensitive_all);
 
     /* OEMEV tests */
     failed += run_test("oemev_init", test_oemev_init);
@@ -1244,21 +1197,17 @@ int main(void) {
     failed += run_test("oemsnd_init", test_oemsnd_init);
     failed += run_test("oemsnd_term", test_oemsnd_term);
     failed += run_test("oemsnd_donote_reset", test_oemsnd_donote_reset);
-    failed +=
-        run_test("oemsnd_donote_foreground", test_oemsnd_donote_foreground);
-    failed +=
-        run_test("oemsnd_donote_background", test_oemsnd_donote_background);
+    failed += run_test("oemsnd_donote_foreground", test_oemsnd_donote_foreground);
+    failed += run_test("oemsnd_donote_background", test_oemsnd_donote_background);
     failed += run_test("oemsnd_donote_rest", test_oemsnd_donote_rest);
-    failed += run_test("oemsnd_donote_zero_duration",
-                       test_oemsnd_donote_zero_duration);
+    failed += run_test("oemsnd_donote_zero_duration", test_oemsnd_donote_zero_duration);
     failed += run_test("oemsnd_sound", test_oemsnd_sound);
     failed += run_test("oemsnd_play", test_oemsnd_play);
     failed += run_test("oemsnd_start_term", test_oemsnd_start_term);
     failed += run_test("oemsnd_sndsta_sndtrm", test_oemsnd_sndsta_sndtrm);
     failed += run_test("oemsnd_multiple_notes", test_oemsnd_multiple_notes);
     failed += run_test("oemsnd_reset", test_oemsnd_reset);
-    failed +=
-        run_test("oemsnd_various_frequencies", test_oemsnd_various_frequencies);
+    failed += run_test("oemsnd_various_frequencies", test_oemsnd_various_frequencies);
     failed += run_test("oemsnd_stop", test_oemsnd_stop);
     failed += run_test("oemsnd_play_command", test_oemsnd_play_command);
     failed += run_test("oemsnd_edge_cases", test_oemsnd_edge_cases);
@@ -1277,8 +1226,7 @@ int main(void) {
     failed += run_test("scnedt_edit", test_scnedt_edit);
     failed += run_test("scnedt_scnsem", test_scnedt_scnsem);
     failed += run_test("scnedt_get_buf_len", test_scnedt_get_buf_len);
-    failed +=
-        run_test("scnedt_init_state_pinlin", test_scnedt_init_state_pinlin);
+    failed += run_test("scnedt_init_state_pinlin", test_scnedt_init_state_pinlin);
     failed += run_test("scnedt_init_state_inlin", test_scnedt_init_state_inlin);
 
     /* OEMCBK tests */
@@ -1289,37 +1237,26 @@ int main(void) {
     failed += run_test("oem_check_pause", test_oem_check_pause);
     failed += run_test("oem_simulate_ctrl_break", test_oem_simulate_ctrl_break);
     failed += run_test("oem_simulate_pause", test_oem_simulate_pause);
-    failed += run_test("oem_process_keyboard_ctrl_shift_b",
-                       test_oem_process_keyboard_ctrl_shift_b);
-    failed += run_test("oem_process_keyboard_ctrl_shift_p",
-                       test_oem_process_keyboard_ctrl_shift_p);
-    failed += run_test("oem_process_keyboard_ctrl_numlock",
-                       test_oem_process_keyboard_ctrl_numlock);
-    failed += run_test("oem_process_keyboard_regular",
-                       test_oem_process_keyboard_regular);
-    failed += run_test("oem_process_keyboard_ctrl_only",
-                       test_oem_process_keyboard_ctrl_only);
-    failed += run_test("oem_process_keyboard_shift_only",
-                       test_oem_process_keyboard_shift_only);
-    failed += run_test("oem_process_keyboard_key_up",
-                       test_oem_process_keyboard_key_up);
+    failed += run_test("oem_process_keyboard_ctrl_shift_b", test_oem_process_keyboard_ctrl_shift_b);
+    failed += run_test("oem_process_keyboard_ctrl_shift_p", test_oem_process_keyboard_ctrl_shift_p);
+    failed += run_test("oem_process_keyboard_ctrl_numlock", test_oem_process_keyboard_ctrl_numlock);
+    failed += run_test("oem_process_keyboard_regular", test_oem_process_keyboard_regular);
+    failed += run_test("oem_process_keyboard_ctrl_only", test_oem_process_keyboard_ctrl_only);
+    failed += run_test("oem_process_keyboard_shift_only", test_oem_process_keyboard_shift_only);
+    failed += run_test("oem_process_keyboard_key_up", test_oem_process_keyboard_key_up);
     failed += run_test("oemcbk_init_term_double", test_oemcbk_init_term_double);
-    failed +=
-        run_test("oemcbk_ctrl_break_cleared", test_oemcbk_ctrl_break_cleared);
+    failed += run_test("oemcbk_ctrl_break_cleared", test_oemcbk_ctrl_break_cleared);
     failed += run_test("oemcbk_pause_cleared", test_oemcbk_pause_cleared);
     failed += run_test("oemcbk_without_init", test_oemcbk_without_init);
-    failed += run_test("oemcbk_process_without_cbksta",
-                       test_oemcbk_process_without_cbksta);
+    failed += run_test("oemcbk_process_without_cbksta", test_oemcbk_process_without_cbksta);
     failed += run_test("oemcbk_right_ctrl_shift", test_oemcbk_right_ctrl_shift);
 
     /* GENGRP tests */
     failed += run_test("gengrp_init", test_gengrp_init);
     failed += run_test("gengrp_grpini", test_gengrp_grpini);
     failed += run_test("gengrp_grprst", test_gengrp_grprst);
-    failed +=
-        run_test("gengrp_scan_coord_absolute", test_gengrp_scan_coord_absolute);
-    failed +=
-        run_test("gengrp_scan_coord_relative", test_gengrp_scan_coord_relative);
+    failed += run_test("gengrp_scan_coord_absolute", test_gengrp_scan_coord_absolute);
+    failed += run_test("gengrp_scan_coord_relative", test_gengrp_scan_coord_relative);
     failed += run_test("gengrp_pset", test_gengrp_pset);
     failed += run_test("gengrp_preset", test_gengrp_preset);
     failed += run_test("gengrp_point", test_gengrp_point);
@@ -1341,10 +1278,8 @@ int main(void) {
     failed += run_test("gengrp_point_text_mode", test_gengrp_point_text_mode);
     failed += run_test("gengrp_multiple_ops", test_gengrp_multiple_ops);
     failed += run_test("gengrp_grprst_resets", test_gengrp_grprst_resets);
-    failed +=
-        run_test("gengrp_line_various_coords", test_gengrp_line_various_coords);
-    failed +=
-        run_test("gengrp_scan_coord_multiple", test_gengrp_scan_coord_multiple);
+    failed += run_test("gengrp_line_various_coords", test_gengrp_line_various_coords);
+    failed += run_test("gengrp_scan_coord_multiple", test_gengrp_scan_coord_multiple);
     failed += run_test("gengrp_set_atr_negative", test_gengrp_set_atr_negative);
     failed += run_test("gengrp_boundaries", test_gengrp_boundaries);
     failed += run_test("gengrp_line_negative", test_gengrp_line_negative);
@@ -1355,8 +1290,7 @@ int main(void) {
     failed += run_test("giodsk_open_sqo", test_giodsk_open_sqo);
     failed += run_test("giodsk_open_rnd", test_giodsk_open_rnd);
     failed += run_test("giodsk_open_app", test_giodsk_open_app);
-    failed += run_test("giodsk_open_invalid_filenum",
-                       test_giodsk_open_invalid_filenum);
+    failed += run_test("giodsk_open_invalid_filenum", test_giodsk_open_invalid_filenum);
     failed += run_test("giodsk_close", test_giodsk_close);
     failed += run_test("giodsk_close_all", test_giodsk_close_all);
     failed += run_test("giodsk_print", test_giodsk_print);
@@ -1374,8 +1308,7 @@ int main(void) {
     failed += run_test("giodsk_write_read", test_giodsk_write_read);
     failed += run_test("giodsk_append", test_giodsk_append);
     failed += run_test("giodsk_record_size", test_giodsk_record_size);
-    failed +=
-        run_test("giodsk_default_record_size", test_giodsk_default_record_size);
+    failed += run_test("giodsk_default_record_size", test_giodsk_default_record_size);
 
     /* GIOLPT tests */
     failed += run_test("giolpt_init", test_giolpt_init);
@@ -1401,10 +1334,8 @@ int main(void) {
     failed += run_test("giolpt_reopen", test_giolpt_reopen);
     failed += run_test("giolpt_invalid_device", test_giolpt_invalid_device);
     failed += run_test("giolpt_multiple_devices", test_giolpt_multiple_devices);
-    failed +=
-        run_test("giolpt_lpos_after_output", test_giolpt_lpos_after_output);
-    failed +=
-        run_test("giolpt_sot_cr_resets_pos", test_giolpt_sot_cr_resets_pos);
+    failed += run_test("giolpt_lpos_after_output", test_giolpt_lpos_after_output);
+    failed += run_test("giolpt_sot_cr_resets_pos", test_giolpt_sot_cr_resets_pos);
     failed += run_test("giolpt_gwd_after_close", test_giolpt_gwd_after_close);
 
     /* GIOCOM tests */
@@ -1434,15 +1365,12 @@ int main(void) {
     failed += run_test("giocom_invalid_device", test_giocom_invalid_device);
     failed += run_test("giocom_multiple_devices", test_giocom_multiple_devices);
     failed += run_test("giocom_default_baud", test_giocom_default_baud);
-    failed +=
-        run_test("giocom_stop_bits_defaults", test_giocom_stop_bits_defaults);
+    failed += run_test("giocom_stop_bits_defaults", test_giocom_stop_bits_defaults);
     failed += run_test("giocom_parity", test_giocom_parity);
     failed += run_test("giocom_data_bits", test_giocom_data_bits);
     failed += run_test("giocom_close_resets_pos", test_giocom_close_resets_pos);
-    failed +=
-        run_test("giocom_sot_cr_resets_pos", test_giocom_sot_cr_resets_pos);
-    failed +=
-        run_test("giocom_sot_lf_resets_pos", test_giocom_sot_lf_resets_pos);
+    failed += run_test("giocom_sot_cr_resets_pos", test_giocom_sot_cr_resets_pos);
+    failed += run_test("giocom_sot_lf_resets_pos", test_giocom_sot_lf_resets_pos);
     failed += run_test("giocom_gwd_after_close", test_giocom_gwd_after_close);
     failed += run_test("giocom_sin_timeout", test_giocom_sin_timeout);
     /* GWLIST tests */
@@ -1454,8 +1382,7 @@ int main(void) {
     failed += run_test("gwlist_delete_middle", test_gwlist_delete_middle);
     failed += run_test("gwlist_delete_first", test_gwlist_delete_first);
     failed += run_test("gwlist_delete_last", test_gwlist_delete_last);
-    failed +=
-        run_test("gwlist_delete_nonexistent", test_gwlist_delete_nonexistent);
+    failed += run_test("gwlist_delete_nonexistent", test_gwlist_delete_nonexistent);
     failed += run_test("gwlist_list_basic", test_gwlist_list_basic);
     failed += run_test("gwlist_list_range", test_gwlist_list_range);
     failed += run_test("gwlist_list_start_only", test_gwlist_list_start_only);
@@ -1466,14 +1393,12 @@ int main(void) {
     failed += run_test("gwlist_empty_text", test_gwlist_empty_text);
     failed += run_test("gwlist_long_text", test_gwlist_long_text);
     failed += run_test("gwlist_delete_all", test_gwlist_delete_all);
-    failed +=
-        run_test("gwlist_insert_at_beginning", test_gwlist_insert_at_beginning);
+    failed += run_test("gwlist_insert_at_beginning", test_gwlist_insert_at_beginning);
     failed += run_test("gwlist_insert_at_end", test_gwlist_insert_at_end);
     failed += run_test("gwlist_special_chars", test_gwlist_special_chars);
     failed += run_test("gwlist_init", test_gwlist_init);
     failed += run_test("gwlist_init_twice", test_gwlist_init_twice);
-    failed += run_test("gwlist_delete_then_add_same",
-                       test_gwlist_delete_then_add_same);
+    failed += run_test("gwlist_delete_then_add_same", test_gwlist_delete_then_add_same);
     failed += run_test("gwlist_many_lines", test_gwlist_many_lines);
     /* GWLIST/BISTRS combined tests */
     failed += run_test("gwlist_bistrs_init", test_gwlist_bistrs_init);
@@ -1489,8 +1414,7 @@ int main(void) {
     failed += run_test("gwsts_let_numeric_expr", test_gwsts_let_numeric_expr);
     failed += run_test("gwsts_let_mult", test_gwsts_let_mult);
     failed += run_test("gwsts_direct_assign", test_gwsts_direct_assign);
-    failed +=
-        run_test("gwsts_direct_assign_expr", test_gwsts_direct_assign_expr);
+    failed += run_test("gwsts_direct_assign_expr", test_gwsts_direct_assign_expr);
     failed += run_test("gwsts_print_expr", test_gwsts_print_expr);
     failed += run_test("gwsts_if_true", test_gwsts_if_true);
     failed += run_test("gwsts_if_false", test_gwsts_if_false);
@@ -1544,15 +1468,13 @@ int main(void) {
     failed += run_test("bimisc_troff", test_bimisc_troff);
     failed += run_test("bimisc_is_letter_upper", test_bimisc_is_letter_upper);
     failed += run_test("bimisc_is_letter_lower", test_bimisc_is_letter_lower);
-    failed +=
-        run_test("bimisc_is_letter_nonletter", test_bimisc_is_letter_nonletter);
+    failed += run_test("bimisc_is_letter_nonletter", test_bimisc_is_letter_nonletter);
     failed += run_test("bimisc_stop", test_bimisc_stop);
     failed += run_test("bimisc_end", test_bimisc_end);
     failed += run_test("bimisc_cont", test_bimisc_cont);
     failed += run_test("bimisc_swap_numeric", test_bimisc_swap_numeric);
     failed += run_test("bimisc_swap_integer", test_bimisc_swap_integer);
-    failed +=
-        run_test("bimisc_swap_type_mismatch", test_bimisc_swap_type_mismatch);
+    failed += run_test("bimisc_swap_type_mismatch", test_bimisc_swap_type_mismatch);
     failed += run_test("bimisc_swap_null", test_bimisc_swap_null);
     failed += run_test("bimisc_swap_nonexistent", test_bimisc_swap_nonexistent);
     failed += run_test("bimisc_is_file_io", test_bimisc_is_file_io);
@@ -1562,8 +1484,7 @@ int main(void) {
     failed += run_test("bimisc_clear_with_args", test_bimisc_clear_with_args);
     failed += run_test("bimisc_run_setup", test_bimisc_run_setup);
     failed += run_test("bimisc_erase", test_bimisc_erase);
-    failed +=
-        run_test("bimisc_erase_nonexistent", test_bimisc_erase_nonexistent);
+    failed += run_test("bimisc_erase_nonexistent", test_bimisc_erase_nonexistent);
     failed += run_test("bimisc_erase_null", test_bimisc_erase_null);
     failed += run_test("bimisc_control_char", test_bimisc_control_char);
     failed += run_test("bimisc_get_stack", test_bimisc_get_stack);
@@ -1571,8 +1492,7 @@ int main(void) {
     failed += run_test("bimisc_trap_on_off", test_bimisc_trap_on_off);
     failed += run_test("bimisc_trap_stop", test_bimisc_trap_stop);
     failed += run_test("bimisc_set_trap_address", test_bimisc_set_trap_address);
-    failed +=
-        run_test("bimisc_check_traps_empty", test_bimisc_check_traps_empty);
+    failed += run_test("bimisc_check_traps_empty", test_bimisc_check_traps_empty);
     /* BIPTRG extended tests */
     failed += run_test("biptrg_dim_single", test_biptrg_dim_single);
     failed += run_test("biptrg_dim_integer", test_biptrg_dim_integer);
@@ -1587,16 +1507,11 @@ int main(void) {
     failed += run_test("biptrg_index_clamp_low", test_biptrg_index_clamp_low);
     failed += run_test("biptrg_get_nonexistent", test_biptrg_get_nonexistent);
     failed += run_test("biptrg_set_nonexistent", test_biptrg_set_nonexistent);
-    failed += run_test("biptrg_type_mismatch_set_string",
-                       test_biptrg_type_mismatch_set_string);
-    failed += run_test("biptrg_type_mismatch_set_numeric",
-                       test_biptrg_type_mismatch_set_numeric);
-    failed += run_test("biptrg_get_string_on_numeric",
-                       test_biptrg_get_string_on_numeric);
-    failed += run_test("biptrg_get_numeric_on_string",
-                       test_biptrg_get_numeric_on_string);
-    failed +=
-        run_test("biptrg_multiple_elements", test_biptrg_multiple_elements);
+    failed += run_test("biptrg_type_mismatch_set_string", test_biptrg_type_mismatch_set_string);
+    failed += run_test("biptrg_type_mismatch_set_numeric", test_biptrg_type_mismatch_set_numeric);
+    failed += run_test("biptrg_get_string_on_numeric", test_biptrg_get_string_on_numeric);
+    failed += run_test("biptrg_get_numeric_on_string", test_biptrg_get_numeric_on_string);
+    failed += run_test("biptrg_multiple_elements", test_biptrg_multiple_elements);
     failed += run_test("biptrg_string_overwrite", test_biptrg_string_overwrite);
     failed += run_test("biptrg_free_array", test_biptrg_free_array);
     failed += run_test("biptrg_free_null", test_biptrg_free_null);
@@ -1613,82 +1528,52 @@ int main(void) {
     /* FIVEO tests */
     failed += run_test("fiveo_init", test_fiveo_init);
     failed += run_test("fiveo_init_multiple", test_fiveo_init_multiple);
-    failed += run_test("fiveo_init_clears_while_stack",
-                       test_fiveo_init_clears_while_stack);
+    failed += run_test("fiveo_init_clears_while_stack", test_fiveo_init_clears_while_stack);
     failed += run_test("fiveo_while_push", test_fiveo_while_push);
-    failed +=
-        run_test("fiveo_while_push_multiple", test_fiveo_while_push_multiple);
+    failed += run_test("fiveo_while_push_multiple", test_fiveo_while_push_multiple);
     failed += run_test("fiveo_while_pop", test_fiveo_while_pop);
     failed += run_test("fiveo_while_pop_empty", test_fiveo_while_pop_empty);
     failed += run_test("fiveo_while_pop_order", test_fiveo_while_pop_order);
     failed += run_test("fiveo_while_depth", test_fiveo_while_depth);
     failed += run_test("fiveo_while_overflow", test_fiveo_while_overflow);
     failed += run_test("fiveo_while_clear", test_fiveo_while_clear);
-    failed +=
-        run_test("fiveo_find_matching_while", test_fiveo_find_matching_while);
-    failed +=
-        run_test("fiveo_find_while_not_found", test_fiveo_find_while_not_found);
-    failed += run_test("fiveo_find_while_empty_stack",
-                       test_fiveo_find_while_empty_stack);
+    failed += run_test("fiveo_find_matching_while", test_fiveo_find_matching_while);
+    failed += run_test("fiveo_find_while_not_found", test_fiveo_find_while_not_found);
+    failed += run_test("fiveo_find_while_empty_stack", test_fiveo_find_while_empty_stack);
     failed += run_test("fiveo_write_init", test_fiveo_write_init);
-    failed +=
-        run_test("fiveo_write_clears_state", test_fiveo_write_clears_state);
+    failed += run_test("fiveo_write_clears_state", test_fiveo_write_clears_state);
     failed += run_test("fiveo_common_mark_basic", test_fiveo_common_mark_basic);
-    failed +=
-        run_test("fiveo_common_mark_multiple", test_fiveo_common_mark_multiple);
-    failed += run_test("fiveo_common_mark_case_insensitive",
-                       test_fiveo_common_mark_case_insensitive);
-    failed += run_test("fiveo_common_mark_duplicate",
-                       test_fiveo_common_mark_duplicate);
+    failed += run_test("fiveo_common_mark_multiple", test_fiveo_common_mark_multiple);
+    failed += run_test("fiveo_common_mark_case_insensitive", test_fiveo_common_mark_case_insensitive);
+    failed += run_test("fiveo_common_mark_duplicate", test_fiveo_common_mark_duplicate);
     failed += run_test("fiveo_common_mark_empty", test_fiveo_common_mark_empty);
     failed += run_test("fiveo_common_mark_null", test_fiveo_common_mark_null);
     failed += run_test("fiveo_common_clear_all", test_fiveo_common_clear_all);
-    failed +=
-        run_test("fiveo_common_list_iterator", test_fiveo_common_list_iterator);
+    failed += run_test("fiveo_common_list_iterator", test_fiveo_common_list_iterator);
     failed += run_test("fiveo_common_list_empty", test_fiveo_common_list_empty);
     failed += run_test("fiveo_common_list_reset", test_fiveo_common_list_reset);
     failed += run_test("fiveo_common_get_marked", test_fiveo_common_get_marked);
-    failed += run_test("fiveo_common_get_marked_overflow",
-                       test_fiveo_common_get_marked_overflow);
-    failed +=
-        run_test("fiveo_common_init_clears", test_fiveo_common_init_clears);
-    failed +=
-        run_test("fiveo_chain_line_default", test_fiveo_chain_line_default);
-    failed +=
-        run_test("fiveo_chain_merge_default", test_fiveo_chain_merge_default);
-    failed +=
-        run_test("fiveo_chain_null_filename", test_fiveo_chain_null_filename);
-    failed +=
-        run_test("fiveo_chain_empty_filename", test_fiveo_chain_empty_filename);
-    failed += run_test("fiveo_chain_nonexistent_file",
-                       test_fiveo_chain_nonexistent_file);
-    failed += run_test("fiveo_chain_init_resets_state",
-                       test_fiveo_chain_init_resets_state);
+    failed += run_test("fiveo_common_get_marked_overflow", test_fiveo_common_get_marked_overflow);
+    failed += run_test("fiveo_common_init_clears", test_fiveo_common_init_clears);
+    failed += run_test("fiveo_chain_line_default", test_fiveo_chain_line_default);
+    failed += run_test("fiveo_chain_merge_default", test_fiveo_chain_merge_default);
+    failed += run_test("fiveo_chain_null_filename", test_fiveo_chain_null_filename);
+    failed += run_test("fiveo_chain_empty_filename", test_fiveo_chain_empty_filename);
+    failed += run_test("fiveo_chain_nonexistent_file", test_fiveo_chain_nonexistent_file);
+    failed += run_test("fiveo_chain_init_resets_state", test_fiveo_chain_init_resets_state);
     failed += run_test("fiveo_peek_while_empty", test_fiveo_peek_while_empty);
-    failed += run_test("fiveo_peek_while_after_push",
-                       test_fiveo_peek_while_after_push);
-    failed += run_test("fiveo_peek_while_does_not_pop",
-                       test_fiveo_peek_while_does_not_pop);
-    failed += run_test("fiveo_write_begin_sets_state",
-                       test_fiveo_write_begin_sets_state);
-    failed += run_test("fiveo_write_begin_overrides",
-                       test_fiveo_write_begin_overrides);
-    failed += run_test("fiveo_write_end_clears_state",
-                       test_fiveo_write_end_clears_state);
-    failed += run_test("fiveo_write_end_when_not_active",
-                       test_fiveo_write_end_when_not_active);
-    failed += run_test("fiveo_write_active_after_begin_end",
-                       test_fiveo_write_active_after_begin_end);
-    failed +=
-        run_test("fiveo_write_file_default", test_fiveo_write_file_default);
-    failed += run_test("fiveo_write_file_returns_current",
-                       test_fiveo_write_file_returns_current);
-    failed += run_test("fiveo_common_is_marked_basic",
-                       test_fiveo_common_is_marked_basic);
-    failed += run_test("fiveo_common_is_marked_case_insensitive",
-                       test_fiveo_common_is_marked_case_insensitive);
-    failed += run_test("fiveo_common_is_marked_null",
-                       test_fiveo_common_is_marked_null);
+    failed += run_test("fiveo_peek_while_after_push", test_fiveo_peek_while_after_push);
+    failed += run_test("fiveo_peek_while_does_not_pop", test_fiveo_peek_while_does_not_pop);
+    failed += run_test("fiveo_write_begin_sets_state", test_fiveo_write_begin_sets_state);
+    failed += run_test("fiveo_write_begin_overrides", test_fiveo_write_begin_overrides);
+    failed += run_test("fiveo_write_end_clears_state", test_fiveo_write_end_clears_state);
+    failed += run_test("fiveo_write_end_when_not_active", test_fiveo_write_end_when_not_active);
+    failed += run_test("fiveo_write_active_after_begin_end", test_fiveo_write_active_after_begin_end);
+    failed += run_test("fiveo_write_file_default", test_fiveo_write_file_default);
+    failed += run_test("fiveo_write_file_returns_current", test_fiveo_write_file_returns_current);
+    failed += run_test("fiveo_common_is_marked_basic", test_fiveo_common_is_marked_basic);
+    failed += run_test("fiveo_common_is_marked_case_insensitive", test_fiveo_common_is_marked_case_insensitive);
+    failed += run_test("fiveo_common_is_marked_null", test_fiveo_common_is_marked_null);
     failed += run_test("fiveo_chain_load_basic", test_fiveo_chain_load_basic);
     failed += run_test("fiveo_chain_merge_mode", test_fiveo_chain_merge_mode);
     failed += run_test("fiveo_chain_all_vars", test_fiveo_chain_all_vars);
@@ -1710,8 +1595,7 @@ int main(void) {
     failed += run_test("scndrv_gwi_default", test_scndrv_gwi_default);
     failed += run_test("scndrv_gwi_after_swi", test_scndrv_gwi_after_swi);
     failed += run_test("scndrv_wdo_valid", test_scndrv_wdo_valid);
-    failed +=
-        run_test("scndrv_wdo_out_of_bounds", test_scndrv_wdo_out_of_bounds);
+    failed += run_test("scndrv_wdo_out_of_bounds", test_scndrv_wdo_out_of_bounds);
     failed += run_test("scndrv_wdo_truncate", test_scndrv_wdo_truncate);
     failed += run_test("scndrv_brk", test_scndrv_brk);
     failed += run_test("scndrv_ipi", test_scndrv_ipi);
