@@ -169,14 +169,3 @@ void test_gwdata_max_var_name(void) {
     TEST_ASSERT(v != NULL, "40 字符变量名应支持");
     TEST_ASSERT(strlen(v->name) == 40, "变量名长度应为 40");
 }
-
-/* 供 test_runner.c 注册的测试函数声明 */
-void test_gwdata_var_table_init(void);
-void test_gwdata_string_heap(void);
-void test_gwdata_variable_types(void);
-void test_gwdata_array_variables(void);
-void test_gwdata_string_heap_gc(void);
-void test_gwdata_program_buffer(void);
-void test_gwdata_error_messages(void);
-void test_gwdata_case_insensitive(void);
-void test_gwdata_max_var_name(void);
