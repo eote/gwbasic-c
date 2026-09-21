@@ -48,6 +48,7 @@ TEST_SRCS = \
 	../tests/test_gwdata.c \
 	../tests/test_gwram.c \
 	../tests/test_gwinit.c \
+	../tests/test_gwmain.c \
 	../tests/test_gwsts_gweval.c \
 	../tests/test_giocon.c \
 	../tests/test_giokyb_gioscn.c \
