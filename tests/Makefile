@@ -55,6 +55,7 @@ TEST_SRCS = \
 	../tests/test_biprtu_biptrg.c \
 	../tests/test_dskcom.c \
 	../tests/test_math.c \
+	../tests/test_math2.c \
 	../tests/test_advgrp.c \
 	../tests/test_call86.c \
 	../tests/test_itsa86.c \

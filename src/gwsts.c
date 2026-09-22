@@ -538,6 +538,29 @@ int gwsts_exec_statement(const char *text) {
         }
         result = SUCCESS;
     }
+    /* RANDOMIZE statement: RANDOMIZE [n] (ASM GWMAIN.ASM RANDOM L3383-3413)
+     * No argument → ask from terminal (INPRG: RANMES prompt);
+     * With argument → FRMEVL + FRCINT → STRNDS: reseed + RNDMN2. */
+    else if (starts_with(trimmed, "RANDOMIZE")) {
+        char *rest = trimmed + 9;  /* Skip "RANDOMIZE" */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        if (*rest == '\0') {
+            /* No argument — ASM asks for input via RANMES prompt */
+            int seed = 0;
+            printf("Random number seed (-32768 to 32767)");
+            fflush(stdout);
+            char input[64];
+            if (fgets(input, sizeof(input), stdin)) {
+                seed = (int)gweval_eval_numeric(input);
+            }
+            math2_randomize(seed);
+        } else {
+            int seed = (int)gweval_eval_numeric(rest);
+            math2_randomize(seed);
+        }
+        result = SUCCESS;
+    }
     /* RESTORE statement: RESTORE [line] */
     else if (starts_with(trimmed, "RESTORE")) {
         char *rest = trimmed + 7;  /* Skip "RESTORE" */

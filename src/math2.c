@@ -5,9 +5,22 @@
 #include <math.h>
 #include <stdlib.h>
 
+/* Last RND value for RND(0) (ASM RNDX storage) */
+static float last_rnd = 0.0f;
+
 /* Module initialization */
 void math2_init(void) {
     /* Nothing special needed */
+}
+
+/* RANDOMIZE n - reseed random generator (ASM GWMAIN.ASM RANDOM L3383-3413).
+ * STRNDS: MOV RNDX+1,BX / CALL RNDMN2 — store seed, reset sequence. */
+void math2_randomize(int seed) {
+    srand((unsigned int)(seed < 0 ? -seed : seed));
+    /* Discard first value so next RND(x>0) continues the new sequence
+     * (ASM RNDMN2 resets the internal state). */
+    (void)math2_rnd(1.0f);
+    last_rnd = 0.0f;  /* No "last value" until an actual RND runs */
 }
 
 /* SQR(x) - Square root */
@@ -38,8 +51,6 @@ float math2_sgn(float x) {
  * - RND with zero: returns last random number generated
  * - RND without argument: same as positive x
  */
-static float last_rnd = 0.0f;
-
 float math2_rnd(float x) {
     if (x < 0.0f) {
         /* Reseed with absolute value of x */

@@ -373,6 +373,7 @@ float math1_log(float x);
 
 /* MATH2 module functions - Elementary math */
 void math2_init(void);
+void math2_randomize(int seed);  /* RANDOMIZE n (ASM GWMAIN RANDOM L3383) */
 float math2_sqr(float x);
 float math2_abs(float x);
 float math2_sgn(float x);

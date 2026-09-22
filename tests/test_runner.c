@@ -141,6 +141,15 @@ void test_math2_sgn(void);
 void test_math2_rnd(void);
 void test_math2_int(void);
 void test_math2_fix(void);
+void test_math2_randomize(void);
+void test_math2_randomize_diff_seeds(void);
+void test_math2_rnd_negative_reseed(void);
+void test_math2_rnd_zero_last(void);
+void test_math2_rnd_range(void);
+void test_gwsts_on_goto(void);
+void test_gwsts_on_goto_out_of_range(void);
+void test_gwsts_on_gosub_syntax(void);
+void test_gwsts_while_wend_loop(void);
 void test_math_expression_eval(void);
 
 /* ADVGRP test functions */
@@ -929,6 +938,15 @@ int main(void) {
     failed += run_test("math2_rnd", test_math2_rnd);
     failed += run_test("math2_int", test_math2_int);
     failed += run_test("math2_fix", test_math2_fix);
+    failed += run_test("math2_randomize", test_math2_randomize);
+    failed += run_test("math2_randomize_diff_seeds", test_math2_randomize_diff_seeds);
+    failed += run_test("math2_rnd_negative_reseed", test_math2_rnd_negative_reseed);
+    failed += run_test("math2_rnd_zero_last", test_math2_rnd_zero_last);
+    failed += run_test("math2_rnd_range", test_math2_rnd_range);
+    failed += run_test("gwsts_on_goto", test_gwsts_on_goto);
+    failed += run_test("gwsts_on_goto_out_of_range", test_gwsts_on_goto_out_of_range);
+    failed += run_test("gwsts_on_gosub_syntax", test_gwsts_on_gosub_syntax);
+    failed += run_test("gwsts_while_wend_loop", test_gwsts_while_wend_loop);
     failed += run_test("math_expression_eval", test_math_expression_eval);
 
     /* GWEVAL HELPER tests */
