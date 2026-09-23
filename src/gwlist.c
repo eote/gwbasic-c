@@ -14,6 +14,89 @@ void gwlist_init(void) {
     g_program_head = NULL;
 }
 
+/* RESEQ [NN[,MM[,INC]]] — resequence line numbers (ASM GWMAIN.ASM RESEQ L3102-3222).
+ * NN = first destination line (0 = default 10); MM = threshold — lines < MM are
+ * NOT resequenced (0 = all); INC = increment (0 = default 10, explicit 0 → FCERR).
+ * New numbers > 65529 → FCERR (ASM L3176-3181). */
+int gwlist_reseq(int first, int mm, int inc) {
+    if (!g_state && !g_program_head) return SUCCESS;
+
+    /* Defaults (ASM L3105-3111: CX=10 assumed INC; DE=0 = all lines) */
+    int start = (first > 0) ? first : 10;
+    int threshold = mm;          /* 0 = reseq all */
+    int increment = (inc > 0) ? inc : 10;
+    if (inc == 0 && mm > 0) {
+        return ERROR;  /* ASM L3140-3142: explicit INC=0 → FCERR */
+    }
+
+    /* Snapshot the qualifying nodes first (in sorted order), then renumber and
+     * re-position each. Prevents re-encountering already-processed nodes that
+     * repositioning moves behind curr (ASM RESNX1 processes each line once). */
+    struct program_line *nodes[256];
+    int count = 0;
+    struct program_line *curr = g_program_head;
+    while (curr && count < 256) {
+        if (threshold == 0 || curr->number >= threshold) {
+            nodes[count++] = curr;
+        }
+        curr = curr->next;
+    }
+
+    int new_num = start;
+    for (int i = 0; i < count; i++) {
+        /* ASM NXTRSC L3176-3181: new line > 65529 → FCERR */
+        if (new_num > 65529) {
+            return ERROR;
+        }
+        struct program_line *node = nodes[i];
+        node->number = new_num;
+        new_num += increment;
+
+        /* Re-position node in the sorted list (ASM RESNX1 L3236: MOV [BX],DX) */
+        struct program_line *prev = g_program_head;
+        if (prev == node) {
+            /* Already at head — check if next breaks order */
+            if (!node->next || node->number <= node->next->number) continue;
+            g_program_head = node->next;
+        } else {
+            while (prev && prev->next != node) prev = prev->next;
+            if (!prev) continue;  /* Should not happen */
+            if (!node->next || node->number <= node->next->number) continue;
+            prev->next = node->next;
+        }
+        /* Find insertion point for node->number */
+        struct program_line *p = g_program_head;
+        struct program_line *pp = NULL;
+        while (p && p->number < node->number) {
+            pp = p;
+            p = p->next;
+        }
+        node->next = p;
+        if (pp) pp->next = node;
+        else g_program_head = node;
+    }
+    return SUCCESS;
+}
+
+/* DELETE range — delete lines in [start, end] (ASM DEL via CHAIN DELETE range).
+ * start > end → ERROR; empty range (no lines inside) → SUCCESS (no-op). */
+int gwlist_delete_range(int start, int end) {
+    if (start > end) return ERROR;
+
+    struct program_line *curr = g_program_head;
+    int deleted = 0;
+    while (curr) {
+        struct program_line *next = curr->next;
+        if (curr->number >= start && curr->number <= end) {
+            gwlist_delete_line(curr->number);
+            deleted++;
+        }
+        curr = next;
+    }
+    (void)deleted;
+    return SUCCESS;
+}
+
 void gwlist_add_line(int number, const char *text) {
     if (!text) return;
     

@@ -310,6 +310,8 @@ void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
 void gwlist_clear(void);
 int gwlist_load_file(const char *filename);
+int gwlist_reseq(int first, int mm, int inc);        /* RESEQ (ASM GWMAIN L3102) */
+int gwlist_delete_range(int start, int end);         /* DELETE range */
 
 /* FIVEO module functions - WHILE/WEND stack, WRITE, CHAIN */
 void fiveo_init(void);
