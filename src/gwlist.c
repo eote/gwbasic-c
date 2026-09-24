@@ -16,17 +16,22 @@ void gwlist_init(void) {
 
 /* RESEQ [NN[,MM[,INC]]] — resequence line numbers (ASM GWMAIN.ASM RESEQ L3102-3222).
  * NN = first destination line (0 = default 10); MM = threshold — lines < MM are
- * NOT resequenced (0 = all); INC = increment (0 = default 10, explicit 0 → FCERR).
- * New numbers > 65529 → FCERR (ASM L3176-3181). */
+ * NOT resequenced (0 = all); INC = increment.
+ * INC semantics: -1 = absent (default 10); 0 = explicit zero → FCERR (ASM L3140-3142);
+ * >0 = use as-is. New numbers > 65529 → FCERR (ASM L3176-3181). */
 int gwlist_reseq(int first, int mm, int inc) {
     if (!g_state && !g_program_head) return SUCCESS;
 
     /* Defaults (ASM L3105-3111: CX=10 assumed INC; DE=0 = all lines) */
     int start = (first > 0) ? first : 10;
     int threshold = mm;          /* 0 = reseq all */
-    int increment = (inc > 0) ? inc : 10;
-    if (inc == 0 && mm > 0) {
+    int increment;
+    if (inc == 0) {
         return ERROR;  /* ASM L3140-3142: explicit INC=0 → FCERR */
+    } else if (inc < 0) {
+        increment = 10;  /* Absent INC — default */
+    } else {
+        increment = inc;
     }
 
     /* Snapshot the qualifying nodes first (in sorted order), then renumber and

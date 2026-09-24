@@ -561,6 +561,40 @@ int gwsts_exec_statement(const char *text) {
         }
         result = SUCCESS;
     }
+    /* RENUM statement: RENUM [NN[,MM[,INC]]] (ASM GWMAIN.ASM RESEQ L3102-3222)
+     * NN = first destination line; MM = threshold (lines < MM not resequenced);
+     * INC = increment. Defaults: 10 / all / 10. */
+    else if (starts_with(trimmed, "RENUM")) {
+        char *rest = trimmed + 5;  /* Skip "RENUM" */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        int first = 0, mm = 0;
+        int inc = -1;  /* -1 = absent (default 10); explicit 0 → FCERR */
+        
+        if (*rest) {
+            first = (int)gweval_eval_numeric(rest);
+            char *comma1 = strchr(rest, ',');
+            if (comma1) {
+                char *rest2 = comma1 + 1;
+                while (*rest2 && isspace((unsigned char)*rest2)) rest2++;
+                if (*rest2) {
+                    mm = (int)gweval_eval_numeric(rest2);
+                    char *comma2 = strchr(rest2, ',');
+                    if (comma2) {
+                        char *rest3 = comma2 + 1;
+                        while (*rest3 && isspace((unsigned char)*rest3)) rest3++;
+                        if (*rest3) {
+                            inc = (int)gweval_eval_numeric(rest3);
+                        } else {
+                            inc = -1;  /* Trailing comma, INC absent */
+                        }
+                    }
+                }
+            }
+        }
+        
+        result = gwlist_reseq(first, mm, inc);
+    }
     /* RESTORE statement: RESTORE [line] */
     else if (starts_with(trimmed, "RESTORE")) {
         char *rest = trimmed + 7;  /* Skip "RESTORE" */

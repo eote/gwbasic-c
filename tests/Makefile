@@ -85,7 +85,8 @@ TEST_SRCS = \
 	../tests/test_scndrv.c \
 	../tests/test_gweval_helpers.c \
 	../tests/test_gwlist_bistrs.c \
-	../tests/test_gwlist_m1.c
+	../tests/test_gwlist_m1.c \
+	../tests/test_gwsts_renum.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 TEST_RUNNER_OBJ = test_runner.o

@@ -14,7 +14,7 @@ void test_gwlist_reseq_default(void) {
     gwlist_add_line(15, "B = 2");
     gwlist_add_line(25, "C = 3");
     
-    int rc = gwlist_reseq(0, 0, 0);  /* 0,0,0 = defaults: start=10, mm=all, inc=10 */
+    int rc = gwlist_reseq(0, 0, -1);  /* 0,0,-1 = defaults: start=10, mm=all, inc=10 (absent INC) */
     
     TEST_ASSERT_EQ_INT(rc, 0, "RESEQ default succeeds");
     /* 5→10, 15→20, 25→30 */
@@ -67,13 +67,12 @@ void test_gwlist_reseq_inc_zero_error(void) {
     
     gwlist_add_line(10, "A = 1");
     
-    int rc = gwlist_reseq(100, 0, 0);  /* inc 显式 0 — 但 0,0 = defaults! */
-    /* ASM: RESEQ 100,,0 → FCERR. 这里 0 inc + mm=0 → defaults inc=10 */
-    /* 单独测 inc=0: RESEQ 100,5,0 */
+    int rc = gwlist_reseq(100, 0, -1);  /* INC absent — default 10 */
+    /* ASM: RESEQ 100,,0 → explicit INC=0 → FCERR */
     int rc2 = gwlist_reseq(100, 5, 0);  /* inc=0 explicit */
     
-    TEST_ASSERT(rc == 0, "RESEQ 100,0,0 uses default inc=10");
-    TEST_ASSERT(rc2 != 0, "RESEQ 100,5,0 → FCERR (inc=0 illegal)");
+    TEST_ASSERT(rc == 0, "RESEQ 100 with absent INC uses default 10");
+    TEST_ASSERT(rc2 != 0, "RESEQ 100,5,0 → FCERR (explicit inc=0 illegal)");
     TEST_PASS("gwlist reseq inc=0 error");
 }
 
@@ -100,7 +99,7 @@ void test_gwlist_reseq_empty_program(void) {
     gwram_init();
     gwlist_init();
     
-    int rc = gwlist_reseq(0, 0, 0);
+    int rc = gwlist_reseq(0, 0, -1);
     
     TEST_ASSERT_EQ_INT(rc, 0, "RESEQ on empty program succeeds (no-op)");
     TEST_PASS("gwlist reseq empty");
@@ -115,7 +114,7 @@ void test_gwlist_reseq_content_preserved(void) {
     gwlist_add_line(10, "PRINT \"HELLO\"");
     gwlist_add_line(20, "GOTO 10");
     
-    int rc = gwlist_reseq(0, 0, 0);  /* 10→10? no: start=10, 10→10, 20→20 (same!) */
+    int rc = gwlist_reseq(0, 0, -1);  /* 10→10? no: start=10, 10→10, 20→20 (same!) */
     /* 用不同起点验证内容移动 */
     int rc2 = gwlist_reseq(100, 0, 50);  /* 10→100, 20→150 */
     
