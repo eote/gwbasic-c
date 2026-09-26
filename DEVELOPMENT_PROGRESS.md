@@ -5,13 +5,13 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 全部完成 ✅ → **M1 进行中 3/N** (RANDOMIZE ✅ / RESEQ/DELETE ✅ / RENUM 语句 ✅) |
-| **当前阶段** | CODE_REVIEW v119 验证确认 (0 CRITICAL/HIGH/MEDIUM/LOW, v118 MEDIUM-1 已修复) — 无待办修复；.bas 集成测试补充待做 |
+| **当前阶段** | CODE_REVIEW v119 验证确认 (0 问题, MEDIUM-1 RENUM 已修复) — 无待办修复；.bas 集成测试补充待做 |
 | **依赖顺序** | M0 ✅ → M1 (RENUM ✅ → .bas 覆盖 → DELETE 语句分支) → M2+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
 ---
 
-## 当前轮: CODE_REVIEW v119 验证记录
+## 当前轮: CODE_REVIEW v119 验证记录 (重复确认 — 同一文件 v119 未变)
 
 ### 验证结果
 
@@ -23,11 +23,11 @@
 | 孤儿 | 声明=注册=754, diff 空 | **0** ✅ |
 | 重复注册 | uniq -d | **0** ✅ |
 | 集成回归 | gwdata 8/8, gwram 4/4, on_error ERR=11, cond/def_fn 全绿 | ✅ |
-| RENUM+RANDOMIZE .bas | 语句级联合运行 | **rc=0 全绿** ✅ |
+| RENUM .bas | 语句级运行 | **rc=0** ✅ |
 
 ### 问题清单
-**0 CRITICAL / 0 HIGH / 0 MEDIUM / 0 LOW** — v118 唯一 MEDIUM (RENUM 语句分支) 已修复确认。
-v119 建议：.bas 集成测试（完整 RESEQ 流程）、nodes[256] 上限、AddressSanitizer。
+**0 CRITICAL / 0 HIGH / 0 MEDIUM / 0 LOW** — v118 MEDIUM-1 (RENUM 语句分支) 已修复确认。
+无待办修复项。v119 建议 (.bas 集成测试/nodes[256]/ASan) 为改进项非阻塞。
 
 ### 里程碑状态
 
@@ -42,7 +42,7 @@ v119 建议：.bas 集成测试（完整 RESEQ 流程）、nodes[256] 上限、A
 
 | 优先级 | 任务 |
 |--------|------|
-| 1 | **RENUM/DELETE .bas 集成测试文件** (test_renum.bas: RENUM/RESEQ/DELETE 语句实际运行验证) |
+| 1 | **RENUM/DELETE .bas 集成测试文件** (test_renum.bas: RESEQ/DELETE 语句实际运行) |
 | 2 | DELETE 语句分支 (gwsts.c 接入 gwlist_delete_range — 同 RENUM 模式) |
 | 3 | nodes[256] 上限确认 (ASM 64K 程序 — 动态扩容或提升上限) |
 
