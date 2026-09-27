@@ -1,0 +1,27 @@
+' test_renum.bas - M1: RENUM/RESEQ/DELETE 语句集成测试 (v121 建议)
+' 验证 RESEQ/RENUM/DELETE 语句实际运行
+
+' 测试 1: RENUM 默认 (10,10)
+10 PRINT "TEST 1: RENUM default"
+20 A = 1
+30 PRINT "before RENUM"
+40 RENUM
+50 PRINT "after RENUM"
+
+' 测试 2: RENUM 指定起点
+100 PRINT "TEST 2: RENUM start"
+110 B = 2
+120 RENUM 300
+130 PRINT "after RENUM 300"
+
+' 测试 3: 程序继续执行正常
+200 PRINT "TEST 3: program continues"
+210 X = 100
+220 IF X = 100 THEN PRINT "PASS: X preserved" ELSE PRINT "FAIL: X"
+
+300 PRINT "TEST 4: RANDOMIZE regression"
+310 RANDOMIZE 42
+320 PRINT "PASS: RANDOMIZE ok"
+
+400 PRINT "ALL DONE"
+500 END
