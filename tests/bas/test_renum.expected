@@ -1,0 +1,10 @@
+TEST 1: RENUM default
+before RENUM
+after RENUM
+TEST 2: RENUM start
+after RENUM 300
+TEST 3: program continues
+PASS: X preserved
+TEST 4: RANDOMIZE regression
+PASS: RANDOMIZE ok
+ALL DONE

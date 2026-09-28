@@ -77,6 +77,7 @@ IMPLEMENTED_TESTS=(
     "test_resume_next.bas"
     "test_resume_line.bas"
     "test_def_fn.bas"
+    "test_renum.bas"
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)
