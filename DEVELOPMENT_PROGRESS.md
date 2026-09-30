@@ -4,45 +4,53 @@
 
 | 维度 | 定义 |
 |------|------|
-| **里程碑** | M0 全部完成 ✅ → **M1 进行中 3/N** (RANDOMIZE ✅ / RESEQ/DELETE ✅ / RENUM 语句 ✅ / RENUM .bas+expected ✅) |
-| **当前阶段** | CODE_REVIEW v124 复核确认 (0 问题) 完成；DELETE 语句分支待做 (短期建议-1) |
-| **依赖顺序** | M0 ✅ → M1 (RENUM ✅ → .bas ✅ → DELETE 语句分支) → M2+ |
+| **里程碑** | M0 全部完成 ✅ → **M1 进行中 4/N** (RANDOMIZE ✅ / RESEQ/DELETE ✅ / RENUM 语句 ✅ / RENUM .bas ✅ / **DELETE 语句分支 ✅**) |
+| **当前阶段** | M1 第 3 批 TDD 7 步完成 (DELETE 语句 + .bas 集成 + expected)；nodes[256] 上限确认待做 |
+| **依赖顺序** | M0 ✅ → M1 (RENUM ✅ → DELETE ✅ → nodes[256]) → M2+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
 ---
 
-## 当前轮: CODE_REVIEW v124 复核确认 (0 问题)
+## 当前轮: M1 第 3 批 — DELETE 语句分支 (v124 短期建议-1)
 
-### v124 复核结果
+### TDD 7 步
 
-0 CRITICAL / 0 HIGH / 0 MEDIUM / 0 LOW — 复核确认轮（自 v123 后无代码变更，仅文档更新 60f0979）
+| 步 | 内容 | 状态 |
+|----|------|------|
+| 1 | 查 ASM (IBMRES.ASM R2 DELETE → GWMAIN SCCLIN/SCCPTR 删除路径) | ✅ |
+| 2 | 查已有: gwlist_delete_range API 已有 (test_gwlist_m1.c), 语句分支无 | ✅ |
+| 3 | tests/test_gwsts_delete.c 8 测试 (API 5 + 语句级 3) — RED 确认 (链接错误 + rc=-1) | ✅ |
+| 4 | src/gwsts.c DELETE 分支 — 文本解析行号 ('-' 为区间分隔符非算术) | ✅ |
+| 5 | 注册 8 测试 (5 gwlist_delete_* + 3 gwsts_delete_*) + Makefile | ✅ |
+| 6 | mingw32-make test 绿 | ✅ |
+| 7 | 双回归 + .bas 集成 | ✅ |
+
+### 关键修复: 行号文本解析
+
+- 初版用 gweval_eval_numeric("20-30") → 算术求值 -10 → DELETE 20-30 误删 line 10
+- ASM 语义: '-' 是 RANGE 分隔符，行号按文本解析 (atoi) — 已修复
+- DELETE 90-50 → start>end → ERROR (ASM FCERR)
+
+### 验证结果
 
 | 测试类型 | 命令 | 结果 |
 |----------|------|------|
-| 注册测试 | mingw32-make test | **2989/2989 PASS** |
-| 完整测试 | ./tests/test_gwbasic.exe | **2989/2989 PASS, rc=0** |
+| 注册测试 | mingw32-make test | **3013/3013 PASS** (+24: gwlist_delete_range 3 旧 + gwsts_delete 8 新) |
+| 完整测试 | ./tests/test_gwbasic.exe | **3013/3013 PASS, rc=0** |
 | 编译警告 | 干净重建 | **0 条** |
-| 孤儿 | 定义 754 = 注册 754 (唯一函数名口径) | **0** ✅ |
-| 套件集成 | bash run_bas_tests.sh | **66/68 PASS** (0 失败 + 2 预期跳过), test_renum 输出校验 ✅ |
+| 套件集成 | bash run_bas_tests.sh | **67/69 PASS** (0 失败 + 2 预期跳过), test_delete/test_renum 输出校验 ✅ |
+| test_delete.bas | DELETE 单行/range/程序继续 | **rc=0 全绿** ✅ |
 | 集成回归 | gwdata 8/8, gwram 4/4, on_error ERR=11, cond/def_fn 全绿 | ✅ |
-
-### 里程碑状态
-
-| 里程碑 | 进度 |
-|--------|------|
-| M0 | **4/4 完成** ✅ |
-| M1 | **3/N** (RANDOMIZE ✓, RESEQ ✓, DELETE range API ✓, RENUM 语句 ✓, RENUM .bas+expected ✓) |
-| CODE_REVIEW.md 入库 | ✅ 90514a3 |
 
 ---
 
-## 下一步 (M1 剩余, v124 建议)
+## 下一步 (M1 剩余)
 
 | 优先级 | 任务 |
 |--------|------|
-| 1 | **DELETE 语句分支** (gwsts.c 接入 gwlist_delete_range — 同 RENUM 模式) + 语句级 .bas 集成测试 (含 expected; 用例含 start>end/越界/空程序) |
-| 2 | 为其余 65 个 .bas 测试补充 expected 基线 (当前 ⚠️ rc-only) |
-| 3 | nodes[256] 上限确认 (ASM 64K 程序) → M1 完成后 v125 review → M2+ |
+| 1 | nodes[256] 上限确认 (ASM 64K 程序 — 动态扩容或提升上限) |
+| 2 | 为其余 64 个 .bas 测试补充 expected 基线 (当前 ⚠️ rc-only) |
+| 3 | M1 完成后 v125 review → M2+ |
 
 ## 更新时间
 2026-10-01

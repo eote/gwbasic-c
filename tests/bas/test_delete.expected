@@ -1,0 +1,7 @@
+TEST 1: DELETE single line
+after DELETE 20
+TEST 2: DELETE range
+after DELETE 110-120
+TEST 3: program continues
+PASS: X preserved
+ALL DONE

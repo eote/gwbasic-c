@@ -595,6 +595,35 @@ int gwsts_exec_statement(const char *text) {
         
         result = gwlist_reseq(first, mm, inc);
     }
+    /* DELETE statement: DELETE [start][-end] (ASM IBMRES.ASM R2 DELETE →
+     * GWMAIN SCCLIN/SCCPTR deletion path). Range syntax: "DELETE 40" (single),
+     * "DELETE 40-60" (range). start>end → FCERR (gwlist_delete_range checks). */
+    else if (starts_with(trimmed, "DELETE")) {
+        char *rest = trimmed + 6;  /* Skip "DELETE" */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+
+        int rc = ERROR;
+        if (*rest) {
+            /* Parse line numbers TEXTUALLY — the '-' is a RANGE separator, not
+             * arithmetic. gweval_eval_numeric would evaluate "20-30" as -10. */
+            char *dash = strchr(rest, '-');
+            char start_buf[16];
+            int start, end;
+            if (dash) {
+                size_t n = (size_t)(dash - rest);
+                if (n >= sizeof(start_buf)) n = sizeof(start_buf) - 1;
+                memcpy(start_buf, rest, n);
+                start_buf[n] = '\0';
+                start = atoi(start_buf);
+                end = atoi(dash + 1);
+            } else {
+                start = atoi(rest);
+                end = start;  /* Single line form */
+            }
+            rc = gwlist_delete_range(start, end);
+        }
+        result = rc;
+    }
     /* RESTORE statement: RESTORE [line] */
     else if (starts_with(trimmed, "RESTORE")) {
         char *rest = trimmed + 7;  /* Skip "RESTORE" */
