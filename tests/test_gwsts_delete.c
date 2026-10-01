@@ -14,8 +14,9 @@ void test_gwlist_delete_basic(void) {
     gwlist_add_line(20, "B = 2");
     gwlist_add_line(30, "C = 3");
 
-    int rc = gwlist_delete_range(20, 20);
-    TEST_ASSERT_EQ_INT(rc, 0, "delete 20-20 succeeds");
+    struct program_line *anchor = gwlist_delete_range(20, 20);
+    TEST_ASSERT(anchor != NULL, "delete 20-20 succeeds, anchor set");
+    TEST_ASSERT_EQ_INT(anchor->number, 30, "anchor is line 30");
     TEST_ASSERT(gwlist_find_line(20) == NULL, "line 20 gone");
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
     TEST_ASSERT(gwlist_find_line(30) != NULL, "line 30 kept");
@@ -32,8 +33,10 @@ void test_gwlist_delete_range_multi(void) {
     gwlist_add_line(20, "B = 2");
     gwlist_add_line(30, "C = 3");
 
-    int rc = gwlist_delete_range(20, 30);
-    TEST_ASSERT_EQ_INT(rc, 0, "delete 20-30 succeeds");
+    struct program_line *anchor = gwlist_delete_range(20, 30);
+    /* [10,20,30] delete 20-30 → nothing after 30 → anchor = NULL (ASM FNDLIN
+     * return 1: no line greater than the range end) */
+    TEST_ASSERT(anchor == NULL, "delete 20-30: no anchor (nothing after 30)");
     TEST_ASSERT(gwlist_find_line(20) == NULL, "line 20 gone");
     TEST_ASSERT(gwlist_find_line(30) == NULL, "line 30 gone");
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
@@ -48,8 +51,8 @@ void test_gwlist_delete_bad_range(void) {
 
     gwlist_add_line(10, "A = 1");
 
-    int rc = gwlist_delete_range(30, 20);
-    TEST_ASSERT_EQ_INT(rc, -1, "start>end → ERROR");
+    struct program_line *anchor = gwlist_delete_range(30, 20);
+    TEST_ASSERT(anchor == NULL, "start>end → NULL (FCERR)");
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
     TEST_PASS("gwlist delete_range start>end error");
 }
@@ -62,8 +65,8 @@ void test_gwlist_delete_missing(void) {
 
     gwlist_add_line(10, "A = 1");
 
-    int rc = gwlist_delete_range(50, 60);
-    TEST_ASSERT_EQ_INT(rc, 0, "delete missing range succeeds");
+    struct program_line *anchor = gwlist_delete_range(50, 60);
+    TEST_ASSERT(anchor == NULL, "delete missing range: no anchor (no-op)");
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
     TEST_PASS("gwlist delete_range missing lines no-op");
 }
@@ -74,8 +77,8 @@ void test_gwlist_delete_empty(void) {
     gwram_init();
     gwlist_init();
 
-    int rc = gwlist_delete_range(10, 20);
-    TEST_ASSERT_EQ_INT(rc, 0, "delete on empty program succeeds");
+    struct program_line *anchor = gwlist_delete_range(10, 20);
+    TEST_ASSERT(anchor == NULL, "delete on empty program: no anchor");
     TEST_PASS("gwlist delete_range empty program");
 }
 
@@ -128,4 +131,90 @@ void test_gwsts_delete_program_continues(void) {
     TEST_ASSERT(gwlist_find_line(10) != NULL && gwlist_find_line(30) != NULL, "10/30 kept");
     TEST_ASSERT(gwlist_find_line(20) == NULL, "20 deleted");
     TEST_PASS("gwsts DELETE program continues");
+}
+
+/* Test: 边界用例 (v125 LOW-1/2/3) — 裸 DELETE / 40- 开放区间 / -40 / 非数字 / 尾部 */
+void test_gwsts_delete_bare(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+
+    int rc = gwsts_exec_statement("DELETE");
+    TEST_ASSERT_EQ_INT(rc, -1, "bare DELETE → SNERR");
+    TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
+    TEST_PASS("gwsts DELETE bare syntax error");
+}
+
+void test_gwsts_delete_open_range(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+    gwlist_add_line(40, "D = 4");
+
+    int rc = gwsts_exec_statement("DELETE 40-");
+    TEST_ASSERT_EQ_INT(rc, 0, "DELETE 40- open range (to 65530)");
+    TEST_ASSERT(gwlist_find_line(40) == NULL, "line 40 gone");
+    TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
+    TEST_PASS("gwsts DELETE 40- open range");
+}
+
+void test_gwsts_delete_from_start(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+    gwlist_add_line(20, "B = 2");
+    gwlist_add_line(40, "D = 4");
+
+    int rc = gwsts_exec_statement("DELETE -20");
+    TEST_ASSERT_EQ_INT(rc, 0, "DELETE -20 from start (0..20)");
+    TEST_ASSERT(gwlist_find_line(10) == NULL, "line 10 gone");
+    TEST_ASSERT(gwlist_find_line(20) == NULL, "line 20 gone");
+    TEST_ASSERT(gwlist_find_line(40) != NULL, "line 40 kept");
+    TEST_PASS("gwsts DELETE -20 from start");
+}
+
+void test_gwsts_delete_non_numeric(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+
+    int rc1 = gwsts_exec_statement("DELETE ABC");
+    TEST_ASSERT_EQ_INT(rc1, -1, "DELETE ABC → SNERR");
+    TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept after ABC");
+
+    int rc2 = gwsts_exec_statement("DELETE 1.5x");
+    TEST_ASSERT_EQ_INT(rc2, -1, "DELETE 1.5x → SNERR");
+    TEST_PASS("gwsts DELETE non-numeric errors");
+}
+
+void test_gwsts_delete_tail_garbage(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+    gwlist_add_line(20, "B = 2");
+
+    int rc = gwsts_exec_statement("DELETE 10-20 30");
+    /* Tail garbage after range → SNERR (ASM SCNLIN: must be terminator) */
+    TEST_ASSERT_EQ_INT(rc, -1, "DELETE 10-20 30 tail → SNERR");
+    TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept (not deleted)");
+    TEST_PASS("gwsts DELETE tail garbage errors");
+}
+
+void test_gwsts_delete_line_zero(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(0, "Z = 0");
+    gwlist_add_line(10, "A = 1");
+
+    int rc = gwsts_exec_statement("DELETE 0");
+    TEST_ASSERT_EQ_INT(rc, 0, "DELETE 0 (line 0 legal, ASM 0..65529)");
+    TEST_ASSERT(gwlist_find_line(0) == NULL, "line 0 gone");
+    TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
+    TEST_PASS("gwsts DELETE line 0");
 }

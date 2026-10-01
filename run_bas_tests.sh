@@ -79,6 +79,7 @@ IMPLEMENTED_TESTS=(
     "test_def_fn.bas"
     "test_renum.bas"
     "test_delete.bas"
+    "test_delete_exec.bas"
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)

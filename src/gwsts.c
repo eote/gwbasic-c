@@ -595,33 +595,79 @@ int gwsts_exec_statement(const char *text) {
         
         result = gwlist_reseq(first, mm, inc);
     }
-    /* DELETE statement: DELETE [start][-end] (ASM IBMRES.ASM R2 DELETE →
-     * GWMAIN SCCLIN/SCCPTR deletion path). Range syntax: "DELETE 40" (single),
-     * "DELETE 40-60" (range). start>end → FCERR (gwlist_delete_range checks). */
+    /* DELETE statement: DELETE [start][-end] (ASM SCNLIN GWMAIN.ASM L842-876 +
+     * DELETE GWLIST.ASM L778-812). Semantics per ASM:
+     * - "DELETE 40"     → single line (SCNLIN SNGLIN path)
+     * - "DELETE 40-60"  → range 40..60
+     * - "DELETE 40-"    → open range to end (ALLLST: DX=65530 max)
+     * - "DELETE -40"    → from start to 40 (SCNLIN: DX=0 initial)
+     * - start > end     → FCERR (GWLIST.ASM FCERRG L805)
+     * - non-numeric     → SYNTAX ERROR (LINGET MORLIN → SNERR L426) */
     else if (starts_with(trimmed, "DELETE")) {
         char *rest = trimmed + 6;  /* Skip "DELETE" */
         while (*rest && isspace((unsigned char)*rest)) rest++;
 
-        int rc = ERROR;
-        if (*rest) {
+        int rc;
+        if (!*rest) {
+            /* Bare DELETE — ASM syntax error (no range given) */
+            rc = ERROR;
+        } else {
             /* Parse line numbers TEXTUALLY — the '-' is a RANGE separator, not
              * arithmetic. gweval_eval_numeric would evaluate "20-30" as -10. */
             char *dash = strchr(rest, '-');
             char start_buf[16];
-            int start, end;
+            int start = 0, end = 0;
             if (dash) {
                 size_t n = (size_t)(dash - rest);
                 if (n >= sizeof(start_buf)) n = sizeof(start_buf) - 1;
                 memcpy(start_buf, rest, n);
                 start_buf[n] = '\0';
-                start = atoi(start_buf);
-                end = atoi(dash + 1);
+                /* MEDIUM-2: digits-only validation (ASM LINSPC/LINGET —
+                 * non-digit → SNERR). Empty start = "DELETE -40" → 0. */
+                int valid = 1;
+                for (size_t k = 0; k < n; k++) {
+                    if (!isdigit((unsigned char)start_buf[k])) { valid = 0; break; }
+                }
+                const char *endp = dash + 1;
+                if (!*endp) {
+                    /* MEDIUM-1: "DELETE 40-" → open range to end (ASM ALLLST 65530) */
+                    end = 65530;
+                } else {
+                    for (const char *q = endp; *q; q++) {
+                        if (!isdigit((unsigned char)*q)) { valid = 0; break; }
+                    }
+                    end = valid ? atoi(endp) : 0;
+                }
+                if (!valid) {
+                    rc = ERROR;  /* SNERR */
+                } else {
+                    start = (n == 0) ? 0 : atoi(start_buf);
+                    /* start > end → FCERR (ASM FCERRG); otherwise success.
+                     * Must be INSIDE the valid branch — an unconditional check
+                     * here overwrote the SNERR rc (start/end still 0). */
+                    rc = (start > end) ? ERROR : SUCCESS;
+                    if (rc == SUCCESS) {
+                        gwlist_delete_range(start, end);
+                    }
+                }
             } else {
+                /* MEDIUM-2: whole token must be digits */
+                int valid = (*rest != '\0');
+                for (const char *q = rest; *q; q++) {
+                    if (!isdigit((unsigned char)*q)) { valid = 0; break; }
+                }
+                if (!valid) {
+                    rc = ERROR;  /* SNERR */
+                    goto delete_done;
+                }
                 start = atoi(rest);
                 end = start;  /* Single line form */
+                /* start > end impossible here (end == start) — success. */
+                rc = SUCCESS;
+                gwlist_delete_range(start, end);
             }
-            rc = gwlist_delete_range(start, end);
         }
+delete_done:
         result = rc;
     }
     /* RESTORE statement: RESTORE [line] */

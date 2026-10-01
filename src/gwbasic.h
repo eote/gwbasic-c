@@ -305,13 +305,13 @@ void scndrv_mrk(bool is_input);
 void gwlist_init(void);
 void gwlist_add_line(int number, const char *text);
 struct program_line *gwlist_find_line(int number);
-void gwlist_delete_line(int number);
+struct program_line *gwlist_delete_line(int number);  /* Returns next surviving line (UAF-safe relocation) */
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
 void gwlist_clear(void);
 int gwlist_load_file(const char *filename);
 int gwlist_reseq(int first, int mm, int inc);        /* RESEQ (ASM GWMAIN L3102) */
-int gwlist_delete_range(int start, int end);         /* DELETE range */
+struct program_line *gwlist_delete_range(int start, int end);  /* DELETE range; returns anchor after range */
 
 /* FIVEO module functions - WHILE/WEND stack, WRITE, CHAIN */
 void fiveo_init(void);
@@ -889,7 +889,7 @@ int giocom_gwd(int device_id);
 void gwlist_init(void);
 void gwlist_add_line(int number, const char *text);
 struct program_line *gwlist_find_line(int number);
-void gwlist_delete_line(int number);
+struct program_line *gwlist_delete_line(int number);  /* Returns next surviving line (UAF-safe relocation) */
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
 

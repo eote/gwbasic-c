@@ -83,23 +83,34 @@ int gwlist_reseq(int first, int mm, int inc) {
     return SUCCESS;
 }
 
-/* DELETE range — delete lines in [start, end] (ASM DEL via CHAIN DELETE range).
- * start > end → ERROR; empty range (no lines inside) → SUCCESS (no-op). */
-int gwlist_delete_range(int start, int end) {
-    if (start > end) return ERROR;
+/* DELETE range — delete lines in [start, end] (ASM DELETE L778-812 + SCNLIN L842).
+ * start > end → ERROR (ASM FCERRG); empty range (no lines inside) → SUCCESS (no-op).
+ * Returns the first surviving line AFTER the deleted range (safe relocation anchor
+ * for execution pointers); NULL if no such line (deleted to end / nothing deleted). */
+struct program_line *gwlist_delete_range(int start, int end) {
+    if (start > end) return NULL;
+
+    /* Find the first surviving line after the range BEFORE deleting
+     * (ASM L791-793: FNDLIN finds line beyond the last line in range). */
+    struct program_line *anchor = NULL;
+    struct program_line *scan = g_program_head;
+    while (scan) {
+        if (scan->number > end) {
+            anchor = scan;
+            break;
+        }
+        scan = scan->next;
+    }
 
     struct program_line *curr = g_program_head;
-    int deleted = 0;
     while (curr) {
         struct program_line *next = curr->next;
         if (curr->number >= start && curr->number <= end) {
             gwlist_delete_line(curr->number);
-            deleted++;
         }
         curr = next;
     }
-    (void)deleted;
-    return SUCCESS;
+    return anchor;
 }
 
 void gwlist_add_line(int number, const char *text) {
@@ -147,24 +158,29 @@ struct program_line *gwlist_find_line(int number) {
     return NULL;
 }
 
-void gwlist_delete_line(int number) {
+struct program_line *gwlist_delete_line(int number) {
     struct program_line *prev = NULL;
     struct program_line *curr = g_program_head;
-    
+
     while (curr) {
         if (curr->number == number) {
+            struct program_line *next = curr->next;
             if (prev) {
-                prev->next = curr->next;
+                prev->next = next;
             } else {
-                g_program_head = curr->next;
+                g_program_head = next;
             }
             gwram_free(curr->text);
             gwram_free(curr);
-            return;
+            /* Return the next surviving line (ASM DEL/FNDLIN: [H,L] = pointer
+             * to next line) — callers use it to relocate execution pointers
+             * instead of dereferencing freed nodes (UAF). */
+            return next;
         }
         prev = curr;
         curr = curr->next;
     }
+    return NULL;
 }
 
 void gwlist_list(int start, int end) {

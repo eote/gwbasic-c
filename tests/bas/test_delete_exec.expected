@@ -1,0 +1,8 @@
+S1: start
+S1: PASS line 40 not executed
+S2: start
+S2: PASS continued after self-delete
+S3: start
+S3: PASS continued after range delete
+S4: PASS X preserved
+ALL DONE

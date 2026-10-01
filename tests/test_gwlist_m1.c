@@ -138,9 +138,10 @@ void test_gwlist_delete_range(void) {
     gwlist_add_line(30, "C = 3");
     gwlist_add_line(40, "D = 4");
     
-    int rc = gwlist_delete_range(20, 30);
+    struct program_line *anchor = gwlist_delete_range(20, 30);
     
-    TEST_ASSERT_EQ_INT(rc, 0, "DELETE 20-30 succeeds");
+    TEST_ASSERT(anchor != NULL, "DELETE 20-30 succeeds, anchor set");
+    TEST_ASSERT_EQ_INT(anchor->number, 40, "anchor is line 40");
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 preserved");
     TEST_ASSERT(gwlist_find_line(20) == NULL, "line 20 deleted");
     TEST_ASSERT(gwlist_find_line(30) == NULL, "line 30 deleted");
@@ -156,9 +157,9 @@ void test_gwlist_delete_range_invalid(void) {
     
     gwlist_add_line(10, "A = 1");
     
-    int rc = gwlist_delete_range(30, 20);  /* start > end */
+    struct program_line *anchor = gwlist_delete_range(30, 20);  /* start > end */
     
-    TEST_ASSERT(rc != 0, "DELETE 30-20 invalid (start > end)");
+    TEST_ASSERT(anchor == NULL, "DELETE 30-20 invalid (start > end → NULL)");
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 preserved");
     TEST_PASS("gwlist delete range invalid");
 }
@@ -171,9 +172,9 @@ void test_gwlist_delete_range_empty(void) {
     
     gwlist_add_line(10, "A = 1");
     
-    int rc = gwlist_delete_range(100, 200);  /* 无行在范围内 */
+    struct program_line *anchor = gwlist_delete_range(100, 200);  /* 无行在范围内 */
     
-    TEST_ASSERT_EQ_INT(rc, 0, "DELETE empty range succeeds (no-op)");
+    TEST_ASSERT(anchor == NULL, "DELETE empty range: no anchor (no-op)");
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 preserved");
     TEST_PASS("gwlist delete range empty");
 }

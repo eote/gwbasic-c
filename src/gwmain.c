@@ -160,17 +160,38 @@ static void run_interpreter(void) {
         
         /* Check for RUN command */
         if (strcasecmp(trimmed, "RUN") == 0) {
-            /* Execute all program lines in order */
+            /* Execute all program lines in order (ASM NEWST1/GONE chain).
+             * CRITICAL-1 fix: a statement may DELETE lines (including the
+             * current one) — never dereference a possibly-freed node.
+             * After each statement, relocate via gwlist_find_line(number > curr)
+             * if curr was freed, else use the saved next. */
             struct program_line *curr = gwlist_get_first_line();
             while (curr) {
                 if (curr->text) {
+                    int line_num = curr->number;
+                    struct program_line *saved_next = curr->next;
                     int rc = gwsts_exec_statement(curr->text);
                     if (rc != 0) {
-                        printf("Error at line %d\n", curr->number);
+                        printf("Error at line %d\n", line_num);
                         break;
                     }
+                    /* If the statement deleted curr (or neighbors), find the
+                     * first surviving line > line_num; else use saved_next.
+                     * ASM SAVTXT semantics: continue at the PHYSICAL next line
+                     * — relocate by node identity first (RENUM preserves text
+                     * order), number-scan only when saved_next was deleted
+                     * (DELETE never renumbers, so number order is stable). */
+                    if (gwlist_find_line(line_num) == curr) {
+                        curr = saved_next;
+                    } else if (saved_next && gwlist_find_line(saved_next->number) == saved_next) {
+                        curr = saved_next;
+                    } else {
+                        curr = gwlist_get_first_line();
+                        while (curr && curr->number <= line_num) curr = curr->next;
+                    }
+                } else {
+                    curr = curr->next;
                 }
-                curr = curr->next;
             }
             continue;
         }
@@ -251,6 +272,11 @@ int main(int argc, char *argv[]) {
                 g_curlin = curr->number;
                 g_state->current_line = curr->number;
                 
+                /* CRITICAL-1 fix: snapshot identity before executing — a
+                 * statement may DELETE the current line (freeing curr). */
+                int line_num = curr->number;
+                struct program_line *saved_next = curr->next;
+                
                 int rc = gwsts_exec_statement(curr->text);
                 DEBUG_PRINT("Statement returned %d", rc);
                 
@@ -275,7 +301,7 @@ int main(int argc, char *argv[]) {
                                         }
                                     }
                                     /* No ON ERROR handler or handler not found */
-                                    printf("Error at line %d\n", curr->number);
+                                    printf("Error at line %d\n", line_num);
                                     exec_rc = ERROR;
                                     break;
                                 }
@@ -287,9 +313,15 @@ int main(int argc, char *argv[]) {
                                         break;
                                     }
                                     /* Error occurred (from statement execution) */
-                                    if (gwdata_handle_error(curr->number)) {
-                                        curr = gwlist_find_line(gwdata_get_on_error_line());
-                                        continue;
+                                    if (gwlist_find_line(line_num) == curr) {
+                                        if (gwdata_handle_error(line_num)) {
+                                            curr = gwlist_find_line(gwdata_get_on_error_line());
+                                            continue;
+                                        }
+                                    } else {
+                                        /* curr was deleted — no ON ERROR line context */
+                                        exec_rc = ERROR;
+                                        break;
                                     }
                                     /* No ON ERROR handler or handler not found */
                                     exec_rc = ERROR;
@@ -299,9 +331,25 @@ int main(int argc, char *argv[]) {
                                     curr = gwlist_find_line((WORD)rc);
                                     continue;
                                 }
-                                /* rc == 0 is success, continue to next line */
+                                /* rc == 0 is success, continue to next line.
+                                 * CRITICAL-1 fix: if the statement deleted curr,
+                                 * relocate instead of dereferencing the freed
+                                 * node. ASM SAVTXT semantics: continue at the
+                                 * PHYSICAL next line — node identity first
+                                 * (RENUM preserves text order), number-scan
+                                 * only when saved_next was deleted (DELETE
+                                 * never renumbers). */
+                                if (gwlist_find_line(line_num) == curr) {
+                                    curr = saved_next;
+                                } else if (saved_next && gwlist_find_line(saved_next->number) == saved_next) {
+                                    curr = saved_next;
+                                } else {
+                                    curr = gwlist_get_first_line();
+                                    while (curr && curr->number <= line_num) curr = curr->next;
+                                }
+            } else {
+                curr = curr->next;
             }
-            curr = curr->next;
         }
         
         /* Cleanup */
