@@ -177,26 +177,31 @@ static void run_interpreter(void) {
                 if (curr->text) {
                     int line_num = curr->number;
                     struct program_line *saved_next = curr->next;
+                    long link_version = gwlist_get_link_version();
                     int rc = gwsts_exec_statement(curr->text);
                     if (rc != 0) {
                         printf("Error at line %d\n", line_num);
                         break;
                     }
-                    /* Liveness by POINTER IDENTITY (not number lookup —
-                     * RENUM renumbers the current line while it stays alive):
-                     * - curr alive + saved_next alive (RENUM) → physical next
-                     *   line (ASM SAVTXT; number order may have changed).
-                     * - curr alive + saved_next deleted (DELETE) → first
-                     *   surviving line > line_num (numbers unchanged).
-                     * - curr freed (DELETE) → first surviving > line_num. */
-                    if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
-                        curr = saved_next;
-                    } else if (gwlist_is_alive(curr)) {
-                        curr = gwlist_get_first_line();
-                        while (curr && curr->number <= line_num) curr = curr->next;
+                    /* LOW-2 (v127): liveness walk ONLY when the statement
+                     * mutated the chain (link version changed). Snapshot the
+                     * version before executing; O(1) fast path otherwise. */
+                    if (link_version != gwlist_get_link_version()) {
+                        /* Chain mutated — liveness by POINTER IDENTITY (not
+                         * number lookup; RENUM renumbers the current line while
+                         * it stays alive): both alive → physical next line (ASM
+                         * SAVTXT); else first surviving line > line_num. */
+                        if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
+                            curr = saved_next;
+                        } else {
+                            curr = gwlist_get_first_line();
+                            while (curr && curr->number <= line_num) curr = curr->next;
+                        }
+                        link_version = gwlist_get_link_version();
                     } else {
-                        curr = gwlist_get_first_line();
-                        while (curr && curr->number <= line_num) curr = curr->next;
+                        /* Chain unchanged — curr and saved_next are both valid
+                         * live pointers (nothing was deleted). */
+                        curr = saved_next;
                     }
                 } else {
                     curr = curr->next;
@@ -282,9 +287,11 @@ int main(int argc, char *argv[]) {
                 g_state->current_line = curr->number;
                 
                 /* CRITICAL-1 fix: snapshot identity before executing — a
-                 * statement may DELETE the current line (freeing curr). */
+                 * statement may DELETE the current line (freeing curr).
+                 * LOW-2 (v127): also snapshot the link version. */
                 int line_num = curr->number;
                 struct program_line *saved_next = curr->next;
+                long link_version = gwlist_get_link_version();
                 
                 int rc = gwsts_exec_statement(curr->text);
                 DEBUG_PRINT("Statement returned %d", rc);
@@ -350,18 +357,26 @@ int main(int argc, char *argv[]) {
                                  *   live list for first surviving line >
                                  *   line_num (pointer-identity walk, never read
                                  *   freed node fields). */
-                                /* Liveness by POINTER IDENTITY (same as RUN
-                                 * path): RENUM renumbers the current line while
-                                 * it stays alive; DELETE frees it. Never read
-                                 * freed node fields (MEDIUM-2). */
-                                if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
-                                    curr = saved_next;
-                                } else if (gwlist_is_alive(curr)) {
-                                    curr = gwlist_get_first_line();
-                                    while (curr && curr->number <= line_num) curr = curr->next;
+                                /* LOW-2 (v127): liveness walk ONLY when the
+                                 * statement mutated the chain. Same semantics
+                                 * as the RUN path. */
+                                if (link_version != gwlist_get_link_version()) {
+                                    /* Chain mutated — liveness by POINTER
+                                     * IDENTITY (not number lookup; RENUM
+                                     * renumbers the current line while it stays
+                                     * alive): both alive → physical next line
+                                     * (ASM SAVTXT); else first surviving line >
+                                     * line_num. */
+                                    if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
+                                        curr = saved_next;
+                                    } else {
+                                        curr = gwlist_get_first_line();
+                                        while (curr && curr->number <= line_num) curr = curr->next;
+                                    }
+                                    link_version = gwlist_get_link_version();
                                 } else {
-                                    curr = gwlist_get_first_line();
-                                    while (curr && curr->number <= line_num) curr = curr->next;
+                                    /* Chain unchanged — both valid live pointers. */
+                                    curr = saved_next;
                                 }
             } else {
                 curr = curr->next;

@@ -10,8 +10,19 @@
 /* Program line list head */
 static struct program_line *g_program_head = NULL;
 
+/* Link version counter (v127 LOW-2): bumped on every structural change
+ * (delete/add/reseq). Callers snapshot the version before executing a
+ * statement; a change means the chain was mutated → relocate via liveness
+ * walk. Avoids per-statement O(n) liveness traversals (O(n²) overall). */
+static long g_link_version = 0;
+
+long gwlist_get_link_version(void) {
+    return g_link_version;
+}
+
 void gwlist_init(void) {
     g_program_head = NULL;
+    g_link_version++;
 }
 
 /* RESEQ [NN[,MM[,INC]]] — resequence line numbers (ASM GWMAIN.ASM RESEQ L3102-3222).
@@ -36,13 +47,23 @@ int gwlist_reseq(int first, int mm, int inc) {
 
     /* Snapshot the qualifying nodes first (in sorted order), then renumber and
      * re-position each. Prevents re-encountering already-processed nodes that
-     * repositioning moves behind curr (ASM RESNX1 processes each line once). */
-    struct program_line *nodes[256];
+     * repositioning moves behind curr (ASM RESNX1 processes each line once).
+     * v127 nodes[256] fix: dynamic allocation — ASM 64K program allows ~21K
+     * lines; a fixed 256-entry array silently truncated large programs. */
     int count = 0;
     struct program_line *curr = g_program_head;
-    while (curr && count < 256) {
+    while (curr) {
+        if (threshold == 0 || curr->number >= threshold) count++;
+        curr = curr->next;
+    }
+    if (count == 0) return SUCCESS;
+    struct program_line **nodes = (struct program_line **)gwram_alloc((size_t)count * sizeof(struct program_line *));
+    if (!nodes) return ERROR;
+    int idx = 0;
+    curr = g_program_head;
+    while (curr && idx < count) {
         if (threshold == 0 || curr->number >= threshold) {
-            nodes[count++] = curr;
+            nodes[idx++] = curr;
         }
         curr = curr->next;
     }
@@ -51,6 +72,7 @@ int gwlist_reseq(int first, int mm, int inc) {
     for (int i = 0; i < count; i++) {
         /* ASM NXTRSC L3176-3181: new line > 65529 → FCERR */
         if (new_num > 65529) {
+            gwram_free(nodes);
             return ERROR;
         }
         struct program_line *node = nodes[i];
@@ -147,6 +169,7 @@ void gwlist_add_line(int number, const char *text) {
     } else {
         g_program_head = new_line;
     }
+    g_link_version++;
 }
 
 struct program_line *gwlist_find_line(int number) {
@@ -183,6 +206,7 @@ struct program_line *gwlist_delete_line(int number) {
             }
             gwram_free(curr->text);
             gwram_free(curr);
+            g_link_version++;
             /* Return the next surviving line (ASM DEL/FNDLIN: [H,L] = pointer
              * to next line) — callers use it to relocate execution pointers
              * instead of dereferencing freed nodes (UAF). */

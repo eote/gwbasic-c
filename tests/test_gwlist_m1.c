@@ -178,3 +178,29 @@ void test_gwlist_delete_range_empty(void) {
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 preserved");
     TEST_PASS("gwlist delete range empty");
 }
+
+/* Test: RESEQ >256 行 — 动态快照 (v127 nodes[256] 修复: 大程序不再截断) */
+void test_gwlist_reseq_large_program(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+
+    for (int i = 1; i <= 300; i++) {
+        gwlist_add_line(i, "X = 1");
+    }
+
+    int rc = gwlist_reseq(0, 0, -1);  /* default 10,10 — all 300 lines */
+    TEST_ASSERT_EQ_INT(rc, 0, "RESEQ 300 lines succeeds");
+
+    /* 1→10, 300→3000 — 全部重排, 无截断 */
+    TEST_ASSERT(gwlist_find_line(1) == NULL, "old line 1 gone");
+    TEST_ASSERT(gwlist_find_line(10) != NULL, "line 1 -> 10");
+    TEST_ASSERT(gwlist_find_line(256) == NULL, "old line 256 gone (no truncation)");
+    TEST_ASSERT(gwlist_find_line(3000) != NULL, "line 300 -> 3000");
+    /* 行数保持 300 */
+    int count = 0;
+    struct program_line *curr = gwlist_get_first_line();
+    while (curr) { count++; curr = curr->next; }
+    TEST_ASSERT_EQ_INT(count, 300, "300 lines preserved");
+    TEST_PASS("gwlist reseq large program (dynamic snapshot)");
+}

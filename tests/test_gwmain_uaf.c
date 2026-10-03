@@ -42,7 +42,8 @@ void test_gwlist_delete_range_returns_next(void) {
     TEST_PASS("gwlist_delete_range returns next");
 }
 
-/* Test: gwlist_delete_range 删到末尾 — 返回 NULL (无下一行) */
+/* Test: gwlist_delete_range 删到末尾 — 返回 NULL (无下一行)
+ * (v127 LOW-1: (20, 65530) — 与 DELETE 40- 的 ALLLST 哨兵一致; 补 "20 gone" 断言) */
 void test_gwlist_delete_range_to_end(void) {
     gwdata_init();
     gwram_init();
@@ -51,8 +52,9 @@ void test_gwlist_delete_range_to_end(void) {
     gwlist_add_line(10, "A = 1");
     gwlist_add_line(20, "B = 2");
 
-    struct program_line *next = gwlist_delete_range(20, 0);  /* 20-末尾 */
+    struct program_line *next = gwlist_delete_range(20, 65530);  /* 20-末尾 (ASM ALLLST 哨兵) */
     TEST_ASSERT(next == NULL, "delete to end returns NULL");
+    TEST_ASSERT(gwlist_find_line(20) == NULL, "line 20 gone (actually deleted)");
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
     TEST_PASS("gwlist_delete_range to end NULL");
 }

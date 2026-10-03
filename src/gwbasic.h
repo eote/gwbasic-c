@@ -306,6 +306,7 @@ void gwlist_init(void);
 void gwlist_add_line(int number, const char *text);
 struct program_line *gwlist_find_line(int number);
 int gwlist_is_alive(struct program_line *node);
+long gwlist_get_link_version(void);
 struct program_line *gwlist_delete_line(int number);  /* Returns next surviving line (UAF-safe relocation) */
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
@@ -891,6 +892,7 @@ void gwlist_init(void);
 void gwlist_add_line(int number, const char *text);
 struct program_line *gwlist_find_line(int number);
 int gwlist_is_alive(struct program_line *node);
+long gwlist_get_link_version(void);
 struct program_line *gwlist_delete_line(int number);  /* Returns next surviving line (UAF-safe relocation) */
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
