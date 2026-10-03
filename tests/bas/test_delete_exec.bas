@@ -19,5 +19,25 @@
 ' 场景 4: 变量保持 + 正常结束
 300 X = 100
 310 IF X = 100 THEN PRINT "S4: PASS X preserved" ELSE PRINT "S4: FAIL"
-320 PRINT "ALL DONE"
-400 END
+320 PRINT "S4 done"
+
+' 场景 5 (v126 CRITICAL-1): 删除紧邻下一行 — 50 不应执行
+500 PRINT "S5: start"
+510 DELETE 520
+520 PRINT "S5: FAIL line 520 executed"
+530 PRINT "S5: PASS line 520 not executed"
+
+' 场景 6 (v126 CRITICAL-1): 删除紧邻下一行至末尾
+600 PRINT "S6: start"
+610 DELETE 620-625
+620 PRINT "S6: FAIL executed"
+630 PRINT "S6: PASS continued"
+
+' 场景 7 (v126 CRITICAL-1): 区间删除紧邻行
+700 PRINT "S7: start"
+710 DELETE 720-740
+720 PRINT "S7: FAIL executed"
+730 PRINT "S7: FAIL executed"
+750 PRINT "S7: PASS continued"
+800 PRINT "ALL DONE"
+900 END

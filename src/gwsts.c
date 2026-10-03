@@ -633,10 +633,17 @@ int gwsts_exec_statement(const char *text) {
                     /* MEDIUM-1: "DELETE 40-" → open range to end (ASM ALLLST 65530) */
                     end = 65530;
                 } else {
-                    for (const char *q = endp; *q; q++) {
-                        if (!isdigit((unsigned char)*q)) { valid = 0; break; }
+                    /* MEDIUM-1: ASM LINGET — whitespace is a legal terminator.
+                     * Scan digits, then skip trailing whitespace; anything
+                     * else (or content after the whitespace) → SNERR. */
+                    const char *q = endp;
+                    while (*q && isdigit((unsigned char)*q)) q++;
+                    while (*q && isspace((unsigned char)*q)) q++;
+                    if (*q) {
+                        valid = 0;  /* garbage after number/whitespace */
+                    } else {
+                        end = (q > endp) ? atoi(endp) : 0;
                     }
-                    end = valid ? atoi(endp) : 0;
                 }
                 if (!valid) {
                     rc = ERROR;  /* SNERR */
@@ -651,11 +658,13 @@ int gwsts_exec_statement(const char *text) {
                     }
                 }
             } else {
-                /* MEDIUM-2: whole token must be digits */
+                /* MEDIUM-2: whole token must be digits; MEDIUM-1: trailing
+                 * whitespace is a legal terminator (ASM LINGET). */
                 int valid = (*rest != '\0');
-                for (const char *q = rest; *q; q++) {
-                    if (!isdigit((unsigned char)*q)) { valid = 0; break; }
-                }
+                const char *q = rest;
+                while (*q && isdigit((unsigned char)*q)) q++;
+                while (*q && isspace((unsigned char)*q)) q++;
+                if (*q) valid = 0;  /* garbage after number/whitespace */
                 if (!valid) {
                     rc = ERROR;  /* SNERR */
                     goto delete_done;

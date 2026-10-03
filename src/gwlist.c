@@ -158,6 +158,17 @@ struct program_line *gwlist_find_line(int number) {
     return NULL;
 }
 
+/* Pointer-identity liveness check (CRITICAL-1/MEDIUM-2): never dereference the
+ * node — walk the live list comparing pointers only. */
+int gwlist_is_alive(struct program_line *node) {
+    struct program_line *curr = g_program_head;
+    while (curr) {
+        if (curr == node) return 1;
+        curr = curr->next;
+    }
+    return 0;
+}
+
 struct program_line *gwlist_delete_line(int number) {
     struct program_line *prev = NULL;
     struct program_line *curr = g_program_head;

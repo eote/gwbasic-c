@@ -5,4 +5,11 @@ S2: PASS continued after self-delete
 S3: start
 S3: PASS continued after range delete
 S4: PASS X preserved
+S4 done
+S5: start
+S5: PASS line 520 not executed
+S6: start
+S6: PASS continued
+S7: start
+S7: PASS continued
 ALL DONE

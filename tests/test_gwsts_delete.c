@@ -218,3 +218,75 @@ void test_gwsts_delete_line_zero(void) {
     TEST_ASSERT(gwlist_find_line(10) != NULL, "line 10 kept");
     TEST_PASS("gwsts DELETE line 0");
 }
+
+/* Test: MEDIUM-1 (v126) — 尾随空白是合法终止符 (ASM LINGET) */
+void test_gwsts_delete_trailing_space(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+    gwlist_add_line(40, "D = 4");
+
+    int rc1 = gwsts_exec_statement("DELETE 40 ");
+    TEST_ASSERT_EQ_INT(rc1, 0, "DELETE 40 <space> → success");
+    TEST_ASSERT(gwlist_find_line(40) == NULL, "line 40 gone");
+
+    int rc2 = gwsts_exec_statement("DELETE 10-20 ");
+    TEST_ASSERT_EQ_INT(rc2, 0, "DELETE 10-20 <space> → success (range form too)");
+    TEST_ASSERT(gwlist_find_line(10) == NULL, "line 10 gone");
+    TEST_PASS("gwsts DELETE trailing whitespace terminator");
+}
+
+/* Test: CRITICAL-1 (v126) — 语句级删除紧邻下一行 (RENUM 回归保障) */
+void test_gwsts_delete_next_line(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+    gwlist_add_line(20, "B = 2");
+    gwlist_add_line(30, "C = 3");
+    gwlist_add_line(40, "D = 4");
+
+    int rc = gwsts_exec_statement("DELETE 30");
+    TEST_ASSERT_EQ_INT(rc, 0, "DELETE 30 executes");
+    TEST_ASSERT(gwlist_find_line(30) == NULL, "line 30 gone");
+    TEST_ASSERT(gwlist_find_line(20) != NULL, "line 20 kept");
+    TEST_ASSERT(gwlist_find_line(40) != NULL, "line 40 kept");
+    TEST_PASS("gwsts DELETE next line (relocation safe)");
+}
+
+/* Test: CRITICAL-1 (v126) — 区间删除紧邻行至末尾 30- (从下一现存行继续) */
+void test_gwsts_delete_next_line_to_end(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+    gwlist_add_line(20, "B = 2");
+    gwlist_add_line(30, "C = 3");
+
+    int rc = gwsts_exec_statement("DELETE 30-");
+    TEST_ASSERT_EQ_INT(rc, 0, "DELETE 30- open range from next line");
+    TEST_ASSERT(gwlist_find_line(30) == NULL, "line 30 gone");
+    TEST_ASSERT(gwlist_find_line(20) != NULL, "line 20 kept");
+    TEST_PASS("gwsts DELETE next-line-to-end");
+}
+
+/* Test: CRITICAL-1 (v126) — 区间删除紧邻行 30-50 (RENUM 回归保障) */
+void test_gwsts_delete_next_line_range(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+    gwlist_add_line(10, "A = 1");
+    gwlist_add_line(20, "B = 2");
+    gwlist_add_line(30, "C = 3");
+    gwlist_add_line(40, "D = 4");
+    gwlist_add_line(50, "E = 5");
+
+    int rc = gwsts_exec_statement("DELETE 30-50");
+    TEST_ASSERT_EQ_INT(rc, 0, "DELETE 30-50 range from next line");
+    TEST_ASSERT(gwlist_find_line(30) == NULL, "30 gone");
+    TEST_ASSERT(gwlist_find_line(40) == NULL, "40 gone");
+    TEST_ASSERT(gwlist_find_line(50) == NULL, "50 gone");
+    TEST_ASSERT(gwlist_find_line(20) != NULL, "20 kept");
+    TEST_PASS("gwsts DELETE next-line range");
+}

@@ -162,9 +162,16 @@ static void run_interpreter(void) {
         if (strcasecmp(trimmed, "RUN") == 0) {
             /* Execute all program lines in order (ASM NEWST1/GONE chain).
              * CRITICAL-1 fix: a statement may DELETE lines (including the
-             * current one) — never dereference a possibly-freed node.
-             * After each statement, relocate via gwlist_find_line(number > curr)
-             * if curr was freed, else use the saved next. */
+             * current one or the next one) — never dereference a possibly-
+             * freed node. Relocation:
+             * - Branch 1 (current line survives): curr->next is a LIVE pointer
+             *   (gwlist_delete_line already updated the chain) — use it, never
+             *   the pre-execution snapshot.
+             * - Branch 2 (current line deleted): find the next surviving line
+             *   by walking the list with pointer-identity comparison (never
+             *   read fields of freed nodes).
+             * - Branch 3 (saved_next deleted too): number scan (DELETE never
+             *   renumbers, so number order is stable). */
             struct program_line *curr = gwlist_get_first_line();
             while (curr) {
                 if (curr->text) {
@@ -175,16 +182,18 @@ static void run_interpreter(void) {
                         printf("Error at line %d\n", line_num);
                         break;
                     }
-                    /* If the statement deleted curr (or neighbors), find the
-                     * first surviving line > line_num; else use saved_next.
-                     * ASM SAVTXT semantics: continue at the PHYSICAL next line
-                     * — relocate by node identity first (RENUM preserves text
-                     * order), number-scan only when saved_next was deleted
-                     * (DELETE never renumbers, so number order is stable). */
-                    if (gwlist_find_line(line_num) == curr) {
+                    /* Liveness by POINTER IDENTITY (not number lookup —
+                     * RENUM renumbers the current line while it stays alive):
+                     * - curr alive + saved_next alive (RENUM) → physical next
+                     *   line (ASM SAVTXT; number order may have changed).
+                     * - curr alive + saved_next deleted (DELETE) → first
+                     *   surviving line > line_num (numbers unchanged).
+                     * - curr freed (DELETE) → first surviving > line_num. */
+                    if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
                         curr = saved_next;
-                    } else if (saved_next && gwlist_find_line(saved_next->number) == saved_next) {
-                        curr = saved_next;
+                    } else if (gwlist_is_alive(curr)) {
+                        curr = gwlist_get_first_line();
+                        while (curr && curr->number <= line_num) curr = curr->next;
                     } else {
                         curr = gwlist_get_first_line();
                         while (curr && curr->number <= line_num) curr = curr->next;
@@ -312,8 +321,9 @@ int main(int argc, char *argv[]) {
                                         /* END - stop execution gracefully */
                                         break;
                                     }
-                                    /* Error occurred (from statement execution) */
-                                    if (gwlist_find_line(line_num) == curr) {
+                                    /* Error occurred (from statement execution).
+                                     * Liveness by pointer identity (RENUM-safe). */
+                                    if (gwlist_is_alive(curr)) {
                                         if (gwdata_handle_error(line_num)) {
                                             curr = gwlist_find_line(gwdata_get_on_error_line());
                                             continue;
@@ -332,17 +342,23 @@ int main(int argc, char *argv[]) {
                                     continue;
                                 }
                                 /* rc == 0 is success, continue to next line.
-                                 * CRITICAL-1 fix: if the statement deleted curr,
-                                 * relocate instead of dereferencing the freed
-                                 * node. ASM SAVTXT semantics: continue at the
-                                 * PHYSICAL next line — node identity first
-                                 * (RENUM preserves text order), number-scan
-                                 * only when saved_next was deleted (DELETE
-                                 * never renumbers). */
-                                if (gwlist_find_line(line_num) == curr) {
+                                 * CRITICAL-1 fix (same as RUN path):
+                                 * - Branch 1 (current line survives): curr->next
+                                 *   is a LIVE pointer (delete_line already
+                                 *   updated the chain) — use it.
+                                 * - Branch 2/3 (current line freed): walk the
+                                 *   live list for first surviving line >
+                                 *   line_num (pointer-identity walk, never read
+                                 *   freed node fields). */
+                                /* Liveness by POINTER IDENTITY (same as RUN
+                                 * path): RENUM renumbers the current line while
+                                 * it stays alive; DELETE frees it. Never read
+                                 * freed node fields (MEDIUM-2). */
+                                if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
                                     curr = saved_next;
-                                } else if (saved_next && gwlist_find_line(saved_next->number) == saved_next) {
-                                    curr = saved_next;
+                                } else if (gwlist_is_alive(curr)) {
+                                    curr = gwlist_get_first_line();
+                                    while (curr && curr->number <= line_num) curr = curr->next;
                                 } else {
                                     curr = gwlist_get_first_line();
                                     while (curr && curr->number <= line_num) curr = curr->next;
