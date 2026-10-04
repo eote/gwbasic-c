@@ -5,13 +5,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Allocation/free counters (v128 CRITICAL-1 regression): enable leak-balance
+ * assertions in tests (alloc == free after reseq/error paths). */
+static long g_alloc_count = 0;
+static long g_free_count = 0;
+
+long gwram_get_alloc_count(void) { return g_alloc_count; }
+long gwram_get_free_count(void) { return g_free_count; }
+
 void gwram_init(void) {
     /* No initialization needed for standard malloc-based implementation */
+    g_alloc_count = 0;
+    g_free_count = 0;
 }
 
 void *gwram_alloc(size_t size) {
     if (size == 0) return NULL;
-    return malloc(size);
+    void *p = malloc(size);
+    if (p) g_alloc_count++;
+    return p;
 }
 
 void *gwram_realloc(void *ptr, size_t size) {
@@ -22,7 +34,9 @@ void *gwram_realloc(void *ptr, size_t size) {
         gwram_free(ptr);
         return NULL;
     }
-    return realloc(ptr, size);
+    void *p = realloc(ptr, size);
+    if (p) { g_alloc_count++; g_free_count++; }  /* realloc = free + alloc */
+    return p;
 }
 
 void *gwram_calloc(size_t nmemb, size_t size) {
@@ -35,6 +49,7 @@ void *gwram_calloc(size_t nmemb, size_t size) {
     void *ptr = malloc(total);
     if (ptr) {
         memset(ptr, 0, total);
+        g_alloc_count++;
     }
     return ptr;
 }
@@ -42,6 +57,7 @@ void *gwram_calloc(size_t nmemb, size_t size) {
 void gwram_free(void *ptr) {
     if (ptr) {
         free(ptr);
+        g_free_count++;
     }
 }
 

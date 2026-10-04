@@ -102,6 +102,8 @@ int gwlist_reseq(int first, int mm, int inc) {
         if (pp) pp->next = node;
         else g_program_head = node;
     }
+    gwram_free(nodes);
+    g_link_version++;
     return SUCCESS;
 }
 
@@ -234,7 +236,8 @@ struct program_line *gwlist_get_first_line(void) {
     return g_program_head;
 }
 
-/* Clear all program lines - free linked list nodes */
+/* Clear all program lines - free linked list nodes (v128 LOW-1: clear 修改链
+ * 结构 → 递增版本计数器, 保持"版本 = 链结构版本"单一语义) */
 void gwlist_clear(void) {
     struct program_line *curr = g_program_head;
     while (curr) {
@@ -246,6 +249,7 @@ void gwlist_clear(void) {
         curr = next;
     }
     g_program_head = NULL;
+    g_link_version++;
 }
 
 /* Windows-compatible getline implementation (forward declaration) */

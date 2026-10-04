@@ -116,6 +116,7 @@ void test_gwlist_delete_returns_next(void);
 void test_gwlist_delete_range_returns_next(void);
 void test_gwlist_delete_range_to_end(void);
 void test_gwlist_reseq_large_program(void);
+void test_gwlist_reseq_no_leak(void);
 void test_gwsts_delete_bare(void);
 void test_gwsts_delete_open_range(void);
 void test_gwsts_delete_from_start(void);
@@ -952,6 +953,7 @@ int main(void) {
     failed += run_test("gwlist_delete_range_returns_next", test_gwlist_delete_range_returns_next);
     failed += run_test("gwlist_delete_range_to_end", test_gwlist_delete_range_to_end);
     failed += run_test("gwlist_reseq_large_program", test_gwlist_reseq_large_program);
+    failed += run_test("gwlist_reseq_no_leak", test_gwlist_reseq_no_leak);
     failed += run_test("gwsts_delete_bare", test_gwsts_delete_bare);
     failed += run_test("gwsts_delete_open_range", test_gwsts_delete_open_range);
     failed += run_test("gwsts_delete_from_start", test_gwsts_delete_from_start);

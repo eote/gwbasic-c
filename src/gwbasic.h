@@ -226,6 +226,8 @@ void *gwram_alloc(size_t size);
 void *gwram_realloc(void *ptr, size_t size);
 void *gwram_calloc(size_t nmemb, size_t size);
 void gwram_free(void *ptr);
+long gwram_get_alloc_count(void);
+long gwram_get_free_count(void);
 
 /* GWINIT module functions */
 void gwinit_init(void);

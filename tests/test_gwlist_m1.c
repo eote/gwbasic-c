@@ -204,3 +204,36 @@ void test_gwlist_reseq_large_program(void) {
     TEST_ASSERT_EQ_INT(count, 300, "300 lines preserved");
     TEST_PASS("gwlist reseq large program (dynamic snapshot)");
 }
+
+/* Test: RESEQ 泄漏平衡 (v128 CRITICAL-1) — gwram alloc == free (成功+错误路径) */
+void test_gwlist_reseq_no_leak(void) {
+    gwdata_init();
+    gwram_init();
+    gwlist_init();
+
+    for (int i = 1; i <= 300; i++) {
+        gwlist_add_line(i, "X = 1");
+    }
+
+    long alloc0 = gwram_get_alloc_count();
+    long free0 = gwram_get_free_count();
+
+    /* 100 次 RESEQ — 每次快照 count*8 字节; 泄漏则 alloc-free 累积 100×2400B */
+    for (int k = 0; k < 100; k++) {
+        int rc = gwlist_reseq(0, 0, -1);
+        if (rc != 0) break;
+    }
+
+    long alloc1 = gwram_get_alloc_count();
+    long free1 = gwram_get_free_count();
+
+    /* 100 次 RESEQ × 300 行快照 → 每次 1 alloc + 1 free → 平衡 */
+    TEST_ASSERT_EQ_INT((int)(alloc1 - alloc0), (int)(free1 - free0),
+                       "RESEQ 100x: alloc == free (no leak)");
+    /* 行数保持 */
+    int count = 0;
+    struct program_line *curr = gwlist_get_first_line();
+    while (curr) { count++; curr = curr->next; }
+    TEST_ASSERT_EQ_INT(count, 300, "300 lines preserved after 100 reseqs");
+    TEST_PASS("gwlist reseq no leak (alloc/free balance)");
+}
