@@ -1,32 +1,24 @@
-# GW-BASIC C Port - Code Review v128
+# GW-BASIC C Port - Code Review v129
 
-**日期**: 2026-10-05
-**审查范围**: commit `20b0fc2`（feat: M1 收尾 — nodes[256] 动态化 + 链版本计数器，v127 2 LOW）→ 工作区
-**测试状态**: 单元测试 **3064/3064 通过**（0 失败）✅ | .bas 集成 **68/70**（0 失败 + 2 预期跳过）✅ | probe 复测全绿 ✅
+**日期**: 2026-10-06
+**审查范围**: commit `0497172`（fix: CODE_REVIEW v128 — CRITICAL-1 RESEQ 泄漏 + LOW-1 版本计数器）→ 工作区
+**测试状态**: 单元测试 **3066/3066 通过**（0 失败）✅ | .bas 集成 **68/70**（0 失败 + 2 预期跳过）✅ | probe 复测全绿 ✅
 **编译状态**: 干净重建成功（exit 0）| 编译警告 **0 条**（生产 0 / 测试 0）✅
-**工作区状态**: clean（v127 报告已随 20b0fc2 入库）
-**总体评分**: B- — M1 收尾功能与 v127 2 LOW 修复验证通过，但发现 **1 个 CRITICAL 内存泄漏**（RESEQ 成功路径未释放动态快照）及 1 LOW 观察
+**工作区状态**: clean（v128 报告已随 0497172 入库）
+**总体评分**: A（优秀）— v128 的 1 CRITICAL + 1 LOW 全部修复验证通过，**0 新问题**；M1 正式关闭
 
 ---
 
 ## 一、概述
 
-本次审查开发者 M1 收尾提交 `20b0fc2`（8 文件，+224/-198）：
+本次审查开发者对 v128 问题的修复提交 `0497172`（7 文件，+171/-116）。开发者**超额完成**：不仅修复泄漏与版本语义，还落地了 reviewer 建议的分配/释放计数器与泄漏回归测试。
 
-| 变更 | 说明 |
-|------|------|
-| nodes[256] 动态化 | `gwlist_reseq` 快照改动态分配（两遍计数+收集）；ASM 64K 程序 ~21K 行不再截断；FCERR 错误路径释放 |
-| 链版本计数器 `g_link_version` | delete/add/init 递增；gwmain 两处循环快照版本，仅链变化时 liveness walk（O(1) fast path，消除 O(n²)） |
-| v127 LOW-1 | test_gwlist_delete_range_to_end 改 `(20,65530)` + 补 "20 gone" 断言 |
-| v127 LOW-2 | 版本计数器实现（见上） |
-| 新测试 | `test_gwlist_reseq_large_program`（300 行，可捕获旧 256 截断） |
+### v128 修复确认（全部验证通过）
 
-### v127 2 LOW 修复确认（验证通过）
-
-| v127 问题 | 修复 | 独立验证 |
-|-----------|------|----------|
-| LOW-1 假通过测试 | `gwlist_delete_range(20, 65530)`（ASM ALLLST 哨兵）+ `find_line(20)==NULL` "20 gone" 断言 | ✅ 代码复核：start<end 正常删除，断言真实敏感 |
-| LOW-2 O(n²) | 版本计数器 fast path：版本不变 → `curr=saved_next`（O(1)），链变化 → liveness walk | ✅ probe 复测：删除场景走 walk、RENUM/普通语句走 fast path 均正确（见下） |
+| v128 问题 | 修复方式（0497172） | 独立验证 |
+|-----------|--------------------|----------|
+| 🔴 CRITICAL-1 RESEQ 成功路径泄漏 | `return SUCCESS` 前补 `gwram_free(nodes)`（L105）+ **gwram 分配/释放计数器**（g_alloc_count/g_free_count + getter，init 重置，alloc/realloc/calloc/free 全路径递增）+ `test_gwlist_reseq_no_leak`（100×RESEQ×300 行 alloc==free 平衡断言） | ✅ 代码复核 + 单测 3066 内 balance 断言通过 |
+| 🟩 LOW-1 版本计数器未覆盖 reseq/clear | `gwlist_reseq` 成功路径与 `gwlist_clear` 补 `g_link_version++`，与 v127 提交消息"delete/add/reseq/clear/init 递增"口径一致 | ✅ 代码复核 + probe（运行中 RENUM）无回归 |
 
 ### 验证结果（独立执行，当前 checkout 全量重跑）
 
@@ -34,11 +26,23 @@
 |--------|------|
 | 干净重建（全量编译） | ✅ exit 0 |
 | 编译警告 | ✅ **0 条** |
-| 单元测试 | ✅ **3064/3064 PASS**（775 → 776，+1 test_gwlist_reseq_large_program） |
+| 单元测试 | ✅ **3066/3066 PASS**（776 → 777，+1 test_gwlist_reseq_no_leak） |
 | .bas 集成套件（70 项） | ✅ **68/70**（0 失败 + 2 预期跳过），test_renum/test_delete/test_delete_exec 均输出校验 PASS |
-| 孤儿检测（唯一函数名） | ✅ **776 定义 = 776 注册，0 孤儿 / 0 多余** |
-| probe：删除紧邻下一行（fast path 分支） | ✅ `20 DELETE 30` → `start / after`（行 30 不执行） |
-| probe：运行中 RENUM（fast path） | ✅ `20 RENUM 100,10,10` → `start / after renum`（继续执行重编号后下一行） |
+| 孤儿检测（唯一函数名） | ✅ **777 定义 = 777 注册，0 孤儿 / 0 多余** |
+| probe：删除紧邻下一行 | ✅ `20 DELETE 30` → `start / after`（行 30 不执行） |
+| probe：运行中 RENUM（reseq 递增版本后 fast path） | ✅ `20 RENUM 100,10,10` → `start / after renum`（程序正确继续） |
+
+### gwram 计数器实现复核（关键点全通过）
+
+| 路径 | 计数 | 正确性 |
+|------|------|--------|
+| `gwram_alloc(size)` 成功 | alloc++ | ✅ fail 不计 |
+| `gwram_realloc(NULL, size)` | 委托 alloc | ✅ NULL 分支正确 |
+| `gwram_realloc(ptr, 0)` | 走 free | ✅ 0 大小分支正确 |
+| `gwram_realloc(ptr, size)` 成功 | alloc++ + free++（realloc = free+alloc） | ✅ realloc 失败（p==NULL）不计数（旧块保留） |
+| `gwram_calloc` 成功 | alloc++ | ✅ 溢出检查在计数前 |
+| `gwram_free(ptr)` 非 NULL | free++ | ✅ NULL 不计 |
+| `gwram_init()` | 双计数重置 | ✅ 测试隔离（每测试自 init） |
 
 ---
 
@@ -46,29 +50,7 @@
 
 ### 🟥 CRITICAL
 
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | **`gwlist_reseq` 成功路径泄漏动态快照 `nodes`** —— 每次 RENUM/RESEQ 泄漏 `count×8` 字节（300 行 ≈ 2.4KB；21K 行最大 ≈ 168KB），反复 RENUM 累积 | `src/gwlist.c`（L103 附近） |
-
-**详情**:
-
-```c
-/* src/gwlist.c — gwlist_reseq */
-struct program_line **nodes = gwram_alloc((size_t)count * sizeof(struct program_line *));
-...
-for (int i = 0; i < count; i++) {
-    if (new_num > 65529) {
-        gwram_free(nodes);        /* 错误路径：有释放 ✅ */
-        return ERROR;
-    }
-    ...
-}
-return SUCCESS;                   /* 成功路径：无 gwram_free(nodes) ❌ 泄漏 */
-```
-
-- **根因**：FCERR 错误路径正确释放，但 `return SUCCESS` 前遗漏释放 —— 开发者释放意图明确，属笔误级遗漏
-- **影响**：确定性内存泄漏，每次 RESEQ（含 RENUM 语句与直接命令）泄漏 `count×8` 字节；同一会话多次 RENUM 累积；大程序（数千行）单次即几十 KB
-- **修复建议**：`return SUCCESS;` 前补 `gwram_free(nodes);`（一行）。可加 `test_gwlist_reseq_no_leak`（用返回计数/hook 断言 gwram 分配平衡，或上 ASAN）
+无。
 
 ### 🟧 HIGH
 
@@ -80,87 +62,83 @@ return SUCCESS;                   /* 成功路径：无 gwram_free(nodes) ❌ �
 
 ### 🟩 LOW
 
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | **链版本计数器未覆盖 reseq/clear**：`g_link_version++` 仅 3 处（init/add_line/delete_line），`gwlist_reseq` 与 `gwlist_clear`（L238）未递增，与提交消息 "delete/add/reseq/clear/init 递增" 不符 | `src/gwlist.c`、提交消息 |
+无。
 
-**详情**:
+本版为修复确认轮：v128 的 1 CRITICAL + 1 LOW 已关闭，无新增问题。
 
-1. **LOW-1 — 版本计数器语义不完整**：reseq（摘链重插）与 clear（清空链表）都会修改链结构但版本不变。**实测无行为影响**：fast path（版本不变 → `curr=saved_next`）与 liveness walk 分支 1（两者均 alive → `curr=saved_next`）在当前逻辑下等价，probe（运行中 RENUM）实证正确。但"版本不变 ⇒ 链未变"的 fast path 前提在 reseq/clear 下不成立，属防御性语义缺口；且提交消息与实现不符。**建议**：`gwlist_reseq` 与 `gwlist_clear` 补 `g_link_version++`，修正提交消息，保持"版本 = 链结构版本"单一语义。
+**备注（不计问题）**：`gwlist_reseq` 的 FCERR 分支（`new_num > 65529` 中途返回 ERROR）未递增 `g_link_version` —— 但该分支此后语句返回 ERROR，执行循环中断（不再走 fast path），无实际影响；若未来改变错误处理方式可再评估。
 
 ---
 
 ## 三、架构评估
 
-### M1 收尾质量（20b0fc2）
+### 修复质量（0497172）
 
 | 决策 | 评价 |
 |------|------|
-| RESEQ 快照动态分配（两遍计数+收集，O(n)） | ✅ 合理 — 21K 行不再截断；节点指针数组最大 168KB 可接受 |
-| FCERR 错误路径释放（`if (new_num > 65529)`） | ✅ 正确 |
-| **成功路径释放** | ⚠️ **CRITICAL-1** — 遗漏 `gwram_free(nodes)` |
-| 链版本计数器 fast path | ✅ 设计正确 — 消除每语句 O(n) liveness walk（O(n²)→O(1) 常态） |
-| fast path 与 walk 行为等价性 | ✅ 已验证（删除→walk、RENUM/普通→fast path，probe 全绿） |
-| gwmain 两处循环快照/比对对称 | ✅ 一致 |
-| test_gwlist_delete_range_to_end `(20,65530)` + "20 gone" | ✅ LOW-1（v127）修复正确 |
-| test_gwlist_reseq_large_program（300 行） | ✅ 断言能捕获旧 256 截断（find_line(3000)==NULL） |
-| 版本计数器覆盖范围 | ⚠️ LOW-1 — reseq/clear 未递增（行为无影响，语义/文档问题） |
+| `gwram_free(nodes)` 补于成功路径（错误路径原已正确） | ✅ CRITICAL-1 关闭 |
+| **gwram 分配/释放计数器 + 平衡断言**（超出建议） | ✅ 优秀 — 为全项目提供可复用的泄漏回归机制 |
+| `test_gwlist_reseq_no_leak`（100×RESEQ，alloc==free + 300 行保持） | ✅ 高质量 — 可捕获泄漏回归；gwdata/gwram/gwlist 自 init 隔离正确 |
+| reseq/clear 补 `g_link_version++` | ✅ LOW-1 关闭，版本语义单一化 |
+| 计数器全路径复核（alloc/realloc/calloc/free × NULL/0/失败分支） | ✅ 实现正确（见上表） |
+| CODE_REVIEW.md / DEVELOPMENT_PROGRESS.md 随提交入库 | ✅ 流程闭合，工作区 clean |
 
 ### 测试覆盖分析
 
 | 功能 | 覆盖情况 |
 |------|----------|
-| RESEQ 常规语义（默认/起点/MM/INC=0/溢出/空程序/内容） | ✅ 7 用例 + 语句级 |
-| **RESEQ 大程序（>256 行不截断）** | ✅ test_gwlist_reseq_large_program（300 行，新） |
-| **RESEQ 成功路径释放** | ❌ 盲区 → CRITICAL-1（无泄漏检测） |
-| delete-to-end 语义（20 gone） | ✅ v127 LOW-1 修复 |
-| 版本计数器 fast path（普通语句 O(1)） | ✅ probe + 套件回归 |
-| 链版本语义完整性（reseq/clear 递增） | ❌ LOW-1（消息承诺 vs 实现） |
-| 注册一致性 | ✅ 776=776，0 孤儿 0 多余 |
+| RESEQ 语义（默认/起点/MM/INC=0/溢出/空/大程序/内容） | ✅ 8+ 用例 |
+| **RESEQ 内存平衡（成功路径 + 100 次循环）** | ✅ **test_gwlist_reseq_no_leak（新）** |
+| 版本计数器语义（delete/add/reseq/clear/init 全覆盖） | ✅ 提交后实现与口径一致 |
+| 执行指针（删除/RENUM fast path 与 walk） | ✅ probe 复测无回归 |
+| 注册一致性 | ✅ 777=777，0 孤儿 0 多余 |
+| 测试盲区 | ⚠️ 65 个 .bas 仍为 ⚠️ rc-only（无 expected）；**M2 建议项** |
 
 ---
 
 ## 四、改进建议
 
-### 短期（阻塞项）
-1. **CRITICAL-1**：`gwlist_reseq` 成功路径补 `gwram_free(nodes);`（return SUCCESS 前）；建议加泄漏检测（gwram 分配/释放平衡断言或 ASAN）
-2. LOW-1：`gwlist_reseq` / `gwlist_clear` 补 `g_link_version++`，修正提交消息（"delete/add/reseq/clear/init 递增"）
+### 短期（可选）
+1. （备注项）FCERR 分支版本递增 —— 无实际影响，可随 M2 顺手处理
 
-### 中期
-3. M1 已收尾（RANDOMIZE / RESEQ / DELETE / RENUM / UAF / nodes[256]）→ 进入 M2 规划
-4. 其余 65 个 .bas 补充 expected 基线
+### 中期（M2 规划）
+2. **65 个 .bas 补充 expected 基线**（当前 ⚠️ rc-only 校验，输出未断言；含 test_error/test_err2/test_onerr 等错误场景基线）
+3. **CI 门禁落地**：孤儿检测 + 零警告 + fresh clone 构建校验 + .bas 集成自动回归 + 计数器平衡断言纳入标准测试
+4. **AddressSanitizer 构建**（泄漏/UAF 双保险，与 gwram 计数器互补）
 
 ### 长期
-5. CI 门禁：孤儿检测 + 零警告 + fresh clone 构建校验 + .bas 集成回归 + **ASAN（泄漏/UAF）**
-6. AddressSanitizer 构建（可捕获 CRITICAL-1 类泄漏与历史 UAF）
+5. ON ERROR/GOTO 语句分支（test_on_goto/test_onerr_off 两个预期跳过项 → 实现后转 PASS）
+6. 定期运行 .bas 集成
 
 ---
 
 ## 五、总结
 
-**总体评价**: M1 收尾功能正确 —— nodes[256] 动态化解决大程序截断（308 行测试断言可捕获旧 bug）、版本计数器消除 O(n²)（删除走 liveness walk、RENUM/普通语句走 O(1) fast path，probe 实证无回归）、v127 双 LOW 修复到位；单测 3064/3064、套件 68/70、0 警告、0 孤儿。**但 RESEQ 成功路径遗漏 `gwram_free(nodes)`（确定性内存泄漏）必须修复**。
-**关键发现**: **1 CRITICAL**（RESEQ 成功路径泄漏快照）、**1 LOW**（版本计数器未覆盖 reseq/clear，消息承诺与实现不符）。M1 宣布全部完成，但泄漏需在 M2 前修复。
-**建议**: 补一行 `gwram_free(nodes)`（+建议泄漏断言），reseq/clear 递增版本计数器；修复后 v129 复核，随即进入 M2 规划。
+**总体评价**: v128 的 1 CRITICAL（RESEQ 泄漏）与 1 LOW（版本语义）全部修复且超额落地 —— gwram 分配/释放计数器为全项目提供可复用泄漏回归测试（100×RESEQ alloc==free），版本计数器语义闭环；单测 3066/3066、套件 68/70、0 警告、0 孤儿，probe 复测无回归。
+**关键发现**: 0 CRITICAL / 0 HIGH / 0 MEDIUM / **0 LOW**。无阻塞性缺陷。
+**M1 状态**: **正式关闭**（RANDOMIZE / RESEQ / DELETE / RENUM / UAF 修复 / nodes[256] 动态化 / 泄漏关闭，7 项全部完成）。
+**建议**: M1 关闭，进入 M2 规划（expected 基线补齐为最大收益项；ON ERROR/GOTO 分支为下一个功能里程碑候选）。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v127 | v128 | 变化 |
+| 指标 | v128 | v129 | 变化 |
 |------|------|------|------|
-| 单元测试通过（test_runner） | 3057 | **3064** | ✅ +7（+1 测试函数） |
-| 定义数（唯一函数） | 775 | **776** | +1 |
-| 注册数（run_test 调用） | 775 | **776** | +1 |
+| 单元测试通过（test_runner） | 3064 | **3066** | ✅ +2（+1 测试函数） |
+| 定义数（唯一函数） | 776 | **777** | +1 |
+| 注册数（run_test 调用） | 776 | **777** | +1 |
 | 孤儿数 | 0 | **0** | 保持 |
 | 重复/多余注册 | 0 | **0** | 保持 |
 | 生产警告 | 0 | **0** | 保持 |
 | 测试警告 | 0 | **0** | 保持 |
 | .bas 通过 | 68/70 | **68/70** | 保持 |
+| RESEQ 泄漏 | 存在（CRITICAL-1） | **关闭**（+计数器回归防护） | 修复 |
+| 版本计数器语义 | ⚠️ 缺 reseq/clear | **闭环** | 修复 |
 | HEAD 独立构建 | ✅ | ✅ | 保持 |
-| M1 模块完成 | 4/N | **6/6 全部完成**（RANDOMIZE/RESEQ/DELETE/RENUM/UAF/nodes[256]） | 收尾 |
-| RESEQ 内存泄漏 | ⚠️（新引入） | **CRITICAL-1** | 待修复 |
+| M1 状态 | 功能完成 | **正式关闭**（7/7） | 收尾 |
 
 **注释**:
-- 独立验证全程重跑：干净重建 → 单测 3064 → 套件 68/70 → 孤儿 776=776 → 2 项 probe（删除 fast-path / RENUM fast-path，已清理）
-- 泄漏为确定性代码缺陷（成功路径遗漏释放）；`gwram_free` 即标准 `free`，反复 RENUM 累积泄漏
-- **M1 状态**: 功能全部完成；CRITICAL-1 修复后 M1 正式关闭，进入 M2
+- 独立验证全程重跑：干净重建 → 单测 3066 → 套件 68/70 → 孤儿 777=777 → 2 项 probe（已清理）
+- gwram 计数器为全项目通用能力（gwram_get_alloc_count/free_count），可支持未来所有模块的泄漏回归测试
+- **下一步**: M2 规划（expected 基线补齐 → ON ERROR/GOTO 分支 → CI 门禁）
