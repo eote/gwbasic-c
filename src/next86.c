@@ -361,19 +361,9 @@ int next86_goto(const char **text) {
 }
 
 /* GOSUB statement handler */
-int next86_gosub(const char **text) {
-    /* Parse GOSUB statement: GOSUB line_number */
-    
-    /* Skip leading whitespace */
-    while (**text && isspace((unsigned char)**text)) (*text)++;
-    
-    /* Parse line number */
-    int line_num = 0;
-    while (**text && isdigit((unsigned char)**text)) {
-        line_num = line_num * 10 + (**text - '0');
-        (*text)++;
-    }
-    
+/* Push GOSUB return and jump to a resolved line number (ASM SETGSB).
+ * Shared by GOSUB <line> and ON <expr> GOSUB n1,n2,... */
+int next86_gosub_to_line(int line_num) {
     if (line_num <= 0 || line_num > 65529) {
         return -1;  /* Invalid line number */
     }
@@ -406,6 +396,22 @@ int next86_gosub(const char **text) {
     DEBUG_PRINT("GOSUB: Jumping to line %d, return to line %d", line_num, return_line);
     /* Return the line number (positive) for jump */
     return line_num;
+}
+
+int next86_gosub(const char **text) {
+    /* Parse GOSUB statement: GOSUB line_number */
+    
+    /* Skip leading whitespace */
+    while (**text && isspace((unsigned char)**text)) (*text)++;
+    
+    /* Parse line number */
+    int line_num = 0;
+    while (**text && isdigit((unsigned char)**text)) {
+        line_num = line_num * 10 + (**text - '0');
+        (*text)++;
+    }
+    
+    return next86_gosub_to_line(line_num);
 }
 
 /* RETURN statement handler */

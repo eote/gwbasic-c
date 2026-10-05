@@ -80,12 +80,14 @@ IMPLEMENTED_TESTS=(
     "test_renum.bas"
     "test_delete.bas"
     "test_delete_exec.bas"
+    "test_gwdata.bas"
+    "test_gwram.bas"
+    "test_on_goto.bas"
+    "test_onerr_off.bas"
 )
 
 # Tests for NOT YET IMPLEMENTED features (expected to fail)
 NOT_IMPLEMENTED_TESTS=(
-    "test_on_goto.bas"
-    "test_onerr_off.bas"
 )
 
 # Compare output with expected file
@@ -139,6 +141,8 @@ run_test() {
     fi
     
     # For implemented tests, also validate output content
+    # (v130: tests whose .expected includes a terminating error line — e.g.
+    # ON ERROR GOTO 0 — validate by CONTENT when syntax/exit-code fail fires.)
     if [ "$expected" = "pass" ] && [ "$result" = "PASS" ]; then
         compare_output "$name"
         local cmp_result=$?
@@ -154,6 +158,20 @@ run_test() {
         # cmp_result = 0 (match)
         echo "✅ PASS"
         ((PASS++))
+    elif [ "$expected" = "pass" ] && [ "$result" = "FAIL_SYNTAX" ]; then
+        # Terminating-error tests: rc=127 + "Error at line" is the EXPECTED
+        # behavior if .expected matches exactly (output is the contract).
+        if [ -f "$TEST_DIR/$name.expected" ]; then
+            compare_output "$name"
+            local cmp_result=$?
+            if [ $cmp_result -eq 0 ]; then
+                echo "✅ PASS (expected terminating error, output match)"
+                ((PASS++))
+                return
+            fi
+        fi
+        echo "❌ FAIL ($result)"
+        ((FAIL++))
     elif [ "$expected" = "fail" ] && [ "$result" != "PASS" ]; then
         echo "⏭️  SKIP (expected fail: $result)"
         ((SKIP++))

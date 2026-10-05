@@ -694,6 +694,73 @@ delete_done:
         }
         result = SUCCESS;
     }
+    /* ON <expr> GOTO/GOSUB — computed branch (ASM NTONG1/LOOPON L2446-2460).
+     * 1-based index selects the target from a comma-separated list; index out
+     * of range (or 0) → list exhausted → next statement (ASM L2453-2456 RET).
+     * ON I GOSUB pushes a GOSUB return (ASM ISGOSU/SETGSB). */
+    else if (starts_with(trimmed, "ON ") &&
+             !starts_with(trimmed, "ON ERROR")) {
+        char *rest = trimmed + 3;  /* Skip "ON " */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+
+        /* Find the GOTO/GOSUB keyword — expression is everything before it */
+        char *kw_goto = strstr(rest, "GOTO");
+        char *kw_gosub = strstr(rest, "GOSUB");
+        char *kw = NULL;
+        int is_gosub = 0;
+        if (kw_goto && kw_gosub) {
+            kw = (kw_goto < kw_gosub) ? kw_goto : kw_gosub;
+            is_gosub = (kw == kw_gosub);
+        } else if (kw_goto) {
+            kw = kw_goto;
+        } else if (kw_gosub) {
+            kw = kw_gosub;
+            is_gosub = 1;
+        }
+
+        if (!kw) {
+            result = ERROR;  /* SNERR - no GOTO/GOSUB */
+        } else {
+            /* Evaluate the index expression (text before the keyword) */
+            char expr_buf[128];
+            size_t expr_len = (size_t)(kw - rest);
+            if (expr_len >= sizeof(expr_buf)) expr_len = sizeof(expr_buf) - 1;
+            memcpy(expr_buf, rest, expr_len);
+            expr_buf[expr_len] = '\0';
+
+            int index = (int)gweval_eval_numeric(expr_buf);
+
+            /* Parse comma-separated target line numbers (after keyword) */
+            char *p = kw + (is_gosub ? 5 : 4);  /* Skip "GOSUB" / "GOTO" */
+            int targets[64];
+            int count = 0;
+            while (*p && count < 64) {
+                while (*p && (isspace((unsigned char)*p) || *p == ',')) p++;
+                if (!isdigit((unsigned char)*p)) break;
+                int num = 0;
+                while (*p && isdigit((unsigned char)*p)) {
+                    num = num * 10 + (*p - '0');
+                    p++;
+                }
+                targets[count++] = num;
+            }
+
+            /* ASM NTONG1: 1-based selection; out of range → next statement */
+            if (index >= 1 && index <= count) {
+                int target = targets[index - 1];
+                if (is_gosub) {
+                    /* GOSUB semantics: push return, jump to target (ASM SETGSB) */
+                    extern int next86_gosub_to_line(int line_num);
+                    result = next86_gosub_to_line(target);
+                } else {
+                    /* GOTO semantics: plain jump (ASM GONE2 → GOTO) */
+                    result = target;
+                }
+            } else {
+                result = SUCCESS;  /* Out of range → next statement */
+            }
+        }
+    }
     /* READ statement: READ var1, var2, ... */
     else if (starts_with(trimmed, "READ ")) {
         char *rest = trimmed + 5;  /* Skip "READ " */

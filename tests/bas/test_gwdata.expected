@@ -1,0 +1,15 @@
+TEST 1: Basic variable operations
+PASS: String assignment
+TEST 2: Case insensitive variable names
+PASS: lowercase lookup
+PASS: mixed case lookup
+TEST 3: Max variable name length
+TEST 4: String operations
+PASS: LEN()
+TEST 5: Array variables
+PASS: Array element assignment
+PASS: 2D array
+TEST 6: Error messages
+PASS: Division by zero error caught, ERR= 11
+TEST 7: Program buffer
+PASS: Program runs from buffer
