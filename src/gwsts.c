@@ -698,24 +698,43 @@ delete_done:
      * 1-based index selects the target from a comma-separated list; index out
      * of range (or 0) → list exhausted → next statement (ASM L2453-2456 RET).
      * ON I GOSUB pushes a GOSUB return (ASM ISGOSU/SETGSB). */
-    else if (starts_with(trimmed, "ON ") &&
+    else if (starts_with(trimmed, "ON") &&
              !starts_with(trimmed, "ON ERROR")) {
-        char *rest = trimmed + 3;  /* Skip "ON " */
+        char *rest = trimmed + 2;  /* Skip "ON" (v130 LOW-1: 紧凑写法兼容) */
         while (*rest && isspace((unsigned char)*rest)) rest++;
 
-        /* Find the GOTO/GOSUB keyword — expression is everything before it */
-        char *kw_goto = strstr(rest, "GOTO");
-        char *kw_gosub = strstr(rest, "GOSUB");
+        /* Find the GOTO/GOSUB keyword — v130 MEDIUM-1: search BACKWARD and
+         * require a token boundary (preceding char not a letter/digit part of
+         * a variable name). Variable names may contain GOTO/GOSUB substrings
+         * (XGOTO, MYGOSUB are legal); a naive strstr truncates the expr. */
         char *kw = NULL;
         int is_gosub = 0;
-        if (kw_goto && kw_gosub) {
-            kw = (kw_goto < kw_gosub) ? kw_goto : kw_gosub;
-            is_gosub = (kw == kw_gosub);
-        } else if (kw_goto) {
-            kw = kw_goto;
-        } else if (kw_gosub) {
-            kw = kw_gosub;
-            is_gosub = 1;
+        for (char *q = rest + strlen(rest); q >= rest; q--) {
+            if (strncmp(q, "GOSUB", 5) == 0) {
+                kw = q;
+                is_gosub = 1;
+                break;
+            }
+            if (strncmp(q, "GOTO", 4) == 0) {
+                kw = q;
+                is_gosub = 0;
+                break;
+            }
+        }
+        /* Token-boundary check: the char before the keyword must NOT be part
+         * of a variable name (letter/digit/underscore/$). Backward search finds
+         * the LAST occurrence — for "ON XGOTO GOTO 100" the last "GOTO" is the
+         * real keyword (preceded by space); the one inside XGOTO is skipped.
+         * If the ONLY match is inside a variable name (e.g. "ON XGOTO 100"),
+         * the boundary check rejects it → SNERR. */
+        if (kw && kw > rest) {
+            char prev = *(kw - 1);
+            /* Letter/underscore/$ before keyword → variable name (XGOTO) —
+             * not the keyword. Digit before keyword → compact index form
+             * "ON 2GOTO 100" (ASM GETBYT consumes digits, then GOTO) — OK. */
+            if (isalpha((unsigned char)prev) || prev == '_' || prev == '$') {
+                kw = NULL;  /* Inside a variable name — not the keyword */
+            }
         }
 
         if (!kw) {

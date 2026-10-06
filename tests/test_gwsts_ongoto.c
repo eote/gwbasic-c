@@ -104,3 +104,48 @@ void test_gwsts_on_goto_zero(void) {
     TEST_ASSERT_EQ_INT(rc, 0, "ON 0 GOTO -> next statement");
     TEST_PASS("gwsts on goto zero");
 }
+
+/* Test: 变量名含 GOTO 子串 (v130 MEDIUM-1) — ON XGOTO GOTO 表达式不截断 */
+void test_gwsts_on_goto_var_with_goto_substring(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwsts_init();
+    gwlist_init();
+
+    struct variable *xg = gwdata_alloc_variable("XGOTO", VT_SINGLE);
+    xg->value.f = 2.0f;
+
+    int rc = gwsts_exec_statement("ON XGOTO GOTO 100, 200");
+    TEST_ASSERT_EQ_INT(rc, 200, "ON XGOTO GOTO XGOTO=2 -> line 200 (no truncation)");
+    TEST_PASS("gwsts on goto var with GOTO substring");
+}
+
+/* Test: 缺真关键字 — ON XGOTO 100 → SNERR (v130 MEDIUM-1 连带) */
+void test_gwsts_on_goto_missing_keyword(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwsts_init();
+    gwlist_init();
+
+    struct variable *xg = gwdata_alloc_variable("XGOTO", VT_SINGLE);
+    xg->value.f = 1.0f;
+
+    int rc = gwsts_exec_statement("ON XGOTO 100");
+    TEST_ASSERT_EQ_INT(rc, -1, "ON XGOTO 100 (no GOTO keyword) -> SNERR");
+    TEST_PASS("gwsts on goto missing keyword");
+}
+
+/* Test: 紧凑写法 ON2GOTO (v130 LOW-1) — 数字紧邻关键字 */
+void test_gwsts_on_goto_compact(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwsts_init();
+    gwlist_init();
+
+    int rc = gwsts_exec_statement("ON 2GOTO 100, 200");
+    TEST_ASSERT_EQ_INT(rc, 200, "ON 2GOTO 100, 200 compact -> line 200");
+    TEST_PASS("gwsts on goto compact");
+}

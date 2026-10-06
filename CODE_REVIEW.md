@@ -1,24 +1,24 @@
-# GW-BASIC C Port - Code Review v129
+# GW-BASIC C Port - Code Review v130
 
 **日期**: 2026-10-06
-**审查范围**: commit `0497172`（fix: CODE_REVIEW v128 — CRITICAL-1 RESEQ 泄漏 + LOW-1 版本计数器）→ 工作区
-**测试状态**: 单元测试 **3066/3066 通过**（0 失败）✅ | .bas 集成 **68/70**（0 失败 + 2 预期跳过）✅ | probe 复测全绿 ✅
+**审查范围**: commit `82c1a83`（feat: M2 第 1 批 — .bas 基线补齐 + ON..GOTO/GOSUB 语句，TDD 7 步）→ 工作区
+**测试状态**: 单元测试 **3072/3072 通过**（0 失败）✅ | .bas 集成套件 **72/72 全 PASS（0 跳过，首次全绿）** ✅
 **编译状态**: 干净重建成功（exit 0）| 编译警告 **0 条**（生产 0 / 测试 0）✅
-**工作区状态**: clean（v128 报告已随 0497172 入库）
-**总体评分**: A（优秀）— v128 的 1 CRITICAL + 1 LOW 全部修复验证通过，**0 新问题**；M1 正式关闭
+**工作区状态**: clean
+**总体评分**: B — ON..GOTO/GOSUB 核心语义与基线补齐质量高（72/72 首次全绿），但发现 **1 MEDIUM 关键字解析缺陷**（变量名含 GOTO/GOSUB 子串时表达式截断）及 3 LOW
 
 ---
 
 ## 一、概述
 
-本次审查开发者对 v128 问题的修复提交 `0497172`（7 文件，+171/-116）。开发者**超额完成**：不仅修复泄漏与版本语义，还落地了 reviewer 建议的分配/释放计数器与泄漏回归测试。
+本次审查 M2 第 1 批提交 `82c1a83`（11 文件，+295/-57）：
 
-### v128 修复确认（全部验证通过）
-
-| v128 问题 | 修复方式（0497172） | 独立验证 |
-|-----------|--------------------|----------|
-| 🔴 CRITICAL-1 RESEQ 成功路径泄漏 | `return SUCCESS` 前补 `gwram_free(nodes)`（L105）+ **gwram 分配/释放计数器**（g_alloc_count/g_free_count + getter，init 重置，alloc/realloc/calloc/free 全路径递增）+ `test_gwlist_reseq_no_leak`（100×RESEQ×300 行 alloc==free 平衡断言） | ✅ 代码复核 + 单测 3066 内 balance 断言通过 |
-| 🟩 LOW-1 版本计数器未覆盖 reseq/clear | `gwlist_reseq` 成功路径与 `gwlist_clear` 补 `g_link_version++`，与 v127 提交消息"delete/add/reseq/clear/init 递增"口径一致 | ✅ 代码复核 + probe（运行中 RENUM）无回归 |
+| 变更 | 说明 |
+|------|------|
+| ON..GOTO/GOSUB 语句（ASM NTONG1/LOOPON L2446-2460） | `gwsts.c` ON 分支：表达式求值 + 目标列表解析 + 1-based 选择；越界/0 → SUCCESS（ASM L2453-2456 RET）；ON..GOSUB → `next86_gosub_to_line`（SETGSB，自 next86_gosub 重构共享） |
+| .bas 基线补齐 | 审计确认全部已实现 .bas 均有 expected（修正 v129 备注）；补 test_gwdata（15 行）/test_gwram（14 行） |
+| 两个长期跳过项转正 | `test_on_goto` / `test_onerr_off`：run_bas_tests.sh 新增 terminating-error 校验路径（rc=127 + expected 精确匹配）；NOT_IMPLEMENTED 清空 |
+| 6 新单测 | `tests/test_gwsts_ongoto.c`：index1/2/3 + 越界 + gosub + zero |
 
 ### 验证结果（独立执行，当前 checkout 全量重跑）
 
@@ -26,23 +26,13 @@
 |--------|------|
 | 干净重建（全量编译） | ✅ exit 0 |
 | 编译警告 | ✅ **0 条** |
-| 单元测试 | ✅ **3066/3066 PASS**（776 → 777，+1 test_gwlist_reseq_no_leak） |
-| .bas 集成套件（70 项） | ✅ **68/70**（0 失败 + 2 预期跳过），test_renum/test_delete/test_delete_exec 均输出校验 PASS |
-| 孤儿检测（唯一函数名） | ✅ **777 定义 = 777 注册，0 孤儿 / 0 多余** |
-| probe：删除紧邻下一行 | ✅ `20 DELETE 30` → `start / after`（行 30 不执行） |
-| probe：运行中 RENUM（reseq 递增版本后 fast path） | ✅ `20 RENUM 100,10,10` → `start / after renum`（程序正确继续） |
-
-### gwram 计数器实现复核（关键点全通过）
-
-| 路径 | 计数 | 正确性 |
-|------|------|--------|
-| `gwram_alloc(size)` 成功 | alloc++ | ✅ fail 不计 |
-| `gwram_realloc(NULL, size)` | 委托 alloc | ✅ NULL 分支正确 |
-| `gwram_realloc(ptr, 0)` | 走 free | ✅ 0 大小分支正确 |
-| `gwram_realloc(ptr, size)` 成功 | alloc++ + free++（realloc = free+alloc） | ✅ realloc 失败（p==NULL）不计数（旧块保留） |
-| `gwram_calloc` 成功 | alloc++ | ✅ 溢出检查在计数前 |
-| `gwram_free(ptr)` 非 NULL | free++ | ✅ NULL 不计 |
-| `gwram_init()` | 双计数重置 | ✅ 测试隔离（每测试自 init） |
+| 单元测试 | ✅ **3072/3072 PASS**（777 → 783，+6 ON 测试） |
+| .bas 集成套件（72 项） | ✅ **72/72 全 PASS，0 跳过（首次全绿）**；test_on_goto ✅、test_onerr_off ✅（expected terminating error, output match） |
+| 孤儿检测（唯一函数名） | ✅ **783 定义 = 783 注册，0 孤儿 / 0 多余** |
+| probe：ON I GOTO 1-based 选择 | ✅ `I=2` → `b2`（跳第 2 目标，正确） |
+| probe：越界/0 | ✅ `I=9`（列表中 2 项）→ `fallthrough`（下一语句） |
+| probe：ON..GOSUB + RETURN | ✅ `sub1` / `back from gosub`（跳转 + 返回） |
+| probe：变量名含 GOTO 子串 | ❌ **MEDIUM-1 实锤**（见下） |
 
 ---
 
@@ -58,87 +48,136 @@
 
 ### 🟨 MEDIUM
 
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | **ON 分支关键字搜索未锚定 token 边界**：`strstr(rest, "GOTO")` 在变量名内匹配到子串时表达式被错误截断，合法 GW-BASIC 程序行为错误 | `src/gwsts.c`（ON 分支 L710-717） |
+
+**详情**:
+
+```c
+char *kw_goto = strstr(rest, "GOTO");   /* 首次出现即可 — 未检查是否为完整 token */
+char *kw_gosub = strstr(rest, "GOSUB");
+...
+size_t expr_len = (size_t)(kw - rest);  /* 表达式 = 关键字前的文本 */
+memcpy(expr_buf, rest, expr_len);       /* 若关键字在变量名内，这里截断 */
+```
+
+**实证**（review 期临时 probe，已清理）：
+```basic
+10 XGOTO = 2
+20 ON XGOTO GOTO 100, 200     ' 合法 GW-BASIC：表达式 XGOTO=2 → 第 2 目标
+30 PRINT "fallthrough"
+...
+200 PRINT "b2"
+```
+实际输出：`fallthrough`（应为 `b2`）。
+
+**根因**：`strstr` 在 `"XGOTO GOTO 100, 200"` 的**偏移 1**（变量名 XGOTO 内）命中 "GOTO" → `expr_buf = "X"` → `gweval_eval_numeric("X")` = 0（未定义变量）→ 越界 → 不跳转。GW-BASIC 变量名允许含 "GOTO"/"GOSUB" 子串（XGOTO、AGOSUB、MYGOTO 等均合法）。
+
+**连带子问题**：`ON XGOTO 100`（缺真关键字，语法错误）也会因误匹配变量内 "GOTO" 而被**静默接受**（index=0 → SUCCESS），应为 SNERR。
+
+**修复建议**：关键字匹配需完整 token：
+- 优先方案：从 `rest` **末尾向前**找最后一个 "GOTO"/"GOSUB"，并校验其前导字符非字母（数字/空白可接受，兼容 `ON 2GOTO` 紧凑）；
+- 或先按表达式语法扫描至终止符（遇到空白+字母关键字），再确认关键字 token；
+- 补测试：变量名含 GOTO/GOSUB 子串的 ON 语句（`ON XGOTO GOTO ...`）、缺关键字语句（`ON XGOTO 100` → SNERR）。
+
+### 🟧 HIGH
+
+无。
+
+### 🟨 MEDIUM
+
 无。
 
 ### 🟩 LOW
 
-无。
+| # | 描述 | 文件 |
+|---|------|------|
+| 1 | **紧凑写法 `ON2GOTO 100` 不支持**：`starts_with("ON ")` 要求 "ON " 带空格，GW-BASIC 允许 `ON2GOTO100`（无空格 token 边界） | `src/gwsts.c` |
+| 2 | **目标列表上限 64**：`targets[64]` 超出部分静默忽略；ASM NTONG1/JSY 无此硬限制，实际使用极少超 64，观察项 | `src/gwsts.c` |
+| 3 | **terminating-error 校验路径外延**：`FAIL_SYNTAX + expected 匹配 → PASS` 适用于所有 IMPLEMENTED 测试；当前 72 项语义正确，但若未来某正常 .bas 回归为语法错误且 expected 恰含 "Error at line" 行，可能误判 PASS。建议仅对显式标记的 terminating 测试启用 | `run_bas_tests.sh` |
 
-本版为修复确认轮：v128 的 1 CRITICAL + 1 LOW 已关闭，无新增问题。
+**详情**:
 
-**备注（不计问题）**：`gwlist_reseq` 的 FCERR 分支（`new_num > 65529` 中途返回 ERROR）未递增 `g_link_version` —— 但该分支此后语句返回 ERROR，执行循环中断（不再走 fast path），无实际影响；若未来改变错误处理方式可再评估。
+1. **LOW-1**：`ON 2 GOTO 100` ✅ 但 `ON2GOTO 100` 不进入 ON 分支（第 3 字符非空格）→ 后续分支不匹配 → 报错。与 RENUM/DELETE 分支（`starts_with("DELETE")` 无空格要求）不一致。建议：`starts_with("ON")` + 跳过空白 + 排除 `ON ERROR`（已排除）。
+2. **LOW-2**：`while (*p && count < 64)` — 第 65 个目标起被忽略；index>64 时误判越界（SUCCESS）。低风险。
+3. **LOW-3**：新路径设计合理（expected 即契约），但建议将 terminating 标记与普通测试区分（命名约定或注释），避免未来误判。
 
 ---
 
 ## 三、架构评估
 
-### 修复质量（0497172）
+### M2 第 1 批质量（82c1a83）
 
 | 决策 | 评价 |
 |------|------|
-| `gwram_free(nodes)` 补于成功路径（错误路径原已正确） | ✅ CRITICAL-1 关闭 |
-| **gwram 分配/释放计数器 + 平衡断言**（超出建议） | ✅ 优秀 — 为全项目提供可复用的泄漏回归机制 |
-| `test_gwlist_reseq_no_leak`（100×RESEQ，alloc==free + 300 行保持） | ✅ 高质量 — 可捕获泄漏回归；gwdata/gwram/gwlist 自 init 隔离正确 |
-| reseq/clear 补 `g_link_version++` | ✅ LOW-1 关闭，版本语义单一化 |
-| 计数器全路径复核（alloc/realloc/calloc/free × NULL/0/失败分支） | ✅ 实现正确（见上表） |
-| CODE_REVIEW.md / DEVELOPMENT_PROGRESS.md 随提交入库 | ✅ 流程闭合，工作区 clean |
+| ON..GOTO/GOSUB 1-based 选择；越界/0 → SUCCESS（ASM L2453-2456 RET） | ✅ 正确 — probe 实证（1-based 选择、越界继续） |
+| ON..GOSUB → `next86_gosub_to_line`（SETGSB 重构共享） | ✅ 正确 — probe 实证（sub1 → RETURN → back）；重构无回归（网关 GOSUB 单测保持） |
+| `next86_gosub` 重构为「解析 + 委托 to_line」 | ✅ 语义保持，共用路径 |
+| 目标列表解析（数字/逗号/空白；非数字即止） | ✅ 常规场景正确 |
+| **关键字 token 搜索（strstr 首次匹配）** | ⚠️ **MEDIUM-1** — 未锚定词边界 |
+| .bas 基线全补齐 + 2 转正 + NOT_IMPLEMENTED 清空 | ✅ 优秀 — 72/72 首次全绿，0 跳过 |
+| terminating-error 校验路径 | ✅ 设计合理（rc=127 + expected 精确匹配），范围需收敛（LOW-3） |
+| 6 新单测（index1/2/3/越界/gosub/zero，自 init 隔离） | ✅ 隔离正确、断言明确；缺变量名含子串用例（MEDIUM-1 未被发现） |
 
 ### 测试覆盖分析
 
 | 功能 | 覆盖情况 |
 |------|----------|
-| RESEQ 语义（默认/起点/MM/INC=0/溢出/空/大程序/内容） | ✅ 8+ 用例 |
-| **RESEQ 内存平衡（成功路径 + 100 次循环）** | ✅ **test_gwlist_reseq_no_leak（新）** |
-| 版本计数器语义（delete/add/reseq/clear/init 全覆盖） | ✅ 提交后实现与口径一致 |
-| 执行指针（删除/RENUM fast path 与 walk） | ✅ probe 复测无回归 |
-| 注册一致性 | ✅ 777=777，0 孤儿 0 多余 |
-| 测试盲区 | ⚠️ 65 个 .bas 仍为 ⚠️ rc-only（无 expected）；**M2 建议项** |
+| ON..GOTO 1-based 选择（1/2/3） | ✅ 单测 + .bas |
+| ON..GOTO 越界 / 0（不分支） | ✅ 单测 + probe |
+| ON..GOSUB 跳转 + GOSUB 栈 | ✅ 单测（rc=100, g_curlin）+ .bas（RETURN 返回） |
+| **变量名含 GOTO/GOSUB 子串** | ❌ **盲区 → MEDIUM-1** |
+| 紧凑写法 ON2GOTO | ❌ LOW-1 |
+| 目标 >64 | ❌ LOW-2 |
+| 注册一致性 | ✅ 783=783，0 孤儿 0 多余 |
 
 ---
 
 ## 四、改进建议
 
-### 短期（可选）
-1. （备注项）FCERR 分支版本递增 —— 无实际影响，可随 M2 顺手处理
+### 短期
+1. **MEDIUM-1**：关键字 token 边界匹配（从后往前/词边界校验），补 `ON XGOTO GOTO ...` 与缺关键字 SNERR 用例
+2. LOW-1：`starts_with("ON")` + 跳过空白（支持紧凑写法），保持与 RENUM/DELETE 分支一致
+3. LOW-3：terminating-error 校验收窄到显式标记测试
 
 ### 中期（M2 规划）
-2. **65 个 .bas 补充 expected 基线**（当前 ⚠️ rc-only 校验，输出未断言；含 test_error/test_err2/test_onerr 等错误场景基线）
-3. **CI 门禁落地**：孤儿检测 + 零警告 + fresh clone 构建校验 + .bas 集成自动回归 + 计数器平衡断言纳入标准测试
-4. **AddressSanitizer 构建**（泄漏/UAF 双保险，与 gwram 计数器互补）
+4. ON ERROR 剩余语义（RESUME 各形式已有单测；`resume_next`/`resume_line` 套件 ✅）
+5. 其他语句分支按 M2 里程碑推进（DATA/READ 已实现；剩余待实现语句审计）
+6. CI 门禁落地（孤儿 + 零警告 + fresh clone 构建 + 套件回归）
 
 ### 长期
-5. ON ERROR/GOTO 语句分支（test_on_goto/test_onerr_off 两个预期跳过项 → 实现后转 PASS）
-6. 定期运行 .bas 集成
+7. ASAN 构建
+8. 定期 .bas 集成回归
 
 ---
 
 ## 五、总结
 
-**总体评价**: v128 的 1 CRITICAL（RESEQ 泄漏）与 1 LOW（版本语义）全部修复且超额落地 —— gwram 分配/释放计数器为全项目提供可复用泄漏回归测试（100×RESEQ alloc==free），版本计数器语义闭环；单测 3066/3066、套件 68/70、0 警告、0 孤儿，probe 复测无回归。
-**关键发现**: 0 CRITICAL / 0 HIGH / 0 MEDIUM / **0 LOW**。无阻塞性缺陷。
-**M1 状态**: **正式关闭**（RANDOMIZE / RESEQ / DELETE / RENUM / UAF 修复 / nodes[256] 动态化 / 泄漏关闭，7 项全部完成）。
-**建议**: M1 关闭，进入 M2 规划（expected 基线补齐为最大收益项；ON ERROR/GOTO 分支为下一个功能里程碑候选）。
+**总体评价**: M2 第 1 批高质量完成 —— ON..GOTO/GOSUB 核心语义（1-based 选择/越界/0/GOSUB 栈）实现正确且 probe 实证，.bas 基线全补齐、两个长期跳过项转正、**套件 72/72 首次全绿**；单测 3072/3072、0 警告、0 孤儿。**但 ON 关键字搜索未锚定 token 边界（1 MEDIUM）：变量名含 GOTO/GOSUB 子串时表达式被错误截断，合法程序行为错误，需修复**。
+**关键发现**: **1 MEDIUM**（strstr 关键字匹配截断表达式）、**3 LOW**（紧凑写法、targets 64 上限、terminating-error 路径外延）。
+**建议**: 修复 MEDIUM-1（token 边界匹配 + 补用例）后继续 M2；该缺陷不阻塞其余 M2 并行推进。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v128 | v129 | 变化 |
+| 指标 | v129 | v130 | 变化 |
 |------|------|------|------|
-| 单元测试通过（test_runner） | 3064 | **3066** | ✅ +2（+1 测试函数） |
-| 定义数（唯一函数） | 776 | **777** | +1 |
-| 注册数（run_test 调用） | 776 | **777** | +1 |
+| 单元测试通过（test_runner） | 3066 | **3072** | ✅ +6（+6 测试函数） |
+| 定义数（唯一函数） | 777 | **783** | +6 |
+| 注册数（run_test 调用） | 777 | **783** | +6 |
 | 孤儿数 | 0 | **0** | 保持 |
 | 重复/多余注册 | 0 | **0** | 保持 |
 | 生产警告 | 0 | **0** | 保持 |
 | 测试警告 | 0 | **0** | 保持 |
-| .bas 通过 | 68/70 | **68/70** | 保持 |
-| RESEQ 泄漏 | 存在（CRITICAL-1） | **关闭**（+计数器回归防护） | 修复 |
-| 版本计数器语义 | ⚠️ 缺 reseq/clear | **闭环** | 修复 |
-| HEAD 独立构建 | ✅ | ✅ | 保持 |
-| M1 状态 | 功能完成 | **正式关闭**（7/7） | 收尾 |
+| .bas 通过 | 68/70 | **72/72（0 跳过，首次全绿）** | ✅ +4（+2 基线 + 转正 2） |
+| NOT_IMPLEMENTED | 2 | **0（清空）** | ✅ |
+| ON..GOTO/GOSUB | ⏳ 未实现 | ✅（含 MEDIUM-1 待修复） | 实现 |
+| M1 状态 | 正式关闭 | **正式关闭** | 保持 |
+| M2 进度 | — | **1/N 批**（ON..GOTO/GOSUB + 基线全补齐） | 启动 |
 
 **注释**:
-- 独立验证全程重跑：干净重建 → 单测 3066 → 套件 68/70 → 孤儿 777=777 → 2 项 probe（已清理）
-- gwram 计数器为全项目通用能力（gwram_get_alloc_count/free_count），可支持未来所有模块的泄漏回归测试
-- **下一步**: M2 规划（expected 基线补齐 → ON ERROR/GOTO 分支 → CI 门禁）
+- 独立验证全程重跑：干净重建 → 单测 3072 → 套件 72/72 → 孤儿 783=783 → 5 项 probe（含 MEDIUM-1 实证，已清理）
+- 72/72 全绿为项目**首次**（此前 2 个预期跳过项：test_on_goto/test_onerr_off 已转正）
+- **M2 进度**: 第 1 批（ON..GOTO/GOSUB + .bas 基线全补齐）；MEDIUM-1 修复后继续下一批

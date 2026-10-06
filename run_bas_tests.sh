@@ -119,7 +119,7 @@ compare_output() {
 # Run a test and check result with output validation
 run_test() {
     local test_file=$1
-    local expected=$2  # "pass" or "fail"
+    local expected=$2  # "pass", "fail" or "termerror" (expected terminating error)
     local name=$(basename "$test_file" .bas)
     
     echo -n "Testing $name... "
@@ -158,9 +158,11 @@ run_test() {
         # cmp_result = 0 (match)
         echo "✅ PASS"
         ((PASS++))
-    elif [ "$expected" = "pass" ] && [ "$result" = "FAIL_SYNTAX" ]; then
-        # Terminating-error tests: rc=127 + "Error at line" is the EXPECTED
-        # behavior if .expected matches exactly (output is the contract).
+    elif [ "$expected" = "termerror" ] && [ "$result" = "FAIL_SYNTAX" ]; then
+        # Explicitly marked terminating-error tests (v130 LOW-3): rc=127 +
+        # "Error at line" is the EXPECTED behavior if .expected matches
+        # exactly (output is the contract). Only applies to tests marked
+        # "termerror" — normal tests still fail on syntax errors.
         if [ -f "$TEST_DIR/$name.expected" ]; then
             compare_output "$name"
             local cmp_result=$?
@@ -181,9 +183,26 @@ run_test() {
     fi
 }
 
+# Tests that terminate with a legit GW-BASIC error (ON ERROR GOTO 0 etc.)
+TERMERROR_TESTS=(
+    "test_onerr_off.bas"
+)
+
+is_termerror() {
+    local t=$1
+    for te in "${TERMERROR_TESTS[@]}"; do
+        if [ "$t" = "$te" ]; then return 0; fi
+    done
+    return 1
+}
+
 echo "=== Implemented Features Tests ==="
 for test in "${IMPLEMENTED_TESTS[@]}"; do
-    run_test "$TEST_DIR/$test" "pass"
+    if is_termerror "$test"; then
+        run_test "$TEST_DIR/$test" "termerror"
+    else
+        run_test "$TEST_DIR/$test" "pass"
+    fi
 done
 
 echo ""
