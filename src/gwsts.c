@@ -703,6 +703,15 @@ delete_done:
         char *rest = trimmed + 2;  /* Skip "ON" (v130 LOW-1: 紧凑写法兼容) */
         while (*rest && isspace((unsigned char)*rest)) rest++;
 
+        /* v131 MEDIUM-1: statement boundary — the ON statement ends at the
+         * first colon (multi-statement line) or end of line. Keyword search
+         * and target parsing must NOT see beyond it (": GOTO 500" or
+         * ": REM GOTO later" would pollute the parse). */
+        {
+            char *colon = strchr(rest, ':');
+            if (colon) *colon = '\0';
+        }
+
         /* Find the GOTO/GOSUB keyword — v130 MEDIUM-1: search BACKWARD and
          * require a token boundary (preceding char not a letter/digit part of
          * a variable name). Variable names may contain GOTO/GOSUB substrings
@@ -727,13 +736,20 @@ delete_done:
          * real keyword (preceded by space); the one inside XGOTO is skipped.
          * If the ONLY match is inside a variable name (e.g. "ON XGOTO 100"),
          * the boundary check rejects it → SNERR. */
-        if (kw && kw > rest) {
-            char prev = *(kw - 1);
-            /* Letter/underscore/$ before keyword → variable name (XGOTO) —
-             * not the keyword. Digit before keyword → compact index form
-             * "ON 2GOTO 100" (ASM GETBYT consumes digits, then GOTO) — OK. */
-            if (isalpha((unsigned char)prev) || prev == '_' || prev == '$') {
-                kw = NULL;  /* Inside a variable name — not the keyword */
+        if (kw) {
+            /* v131 LOW-1: kw == rest also rejected — "ON GOTO 100" (no index
+             * expression) and "ON GOTOX ..." (variable name at start) are both
+             * illegal → SNERR. */
+            if (kw == rest) {
+                kw = NULL;
+            } else {
+                char prev = *(kw - 1);
+                /* Letter/underscore/$ before keyword → variable name (XGOTO) —
+                 * not the keyword. Digit before keyword → compact index form
+                 * "ON 2GOTO 100" (ASM GETBYT consumes digits, then GOTO) — OK. */
+                if (isalpha((unsigned char)prev) || prev == '_' || prev == '$') {
+                    kw = NULL;  /* Inside a variable name — not the keyword */
+                }
             }
         }
 
