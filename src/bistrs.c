@@ -227,6 +227,30 @@ int bistrs_len(const char *str) {
     return strlen(str);
 }
 
+/* INSTR — substring search (ASM INSTRC BISTRS.ASM L841-949).
+ * Forms: INSTR([start,] S1$, S2$) — caller resolves to (s1, s2, start).
+ * Semantics per ASM:
+ * - start = 0            → FCERR (??L009: "DONT ALLOW ZERO OFFSET")
+ * - start > LEN(S1$)     → 0 (offset beyond length → return zero)
+ * - S2$ empty            → return start (S2 NULL → return offset)
+ * - S1$ empty            → 0
+ * - found                → 1-based position of FIRST occurrence (GOTSTR)
+ * - not found            → 0 (RETZR1)
+ * ERROR (-1) maps FCERR for the C caller. */
+int bistrs_instr(const char *s1, const char *s2, int start) {
+    if (start == 0) return -1;            /* ASM FCERR */
+    if (!s1 || !*s1) return 0;            /* S1$ NULL → 0 */
+    size_t len1 = strlen(s1);
+    if ((size_t)start > len1) return 0;   /* offset beyond length → 0 */
+    if (!s2 || !*s2) return start;        /* S2$ NULL → return offset */
+
+    /* Search from 1-based start (ASM: DEC AL to make offset 0-based) */
+    const char *from = s1 + (start - 1);
+    const char *hit = strstr(from, s2);
+    if (!hit) return 0;                   /* RETZR1 */
+    return (int)(hit - s1) + 1;           /* GOTSTR: 1-based position */
+}
+
 /* FRE - return free memory (arg: 0 for numeric, non-zero for string space) */
 double bistrs_fre(int arg) {
     if (!g_state) {

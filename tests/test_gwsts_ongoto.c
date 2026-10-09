@@ -3,6 +3,7 @@
  * 越界 (index > count) → ASM L2453-2456: 列表耗尽 → RET → 下一语句 (无分支) */
 
 #include "test_framework.h"
+#include <string.h>
 #include "../src/gwbasic.h"
 
 /* Test: ON I GOTO — I=1 → 第一目标 (ASM 1-based) */
@@ -197,4 +198,48 @@ void test_gwsts_on_goto_keyword_at_start(void) {
     int rc = gwsts_exec_statement("ON GOTOX 100, 200");
     TEST_ASSERT_EQ_INT(rc, -1, "ON GOTOX 100 (kw at start, no expr) -> SNERR");
     TEST_PASS("gwsts on goto keyword at start");
+}
+
+/* Test: 字符串字面量含冒号 (v132 MEDIUM-1) — INSTR(A$,":") 不被截断 */
+void test_gwsts_on_goto_string_colon(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwsts_init();
+    gwlist_init();
+
+    struct variable *a = gwdata_alloc_variable("A$", VT_STRING);
+    a->value.s.ptr = gwdata_alloc_string(4);
+    if (a->value.s.ptr) {
+        strcpy(a->value.s.ptr, "X:Y");
+        a->value.s.len = 3;
+    }
+
+    /* INSTR(A$, ":") = 2 → 第 2 目标 (引号内冒号不是语句分隔符) */
+    int rc = gwsts_exec_statement("ON INSTR(A$, \":\") GOTO 100, 200");
+    TEST_ASSERT_EQ_INT(rc, 200, "ON INSTR(A$,':') GOTO -> line 200 (quote-aware colon)");
+    TEST_PASS("gwsts on goto string colon");
+}
+
+/* Test: INSTR 函数 (v132 — ASM INSTRC): 基础 + 3-arg 形式 (offset first) */
+void test_gweval_instr_function(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+
+    struct variable *a = gwdata_alloc_variable("A$", VT_STRING);
+    a->value.s.ptr = gwdata_alloc_string(6);
+    if (a->value.s.ptr) {
+        strcpy(a->value.s.ptr, "A:B:C");
+        a->value.s.len = 5;
+    }
+
+    /* 2-arg: INSTR(A$, ":") = 2 */
+    float r1 = gweval_eval_numeric("INSTR(A$, \":\")");
+    TEST_ASSERT_EQ_INT((int)r1, 2, "INSTR(A$,':') = 2");
+    /* 3-arg: INSTR(2, A$, ":") — from 2, colon at 4? "A:B:C": A(1):(2)B(3):(4)C(5)
+       wait — from start=2: colon at 2 itself! */
+    float r2 = gweval_eval_numeric("INSTR(2, A$, \":\")");
+    TEST_ASSERT_EQ_INT((int)r2, 2, "INSTR(2, A$,':') = 2 (start position included)");
+    TEST_PASS("gweval instr function");
 }

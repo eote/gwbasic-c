@@ -456,7 +456,9 @@ int gwsts_exec_statement(const char *text) {
              !starts_with(trimmed, "RSET ") &&
              !starts_with(trimmed, "PUT ") &&
              !starts_with(trimmed, "GET ") &&
-             !starts_with(trimmed, "ON ERROR GOTO ")) {
+             !starts_with(trimmed, "ON ERROR GOTO ") &&
+             !starts_with(trimmed, "ON ") &&
+             !starts_with(trimmed, "ON")) {
         char *eq = strchr(trimmed, '=');
         if (eq) {
             *eq = '\0';
@@ -706,10 +708,23 @@ delete_done:
         /* v131 MEDIUM-1: statement boundary — the ON statement ends at the
          * first colon (multi-statement line) or end of line. Keyword search
          * and target parsing must NOT see beyond it (": GOTO 500" or
-         * ": REM GOTO later" would pollute the parse). */
+         * ": REM GOTO later" would pollute the parse).
+         * v132 MEDIUM-1: quote-aware scan — colons inside double-quoted
+         * string literals (e.g. INSTR(A$, ":")) are NOT statement separators.
+         * GW-BASIC has no escape sequences; "" inside a literal is itself
+         * literal content (still in-string), so a simple in_string toggle on
+         * '"' is exactly the ASM semantics. */
         {
-            char *colon = strchr(rest, ':');
-            if (colon) *colon = '\0';
+            int in_string = 0;
+            char *p;
+            for (p = rest; *p; p++) {
+                if (*p == '"') {
+                    in_string = !in_string;
+                } else if (*p == ':' && !in_string) {
+                    *p = '\0';
+                    break;
+                }
+            }
         }
 
         /* Find the GOTO/GOSUB keyword — v130 MEDIUM-1: search BACKWARD and

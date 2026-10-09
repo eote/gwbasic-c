@@ -354,6 +354,7 @@ char *bistrs_mks(float val);    /* MKS$ - single to 4-byte string */
 int bistrs_cvi(const char *str);  /* CVI - 2-byte string to integer */
 float bistrs_cvs(const char *str);  /* CVS - 4-byte string to single */
 int bistrs_len(const char *str);
+int bistrs_instr(const char *s1, const char *s2, int start);
 int bistrs_asc(const char *str);
 char *bistrs_chr(int code);
 char *bistrs_str(double val);

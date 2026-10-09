@@ -301,3 +301,60 @@ void test_bistrs_space_zero(void) {
     }
     TEST_PASS("SPACE$ zero");
 }
+
+
+/* Test INSTR 2-arg form — basic (ASM INSTRC: 1-based position) */
+void test_bistrs_instr_basic(void) {
+    setup();
+    int pos = bistrs_instr("X:Y", ":", 1);
+    TEST_ASSERT_EQ_INT(pos, 2, "INSTR finds colon at position 2");
+    TEST_PASS("INSTR basic");
+}
+
+/* Test INSTR not found → 0 (ASM RETZR1: end of string, return 0) */
+void test_bistrs_instr_not_found(void) {
+    setup();
+    int pos = bistrs_instr("XYZ", ":", 1);
+    TEST_ASSERT_EQ_INT(pos, 0, "INSTR not found returns 0");
+    TEST_PASS("INSTR not found");
+}
+
+/* Test INSTR 3-arg form — start position (ASM: search from offset I%) */
+void test_bistrs_instr_start_pos(void) {
+    setup();
+    int pos = bistrs_instr("A:B:C", ":", 3);
+    TEST_ASSERT_EQ_INT(pos, 4, "INSTR from position 3 finds colon at 4");
+    TEST_PASS("INSTR start pos");
+}
+
+/* Test INSTR start=0 → error (ASM ??L009: zero offset → FCERR) */
+void test_bistrs_instr_zero_start(void) {
+    setup();
+    int pos = bistrs_instr("X:Y", ":", 0);
+    TEST_ASSERT_EQ_INT(pos, -1, "INSTR start=0 returns error (FCERR)");
+    TEST_PASS("INSTR zero start");
+}
+
+/* Test INSTR start > LEN(S1$) → 0 (ASM: beyond length → return zero) */
+void test_bistrs_instr_start_beyond_len(void) {
+    setup();
+    int pos = bistrs_instr("X:Y", ":", 10);
+    TEST_ASSERT_EQ_INT(pos, 0, "INSTR start beyond length returns 0");
+    TEST_PASS("INSTR start beyond len");
+}
+
+/* Test INSTR empty S2$ → return I% (ASM: S2 NULL → return offset) */
+void test_bistrs_instr_empty_search(void) {
+    setup();
+    int pos = bistrs_instr("X:Y", "", 1);
+    TEST_ASSERT_EQ_INT(pos, 1, "INSTR empty S2 returns I% (1)");
+    TEST_PASS("INSTR empty search");
+}
+
+/* Test INSTR first occurrence (ASM GOTSTR: first match wins) */
+void test_bistrs_instr_first_occurrence(void) {
+    setup();
+    int pos = bistrs_instr("AA:AA", "AA", 1);
+    TEST_ASSERT_EQ_INT(pos, 1, "INSTR first occurrence at 1");
+    TEST_PASS("INSTR first occurrence");
+}

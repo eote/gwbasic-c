@@ -393,7 +393,8 @@ static float parse_factor(parser_t *p) {
                                    strcasecmp_ascii(name, "ASC") == 0 ||
                                    strcasecmp_ascii(name, "VAL") == 0 ||
                                    strcasecmp_ascii(name, "EOF") == 0 ||
-                                   strcasecmp_ascii(name, "FRE") == 0);
+                                   strcasecmp_ascii(name, "FRE") == 0 ||
+                                   strcasecmp_ascii(name, "INSTR") == 0);
             
             /* Check for string functions that return string: LEFT$, RIGHT$, MID$, UCASE$, LCASE$, STR$, CHR$, SPACE$, STRING$, MKI$, MKS$ */
             bool is_str_func = (strcasecmp_ascii(name, "LEFT") == 0 || strcasecmp_ascii(name, "LEFT$") == 0 ||
@@ -533,6 +534,50 @@ static float parse_factor(parser_t *p) {
                     float fn = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return (float)dskcom_eof((int)fn);
+                    }
+                }
+                /* INSTR([start,] S1$, S2$) — numeric result (ASM INSTRC
+                 * BISTRS.ASM L841: FRMPRN + GETYPR distinguishes string vs
+                 * numeric first arg at runtime). C parser: first arg is a
+                 * STRING (2-arg form, start=1) unless it starts with a
+                 * digit/'(' (3-arg form with numeric offset). */
+                else if (strcasecmp_ascii(name, "INSTR") == 0) {
+                    /* Probe: try string-parse of first arg, then rewind and
+                     * re-parse by form (ASM GETYPR runtime type check). */
+                    size_t save_pos = p->pos;
+                    char *probe_s1 = parse_string_expression(p);
+                    p->pos = save_pos;
+                    if (probe_s1) {
+                        /* 2-arg form: INSTR(S1$, S2$) */
+                        char *str_val = parse_string_expression(p);
+                        if (str_val) {
+                            if (parser_match(p, ',')) {
+                                char *s2 = parse_string_expression(p);
+                                if (s2) {
+                                    if (parser_match(p, ')')) {
+                                        return (float)bistrs_instr(str_val, s2, 1);
+                                    }
+                                }
+                            }
+                            /* 1-arg INSTR(S1$) is illegal in GW-BASIC —
+                             * falls through to error handling. */
+                        }
+                    } else {
+                        /* 3-arg form: INSTR(start, S1$, S2$) */
+                        float start = parse_expression(p);
+                        if (parser_match(p, ',')) {
+                            char *str_val = parse_string_expression(p);
+                            if (str_val) {
+                                if (parser_match(p, ',')) {
+                                    char *s2 = parse_string_expression(p);
+                                    if (s2) {
+                                        if (parser_match(p, ')')) {
+                                            return (float)bistrs_instr(str_val, s2, (int)start);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 /* FRE(arg) - return free memory (arg: 0 for numeric, non-zero for string) */
