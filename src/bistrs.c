@@ -238,7 +238,12 @@ int bistrs_len(const char *str) {
  * - not found            → 0 (RETZR1)
  * ERROR (-1) maps FCERR for the C caller. */
 int bistrs_instr(const char *s1, const char *s2, int start) {
-    if (start == 0) return -1;            /* ASM FCERR */
+    /* v133 MEDIUM-1: GW-BASIC manual — start must be 1..255, else FCERR.
+     * (ASM INSTRC holds start in AL: byte semantics; start=0 → FCERR, and
+     * start>255 cannot occur for ASM's ≤255-byte strings. The port permits
+     * longer strings via WORD length, so the 255 ceiling is enforced here
+     * to keep manual-consistent FCERR semantics.) */
+    if (start < 1 || start > 255) return -1;  /* FCERR */
     if (!s1 || !*s1) return 0;            /* S1$ NULL → 0 */
     size_t len1 = strlen(s1);
     if ((size_t)start > len1) return 0;   /* offset beyond length → 0 */

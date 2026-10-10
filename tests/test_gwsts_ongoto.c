@@ -243,3 +243,44 @@ void test_gweval_instr_function(void) {
     TEST_ASSERT_EQ_INT((int)r2, 2, "INSTR(2, A$,':') = 2 (start position included)");
     TEST_PASS("gweval instr function");
 }
+
+
+/* Test: INSTR 1-arg 非法形式 (v133 LOW-1) → SNERR (ERR=2), 不再静默 0 */
+void test_gweval_instr_one_arg_snerr(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+
+    struct variable *a = gwdata_alloc_variable("A$", VT_STRING);
+    a->value.s.ptr = gwdata_alloc_string(6);
+    if (a->value.s.ptr) {
+        strcpy(a->value.s.ptr, "A:B:C");
+        a->value.s.len = 5;
+    }
+
+    float r = gweval_eval_numeric("INSTR(A$)");
+    TEST_ASSERT_EQ_INT((int)r, 0, "INSTR(A$) evaluates to 0");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 2, "INSTR 1-arg sets SNERR (ERR=2)");
+    TEST_PASS("gweval instr one arg snerr");
+}
+
+/* Test: INSTR start 范围 (v133 MEDIUM-1 语句级) — 负值/超255 → FCERR 传播 */
+void test_gweval_instr_start_range(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+
+    struct variable *a = gwdata_alloc_variable("A$", VT_STRING);
+    a->value.s.ptr = gwdata_alloc_string(6);
+    if (a->value.s.ptr) {
+        strcpy(a->value.s.ptr, "ABC");
+        a->value.s.len = 3;
+    }
+
+    /* bistrs_instr 返回 -1 (FCERR); dispatch 直接返回该值 */
+    float r1 = gweval_eval_numeric("INSTR(-1, A$, \"B\")");
+    TEST_ASSERT_EQ_INT((int)r1, -1, "INSTR(-1, ...) -> -1 (FCERR)");
+    float r2 = gweval_eval_numeric("INSTR(300, A$, \"B\")");
+    TEST_ASSERT_EQ_INT((int)r2, -1, "INSTR(300, ...) -> -1 (FCERR)");
+    TEST_PASS("gweval instr start range");
+}

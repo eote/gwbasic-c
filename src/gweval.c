@@ -538,16 +538,23 @@ static float parse_factor(parser_t *p) {
                 }
                 /* INSTR([start,] S1$, S2$) — numeric result (ASM INSTRC
                  * BISTRS.ASM L841: FRMPRN + GETYPR distinguishes string vs
-                 * numeric first arg at runtime). C parser: first arg is a
-                 * STRING (2-arg form, start=1) unless it starts with a
-                 * digit/'(' (3-arg form with numeric offset). */
+                 * numeric first arg at runtime). v133 LOW-2: lightweight
+                 * type probe (peek first non-space char) instead of a full
+                 * parse_string_expression probe — avoids a wasted string-heap
+                 * allocation per call.
+                 * v133 LOW-1: illegal forms (1-arg / S2 parse failure) set
+                 * SNERR instead of silently returning 0. */
                 else if (strcasecmp_ascii(name, "INSTR") == 0) {
-                    /* Probe: try string-parse of first arg, then rewind and
-                     * re-parse by form (ASM GETYPR runtime type check). */
+                    /* Type probe: skip spaces, peek. '"' → string literal;
+                     * letter (variable/function name) → string; digit/'(' →
+                     * numeric offset (3-arg form). */
                     size_t save_pos = p->pos;
-                    char *probe_s1 = parse_string_expression(p);
+                    while (p->pos < p->len && isspace((unsigned char)p->input[p->pos])) p->pos++;
+                    char first = (p->pos < p->len) ? p->input[p->pos] : '\0';
                     p->pos = save_pos;
-                    if (probe_s1) {
+
+                    if (first == '"' || isalpha((unsigned char)first) ||
+                        first == '$' || first == '_') {
                         /* 2-arg form: INSTR(S1$, S2$) */
                         char *str_val = parse_string_expression(p);
                         if (str_val) {
@@ -559,9 +566,12 @@ static float parse_factor(parser_t *p) {
                                     }
                                 }
                             }
-                            /* 1-arg INSTR(S1$) is illegal in GW-BASIC —
-                             * falls through to error handling. */
                         }
+                        /* 1-arg INSTR(S1$) or S2 parse failure → SNERR */
+                        if (g_state) {
+                            gwdata_set_error(2, g_state->current_line, 0);
+                        }
+                        return 0.0f;
                     } else {
                         /* 3-arg form: INSTR(start, S1$, S2$) */
                         float start = parse_expression(p);
@@ -578,6 +588,11 @@ static float parse_factor(parser_t *p) {
                                 }
                             }
                         }
+                        /* 1-arg/2-arg numeric form or S2 failure → SNERR */
+                        if (g_state) {
+                            gwdata_set_error(2, g_state->current_line, 0);
+                        }
+                        return 0.0f;
                     }
                 }
                 /* FRE(arg) - return free memory (arg: 0 for numeric, non-zero for string) */

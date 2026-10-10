@@ -358,3 +358,20 @@ void test_bistrs_instr_first_occurrence(void) {
     TEST_ASSERT_EQ_INT(pos, 1, "INSTR first occurrence at 1");
     TEST_PASS("INSTR first occurrence");
 }
+
+
+/* Test INSTR negative start → FCERR (v133 MEDIUM-1: manual 1..255) */
+void test_bistrs_instr_negative_start(void) {
+    setup();
+    int pos = bistrs_instr("ABC", "B", -1);
+    TEST_ASSERT_EQ_INT(pos, -1, "INSTR negative start returns FCERR (-1)");
+    TEST_PASS("INSTR negative start");
+}
+
+/* Test INSTR start > 255 → FCERR (v133 MEDIUM-1: manual 1..255) */
+void test_bistrs_instr_start_too_large(void) {
+    setup();
+    int pos = bistrs_instr("ABC", "B", 300);
+    TEST_ASSERT_EQ_INT(pos, -1, "INSTR start>255 returns FCERR (-1)");
+    TEST_PASS("INSTR start too large");
+}
