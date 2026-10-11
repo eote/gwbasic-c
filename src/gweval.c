@@ -538,24 +538,27 @@ static float parse_factor(parser_t *p) {
                 }
                 /* INSTR([start,] S1$, S2$) — numeric result (ASM INSTRC
                  * BISTRS.ASM L841: FRMPRN + GETYPR distinguishes string vs
-                 * numeric first arg at runtime). v133 LOW-2: lightweight
-                 * type probe (peek first non-space char) instead of a full
-                 * parse_string_expression probe — avoids a wasted string-heap
-                 * allocation per call.
+                 * numeric first arg at runtime).
                  * v133 LOW-1: illegal forms (1-arg / S2 parse failure) set
-                 * SNERR instead of silently returning 0. */
+                 * SNERR instead of silently returning 0.
+                 * v134 MEDIUM-2: letter-start is AMBIGUOUS (string var A$ /
+                 * string func LEFT$() vs numeric var N / numeric func LEN()) —
+                 * fall back to a FULL parse_string_expression probe (v132
+                 * behavior); probe success → 2-arg, failure → rewind + 3-arg.
+                 * Quote/digit starts stay cheap (unambiguous).
+                 * v134 MEDIUM-1: bistrs_instr FCERR (-1) propagates as error
+                 * code 5 (Illegal function call) — same as SNERR handling. */
                 else if (strcasecmp_ascii(name, "INSTR") == 0) {
-                    /* Type probe: skip spaces, peek. '"' → string literal;
-                     * letter (variable/function name) → string; digit/'(' →
-                     * numeric offset (3-arg form). */
+                    /* Type probe: skip spaces, peek first char. Only
+                     * unambiguous starts skip the full-parse probe: '"' is
+                     * always a string literal; digit/'(' always numeric. */
                     size_t save_pos = p->pos;
                     while (p->pos < p->len && isspace((unsigned char)p->input[p->pos])) p->pos++;
                     char first = (p->pos < p->len) ? p->input[p->pos] : '\0';
                     p->pos = save_pos;
 
-                    if (first == '"' || isalpha((unsigned char)first) ||
-                        first == '$' || first == '_') {
-                        /* 2-arg form: INSTR(S1$, S2$) */
+                    if (first == '"') {
+                        /* Unambiguous 2-arg: INSTR(S1$, S2$) */
                         char *str_val = parse_string_expression(p);
                         if (str_val) {
                             if (parser_match(p, ',')) {
@@ -572,8 +575,9 @@ static float parse_factor(parser_t *p) {
                             gwdata_set_error(2, g_state->current_line, 0);
                         }
                         return 0.0f;
-                    } else {
-                        /* 3-arg form: INSTR(start, S1$, S2$) */
+                    } else if (isdigit((unsigned char)first) || first == '(' ||
+                               first == '-' || first == '+') {
+                        /* Unambiguous 3-arg: INSTR(start, S1$, S2$) */
                         float start = parse_expression(p);
                         if (parser_match(p, ',')) {
                             char *str_val = parse_string_expression(p);
@@ -582,17 +586,76 @@ static float parse_factor(parser_t *p) {
                                     char *s2 = parse_string_expression(p);
                                     if (s2) {
                                         if (parser_match(p, ')')) {
-                                            return (float)bistrs_instr(str_val, s2, (int)start);
+                                            int pos = bistrs_instr(str_val, s2, (int)start);
+                                            if (pos < 0) {
+                                                /* FCERR propagation (v134
+                                                 * MEDIUM-1): Illegal function
+                                                 * call */
+                                                if (g_state) {
+                                                    gwdata_set_error(5, g_state->current_line, 0);
+                                                }
+                                                return 0.0f;
+                                            }
+                                            return (float)pos;
                                         }
                                     }
                                 }
                             }
                         }
-                        /* 1-arg/2-arg numeric form or S2 failure → SNERR */
+                        /* malformed 3-arg → SNERR */
                         if (g_state) {
                             gwdata_set_error(2, g_state->current_line, 0);
                         }
                         return 0.0f;
+                    } else {
+                        /* Ambiguous start (letter/underscore/$): full parse
+                         * probe — string parse success → 2-arg; failure →
+                         * rewind and 3-arg. */
+                        char *probe_s1 = parse_string_expression(p);
+                        if (probe_s1) {
+                            if (parser_match(p, ',')) {
+                                char *s2 = parse_string_expression(p);
+                                if (s2) {
+                                    if (parser_match(p, ')')) {
+                                        return (float)bistrs_instr(probe_s1, s2, 1);
+                                    }
+                                }
+                            }
+                            /* 1-arg INSTR(S1$) → SNERR */
+                            if (g_state) {
+                                gwdata_set_error(2, g_state->current_line, 0);
+                            }
+                            return 0.0f;
+                        } else {
+                            /* Not a string expr → 3-arg with numeric start */
+                            p->pos = save_pos;
+                            float start = parse_expression(p);
+                            if (parser_match(p, ',')) {
+                                char *str_val = parse_string_expression(p);
+                                if (str_val) {
+                                    if (parser_match(p, ',')) {
+                                        char *s2 = parse_string_expression(p);
+                                        if (s2) {
+                                            if (parser_match(p, ')')) {
+                                                int pos = bistrs_instr(str_val, s2, (int)start);
+                                                if (pos < 0) {
+                                                    /* FCERR (v134 MEDIUM-1) */
+                                                    if (g_state) {
+                                                        gwdata_set_error(5, g_state->current_line, 0);
+                                                    }
+                                                    return 0.0f;
+                                                }
+                                                return (float)pos;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (g_state) {
+                                gwdata_set_error(2, g_state->current_line, 0);
+                            }
+                            return 0.0f;
+                        }
                     }
                 }
                 /* FRE(arg) - return free memory (arg: 0 for numeric, non-zero for string) */

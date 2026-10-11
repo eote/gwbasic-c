@@ -1,45 +1,40 @@
-# GW-BASIC C Port - Code Review v133
+# GW-BASIC C Port - Code Review v134
 
-**日期**: 2026-10-11
-**审查范围**: commit `9b31fbd`（fix: CODE_REVIEW v132 — 引号感知冒号截断 + INSTR 函数实现，BISTRS.ASM L841-949）→ 工作区
-**测试状态**: 单元测试 **3088/3088 通过**（0 失败）✅ | .bas 集成套件 **72/72 全 PASS（0 跳过）** ✅
-**编译状态**: 干净重建成功（exit 0）| 编译警告 **0 条**（生产 0 / 测试 0）✅
-**工作区状态**: clean（v132 报告已随 9b31fbd 入库）
-**总体评分**: B- — v132 MEDIUM-1 修复确认（回归 probe b2）+ INSTR 实现主体正确（ASM INSTRC 1:1、9 新单测），但发现 **1 MEDIUM**（INSTR start 范围校验缺失）及 2 LOW
+**日期**: 2026-10-12
+**审查范围**: commit `11ea7cf`（fix: CODE_REVIEW v133 — MEDIUM-1 INSTR start 范围校验 + 2 LOW）→ 工作区
+**测试状态**: 单元测试 **3094/3094 通过**（0 失败,0 警告）✅ | 孤儿 **802=802**（4 新测试全部注册）✅ | .bas 集成套件 **72/72 全 PASS（0 跳过,本轮重跑确认）** ✅
+**工作区状态**: clean（v133 报告已随 11ea7cf 入库）
+**总体评分**: B- — API 层修复（start 校验/SNERR/probe 轻量化）与 1-arg SNERR 语句级行为正确，但发现 **2 MEDIUM**（FCERR 未传播到语句级、probe 轻量化分类歧义破坏数字首参 3-arg 形式）
 
 ---
 
 ## 一、概述
 
-本次审查开发者对 v132 修复提交 `9b31fbd`（9 文件，+297/-109）。提交不仅修复引号感知冒号截断，还**连带实现了 INSTR 函数**（印证 v132 probe 失败的双重原因：引号截断 + INSTR 未实现）。
+本次审查开发者对 v133 修复提交 `11ea7cf`（7 文件，+199/-98）。
 
-| 变更 | 说明 |
-|------|------|
-| 引号感知冒号截断 | ON 分支 in_string 翻转（`'"'`）扫描，字符串字面量内冒号跳过（GW-BASIC 无转义，`""` 仍是字面量内容 — ASM 语义） |
-| `bistrs_instr`（BISTRS.ASM L841-949 INSTRC 1:1） | start=0→FCERR；s1 空→0；start>LEN→0；s2 空→return start；found→1-based 首现（strstr + GOTSTR）；not found→0 |
-| gweval dispatch | probe+rewind 形式判定：首参字符串 → 2-arg（start=1）；首参数字 → 3-arg；`is_str_numeric` 组加入 INSTR |
-| 赋值分支排除 bare ON | `starts_with("ON")` 加入赋值排除（同 OPEN/FIELD 模式），`ON (A$='X:Y')...` 不再被劫持 |
-| 9 新单测 | INSTR API 7（test_bistrs.c）+ string_colon + instr_function（test_gwsts_ongoto.c） |
+### v133 修复确认
 
-### v132 修复确认（验证通过）
+| v133 问题 | 修复方式（11ea7cf） | 独立验证 |
+|-----------|--------------------|----------|
+| 🟨 MEDIUM-1 start 范围 | `bistrs_instr` 前置 `start<1 || start>255 → -1`（注释说明 ASM 字节语义与 port 长串差异） | ⚠️ **API 层正确**（单测 + 代码复核），但**语句级 FCERR 未传播** — 见新 MEDIUM-1 |
+| 🟩 LOW-1 非法形式静默 | dispatch 失败路径显式 `gwdata_set_error(2)`（1-arg / S2 解析失败） | ✅ probe `INSTR(A$)` → `Error at line 20`（SNERR 生效，不再静默 0） |
+| 🟩 LOW-2 probe 分配浪费 | 轻量化 peek（首非空白字符：quote→2-arg，digit/'('→3-arg） | ⚠️ 消除分配浪费，但**引入首字符分类歧义** — 见新 MEDIUM-2 |
+| 4 新单测 | negative_start / start_too_large / one_arg_snerr / start_range | ✅ 全部注册（802=802），断言 API/error-code 正确 |
 
-| v132 问题 | 修复 | 独立验证 |
-|-----------|------|----------|
-| 🟨 MEDIUM-1 引号感知 | in_string 翻转扫描 | ✅ probe `ON INSTR(A$, ":") GOTO 100, 200` → **`b2`**；单测 string_colon 通过 |
-
-### 验证结果（独立执行，当前 checkout 全量重跑）
+### 验证结果（独立执行，当前 checkout）
 
 | 验证项 | 结果 |
 |--------|------|
-| 干净重建（全量编译） | ✅ exit 0 |
-| 编译警告 | ✅ **0 条** |
-| 单元测试 | ✅ **3088/3088 PASS**（789 → 798，+9 测试） |
-| .bas 集成套件（72 项） | ✅ **72/72 全 PASS，0 跳过** |
-| 孤儿检测（唯一函数名） | ✅ **798 定义 = 798 注册，0 孤儿 / 0 多余** |
-| probe：`ON INSTR(A$, ":") GOTO`（回归） | ✅ `b2`（引号感知 + INSTR 均正确） |
-| probe：`INSTR(-1, "ABC", "B")` | ❌ `B= 0`（应 FCERR）— **MEDIUM-1（新）实证** |
-| probe：`INSTR(300, "ABC", "B")` | ❌ `B= 0`（应 FCERR）— **MEDIUM-1（新）实证** |
-| probe：`INSTR(A$)`（1-arg 缺 S2） | ❌ `B= 0` 静默（应报错）— **LOW-1 实证** |
+| 干净重建（全量编译） | ✅ exit 0，**0 编译警告** |
+| 单元测试 | ✅ **3094/3094 PASS** |
+| 孤儿检测（grep 式核验） | ✅ 新增 4 测试 extern+run_test 均注册（v133 798 + 4 = 802，0 孤儿） |
+| probe：`ON INSTR(A$, ":")`（回归） | ✅ `b2`（引号感知 + 2-arg 正常） |
+| probe：`INSTR(A$)` 1-arg（LOW-1 回归） | ✅ `Error at line 20`（SNERR） |
+| probe：`X = INSTR(-1, "ABC", "B")` | ❌ `X=-1`（无错误消息）— **MEDIUM-1（新）实证** |
+| probe：`X = INSTR(N, "ABC", "B")`（N=2，数字变量 start） | ❌ `Error at line 20` — **MEDIUM-2 实证** |
+| probe：`X = INSTR(LEN(S$), "ABC", "B")`（数字函数 start） | ❌ `Error at line 20` — **MEDIUM-2 实证** |
+
+*.bas 集成套件本轮已重跑确认：**72/72 全 PASS（0 失败,0 跳过）**，与 v133 基线一致，无回归。
 
 ---
 
@@ -57,25 +52,32 @@
 
 | # | 描述 | 文件 |
 |---|------|------|
-| 1 | **INSTR start 参数范围校验缺失**：负值 / >255 → 返回 0，GW-BASIC 手册明确 "start must be in range 1 to 255, otherwise Illegal function call (FCERR)" | `src/bistrs.c`（bistrs_instr）、`src/gweval.c`（dispatch） |
+| 1 | **start 非法时 FCERR 未传播到语句级**：`X = INSTR(-1, ...)` / `INSTR(300, ...)` 静默赋 -1，无 "Error at line"（应报 Illegal function call） | `src/gweval.c`（INSTR 3-arg dispatch） |
+| 2 | **probe 轻量化分类歧义（反修复回归）**：字母开头的 token 一律判为"字符串 2-arg"，数字变量/数字函数 start 的 3-arg 形式被错判 → SNERR | `src/gweval.c`（peek 分类） |
 
 **详情**:
 
-```c
-int bistrs_instr(const char *s1, const char *s2, int start) {
-    if (start == 0) return -1;                /* 仅校验 ==0 ✅ */
-    if (!s1 || !*s1) return 0;
-    size_t len1 = strlen(s1);
-    if ((size_t)start > len1) return 0;       /* start<0 → (size_t) 巨大 → 0 ❌ */
-    ...
-}
-```
+1. **MEDIUM-1 — FCERR 传播缺失**：
+   ```c
+   /* 3-arg 分支 */
+   int pos = bistrs_instr(str_val, s2, (int)start);
+   return (float)pos;              /* -1 → 返回 -1 数值，但未 gwdata_set_error! */
+   ```
+   `bistrs_instr` 返回 -1（FCERR）后 dispatch 直接返回数值；与 LOW-1 修复（显式 `gwdata_set_error(2)`）不对称。**实证**：`X = INSTR(-1, "ABC", "B")` → 输出 `X=-1`，无 `Error at line`。单测 `test_gweval_instr_start_range` 只断言 dispatch 返回值 -1（API 层），未覆盖语句级错误传播。**修复**：dispatch 检测 `pos < 0` 时 `gwdata_set_error(5)`（FCERR），补语句级单测（eval 后断言 error code + 行为）。
 
-**实证**：`INSTR(-1, "ABC", "B")` → `B= 0`；`INSTR(300, "ABC", "B")` → `B= 0`（均应为 FCERR 报错）。
-
-**根因**：`start == 0` 单独处理；负值经 `(size_t)` 转换落入 `> len1` → 0；`start>255`（字符串 ≤255 时必然 `> len1`）→ 0。均未映射 FCERR。
-
-**修复建议**：`bistrs_instr` 前置校验 `if (start < 1 || start > 255) return -1;`（ASM INSTRC 对 start 的 FCERR 语义），并补单测 `test_bistrs_instr_negative_start` / `test_bistrs_instr_start_too_large`（>255）。
+2. **MEDIUM-2 — peek 首字符分类歧义**：
+   ```c
+   if (first == '"' || isalpha(first) || first == '$' || first == '_') => 2-arg
+   else => 3-arg
+   ```
+   `isalpha(first)` 无法区分"字符串变量 `A$`/字符串函数 `LEFT$(...)`"与"数字变量 `N`/数字函数 `LEN(...)`"。**实证**：
+   - `X = INSTR(N, "ABC", "B")`（N=2，GW-BASIC 中循环动态 start 的**常用写法**）→ SNERR（应 X=2）
+   - `X = INSTR(LEN(S$), "ABC", "B")` → SNERR（应 X=2）
+   v132 的完整 `parse_string_expression` probe 本可正确区分（字符串解析成功→2-arg；失败→3-arg）；本轮 LOW-2 轻量化在该场景回退。**修复建议**（三选一）：
+   - ① 字母开头时回退完整 parse probe（仅失败时零分配，多数调用无浪费）；或
+   - ② 细粒度 token 分类：变量名看 `$` 后缀；函数名查字符串函数表（LEFT$/MID$/RIGHT$/CHR$/STR$/SPACE$/STRING$/UCASE$/LCASE$/LTRIM$/RTRIM$ → 字符串，其余 → 数字）；或
+   - ③ 按 2-arg 解析失败后自动回退 3-arg 重试（代价最小时通用）。
+   补单测：`INSTR(N, S1$, S2$)`（数字变量 start）、`INSTR(LEN(S$), ...)`（数字函数 start）、`INSTR(2, ...)`（数字字面量，现有）。
 
 ### 🟧 HIGH
 
@@ -87,89 +89,81 @@ int bistrs_instr(const char *s1, const char *s2, int start) {
 
 ### 🟩 LOW
 
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | **INSTR 非法形式静默**：`INSTR(A$)`（缺 S2）→ 静默返回 0；`INSTR(A$, 5)`（S2 类型错）同样。注释声称 "falls through to error handling"，实际无错误产生 | `src/gweval.c`（INSTR dispatch） |
-| 2 | **观察：dispatch probe 额外分配**：`parse_string_expression` probe（探测后 rewind）每次 INSTR 调用分配首参副本且未释放；与项目字符串函数"参数副本不释放、字符串堆统一管理"模式一致，但 probe 是纯浪费，字符串堆额外增长 | `src/gweval.c`（L548+） |
+无新增。
 
-**详情**:
-
-1. **LOW-1**：2-arg 分支 `parser_match(p, ',')` 不匹配（1-arg）或 S2 解析失败（类型错）时，无 return → 不设置错误 → parse_factor 默认路径返回 0 → `B = 0` 静默。GW-BASIC 期望 SNERR/类型错误。建议：失败路径显式设置错误（与其他字符串函数错误处理一致）。
-2. **LOW-2**：probe 用完整 `parse_string_expression`（分配字面量/变量副本）后 `p->pos = save_pos` 丢弃 — 每次 INSTR 调用字符串堆多一份首参拷贝。建议：probe 改为轻量类型探测（`peek()` 判断 `"` 或字母/`$` 后缀），避免完整解析与分配。
+（v133 的 LOW 均已处理：LOW-1 修复确认；LOW-2 引入的副作用归入 MEDIUM-2。）
 
 ---
 
 ## 三、架构评估
 
-### 修复质量（9b31fbd）
+### 修复质量（11ea7cf）
 
 | 决策 | 评价 |
 |------|------|
-| 引号感知冒号截断（in_string 翻转，GW-BASIC 无转义语义） | ✅ 正确 — v132 MEDIUM-1 修复实证（probe b2） |
-| `bistrs_instr` 语义（start>LEN→0 / s2 空→start / 1-based 首现 / not found→0） | ✅ 主体正确（7 API 单测）；⚠️ start 范围校验缺失（MEDIUM-1） |
-| dispatch probe+rewind 形式判定（字符串首参→2-arg；数字→3-arg） | ✅ 判定逻辑正确（test_gweval_instr_function 2/3-arg 均过）；⚠️ 非法形式静默（LOW-1） |
-| `is_str_numeric` 组加入 INSTR | ✅ 正确（返回值类型判定） |
-| 赋值分支排除 bare ON | ✅ 正确（同 OPEN/FIELD 模式） |
-| 9 新单测（INSTR 7 + 语句级 2） | ✅ 隔离正确、断言明确；缺 start 范围/非法形式用例 |
-| code review 流程（报告随提交入库） | ✅ 工作区 clean |
+| `bistrs_instr` 前置 `start<1\|\|start>255 → -1`（ASM 字节语义注释） | ✅ API 层正确 |
+| dispatch 失败路径 SNERR（LOW-1） | ✅ 语句级生效（probe `Error at line 20`） |
+| **FCERR 传播**（dispatch 未 set_error） | ⚠️ MEDIUM-1 — 与 SNERR 不对称 |
+| **peek 轻量化分类**（LOW-2） | ⚠️ MEDIUM-2 — 消除分配浪费但破坏数字首参 3-arg |
+| 4 新单测（API 2 + 语句级 2） | ✅ 注册完整（802=802）；⚠️ 缺语句级 FCERR 传播与数字变量 start 用例 |
+| 赋值分支排除/引号感知（前序修复）无回归 | ✅ probe 回归 b2 |
 
 ### 测试覆盖分析
 
 | 功能 | 覆盖情况 |
 |------|----------|
-| INSTR 2-arg / 3-arg / start / not-found / 空 S2 / 首现 / start=0 FCERR | ✅ 7 单测 |
-| 引号感知冒号截断（语句级） | ✅ string_colon + probe |
-| **start <1 / >255 → FCERR** | ❌ **盲区 → MEDIUM-1** |
-| **1-arg / S2 类型错误** | ❌ **盲区 → LOW-1** |
-| 注册一致性 | ✅ 798=798，0 孤儿 0 多余 |
+| INSTR 2-arg / 3-arg（字面量 start）/ start=0 / 范围（API） | ✅ |
+| INSTR 1-arg → SNERR（语句级） | ✅ 修复 + 单测 |
+| **语句级 FCERR 传播（INSTR(-1) 赋值）** | ❌ MEDIUM-1（单测仅 API 断言） |
+| **数字变量 start（INSTR(N,...)）** | ❌ MEDIUM-2 |
+| **数字函数 start（INSTR(LEN(S$),...)）** | ❌ MEDIUM-2 |
+| 注册一致性 | ✅ 802=802，0 孤儿 |
 
 ---
 
 ## 四、改进建议
 
 ### 短期（阻塞项）
-1. **MEDIUM-1**：`bistrs_instr` 补 `start < 1 || start > 255 → -1`，补负值/超 255 单测
-2. **LOW-1**：INSTR dispatch 失败路径设置错误（1-arg / S2 类型错），补用例
-3. **LOW-2**：probe 改轻量类型探测，避免完整解析分配
+1. **MEDIUM-1**：dispatch 3-arg 分支 `pos < 0 → gwdata_set_error(5)`；补 `X = INSTR(-1,...)` 语句级错误传播单测
+2. **MEDIUM-2**：字母开头回退完整 parse probe（或细粒度 token 分类 / 2-arg 失败回退 3-arg）；补 `INSTR(N, S1$, S2$)`、`INSTR(LEN(S$), ...)` 单测
 
 ### 中期（M2 规划）
-4. INSTR 集成验证完成（ON..GOTO/GOSUB + INSTR 组合已实证）→ 继续 M2 下一批语句/函数
-5. 其余字符串函数与 INSTR 一致性审计（range 校验/非法形式错误处理）
-6. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 套件回归）
+3. 其余字符串函数（LEFT$/MID$/RIGHT$/CHR$/STR$/SPACE$）做同型"首参类型判定/错误传播"一致性审计
+4. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 套件回归）
+5. .bas 套件补 INSTR 集成场景（含数字变量 start）
 
 ### 长期
-7. ASAN 构建
-8. 定期 .bas 集成回归
+6. ASAN 构建
+7. 定期 .bas 集成回归
 
 ---
 
 ## 五、总结
 
-**总体评价**: v132 修复确认（引号感知冒号截断 -> probe `b2`）+ INSTR 实现主体正确（ASM INSTRC 1:1 语义、9 新单测、dispatch 形式判定合理）—— 套件 72/72 保持全绿、0 孤儿。**但 INSTR start 参数范围校验缺失（1 MEDIUM）**：负值/超 255 静默返回 0，违反 GW-BASIC 手册 "start 必须 1-255 否则 FCERR"；另 1-arg 非法形式静默（LOW）、probe 额外分配（LOW）。
-**关键发现**: **1 MEDIUM**（start 范围校验）、**2 LOW**（非法形式静默、probe 分配浪费）。
-**建议**: 补 start<1/start>255 → FCERR + 对应单测；dispatch 失败路径报错；probe 轻量化。修复后 M2 继续推进。
+**总体评价**: v133 修复在 API 层正确（start 范围前置校验、SNERR 显式化、probe 轻量化），1-arg 非法形式语句级生效（probe `Error at line 20`），回归 `ON INSTR(A$, ":") → b2` 保持；单测 3094/3094、0 警告、0 孤儿。**但发现 2 MEDIUM**：① FCERR 传播缺失（`INSTR(-1,...)` 静默赋 -1，应报 Illegal function call）；② probe 轻量化的首字符分类歧义破坏数字变量/数字函数 start 的 3-arg 形式（`INSTR(N, S1$, S2$)` 是 GW-BASIC 常用写法）。
+**关键发现**: **2 MEDIUM**（FCERR 传播、peek 分类回归）、0 HIGH、0 CRITICAL。
+**建议**: dispatch 补 FCERR set_error；字母开头的形式判定回退完整解析（或更细 token 分类）；补对应语句级单测与 .bas 集成。修复后 M2 继续推进。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v132 | v133 | 变化 |
+| 指标 | v133 | v134 | 变化 |
 |------|------|------|------|
-| 单元测试通过（test_runner） | 3078 | **3088** | ✅ +10（+9 测试函数） |
-| 定义数（唯一函数） | 789 | **798** | +9 |
-| 注册数（run_test 调用） | 789 | **798** | +9 |
+| 单元测试通过（test_runner） | 3088 | **3094** | ✅ +6（+4 测试函数） |
+| 定义数（唯一函数） | 798 | **802** | +4 |
+| 注册数（run_test 调用） | 798 | **802** | +4 |
 | 孤儿数 | 0 | **0** | 保持 |
-| 重复/多余注册 | 0 | **0** | 保持 |
-| 生产警告 | 0 | **0** | 保持 |
-| 测试警告 | 0 | **0** | 保持 |
-| .bas 通过 | 72/72 | **72/72** | 保持 |
-| 引号感知冒号截断 | ❌ MEDIUM-1（v132） | ✅ **修复**（probe b2） | 关闭 |
-| INSTR 函数 | ⏳ 未实现（probe 失败部分原因） | ✅ 实现（语义主体正确） | 新增 |
-| **INSTR start 范围校验** | — | ❌ **MEDIUM-1（新）** | 新发现 |
-| M2 进度 | 1/N + 2 修复轮 | **1/N + 3 修复轮** | — |
+| 生产/测试警告 | 0 | **0** | 保持 |
+| .bas 通过 | 72/72 | **72/72（本轮重跑确认）** | 保持 |
+| INSTR start 范围（API） | ❌ | ✅ **修复** | 关闭 |
+| INSTR 1-arg SNERR | ❌ | ✅ **修复** | 关闭 |
+| **INSTR 语句级 FCERR 传播** | — | ❌ **MEDIUM-1** | 新发现 |
+| **INSTR 形式判定（数字首参）** | — | ❌ **MEDIUM-2** | 新发现（LOW-2 副作用） |
+| M2 进度 | 1/N + 3 修复轮 | **1/N + 4 修复轮** | — |
 
 **注释**:
-- 独立验证全程重跑：干净重建 → 单测 3088 → 套件 72/72 → 孤儿 798=798 → 4 项 probe（1 回归 + 3 边界，已清理）
-- v132 probe 失败为双重原因（引号截断 + INSTR 未实现）；本次提交同时闭合
-- start 范围校验（1-255）与 start>LEN→0 需并存：start 在 1-255 但 >LEN → 0；start<1 或 >255 → FCERR
-- **M2 状态**: ON..GOTO/GOSUB + INSTR 主体完成；start 范围校验修复后进入下一批
+- 独立验证：干净重建 → 单测 3094 → 孤儿核验 802=802 → 5 项 probe（2 回归 + 3 边界，已清理）
+- \*.bas 套件本轮已重跑确认（72/72 全 PASS），与 v133 基线一致
+- MEDIUM-2 为 LOW-2（probe 轻量化）的副作用：消除每次调用的分配浪费，但首字符无法区分字符串/数字变量与函数
+- **M2 状态**: ON..GOTO/GOSUB + INSTR 主体完成；FCERR 传播与形式判定修复后进入下一批

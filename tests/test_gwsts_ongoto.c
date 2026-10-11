@@ -277,10 +277,72 @@ void test_gweval_instr_start_range(void) {
         a->value.s.len = 3;
     }
 
-    /* bistrs_instr 返回 -1 (FCERR); dispatch 直接返回该值 */
+    /* v134 MEDIUM-1: FCERR 传播 — dispatch set_error(5) 并返回 0 */
     float r1 = gweval_eval_numeric("INSTR(-1, A$, \"B\")");
-    TEST_ASSERT_EQ_INT((int)r1, -1, "INSTR(-1, ...) -> -1 (FCERR)");
+    TEST_ASSERT_EQ_INT((int)r1, 0, "INSTR(-1, ...) returns 0 (FCERR propagated)");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "INSTR(-1, ...) sets FCERR (ERR=5)");
+    gwdata_set_error(0, 0, 0);
     float r2 = gweval_eval_numeric("INSTR(300, A$, \"B\")");
-    TEST_ASSERT_EQ_INT((int)r2, -1, "INSTR(300, ...) -> -1 (FCERR)");
+    TEST_ASSERT_EQ_INT((int)r2, 0, "INSTR(300, ...) returns 0 (FCERR propagated)");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "INSTR(300, ...) sets FCERR (ERR=5)");
     TEST_PASS("gweval instr start range");
+}
+
+
+/* Test: 数字变量 start (v134 MEDIUM-2) — INSTR(N, S1$, S2$) 3-arg 常用写法 */
+void test_gweval_instr_numeric_var_start(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+
+    struct variable *n = gwdata_alloc_variable("N", VT_SINGLE);
+    n->value.f = 2.0f;
+    struct variable *a = gwdata_alloc_variable("A$", VT_STRING);
+    a->value.s.ptr = gwdata_alloc_string(6);
+    if (a->value.s.ptr) {
+        strcpy(a->value.s.ptr, "A:B:C");
+        a->value.s.len = 5;
+    }
+
+    float r = gweval_eval_numeric("INSTR(N, A$, \":\")");
+    TEST_ASSERT_EQ_INT((int)r, 2, "INSTR(N, A$, ':') with N=2 -> 2");
+    TEST_PASS("gweval instr numeric var start");
+}
+
+/* Test: 数字函数 start (v134 MEDIUM-2) — INSTR(LEN(S$), ...) */
+void test_gweval_instr_numeric_func_start(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+
+    struct variable *s = gwdata_alloc_variable("S$", VT_STRING);
+    s->value.s.ptr = gwdata_alloc_string(6);
+    if (s->value.s.ptr) {
+        strcpy(s->value.s.ptr, "A:B:C");
+        s->value.s.len = 5;
+    }
+
+    /* LEN(S$)=5 > 位置 4 的冒号 → not found → 0? 不 — start=5, len=5,
+     * "A:B:C" 位置 5 是 'C', 从 5 起无冒号 → 0。用 LEN-3=2 验证:
+     * INSTR(LEN(S$)-3, S$, ":") = INSTR(2, ...) = 2 */
+    float r = gweval_eval_numeric("INSTR(LEN(S$)-3, S$, \":\")");
+    TEST_ASSERT_EQ_INT((int)r, 2, "INSTR(LEN(S$)-3, S$, ':') -> 2 (numeric func start)");
+    TEST_PASS("gweval instr numeric func start");
+}
+
+/* Test: 语句级 FCERR 传播 (v134 MEDIUM-1) — X = INSTR(-1,...) 置 ERR=5 */
+void test_gweval_instr_stmt_fcerr(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+
+    struct variable *a = gwdata_alloc_variable("A$", VT_STRING);
+    a->value.s.ptr = gwdata_alloc_string(6);
+    if (a->value.s.ptr) {
+        strcpy(a->value.s.ptr, "ABC");
+        a->value.s.len = 3;
+    }
+    gwsts_exec_statement("X = INSTR(-1, A$, \"B\")");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "stmt X = INSTR(-1,...) sets FCERR (ERR=5)");
+    TEST_PASS("gweval instr stmt fcerr");
 }
