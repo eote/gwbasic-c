@@ -1,60 +1,40 @@
-# GW-BASIC C Port - Code Review v135
+# GW-BASIC C Port - Code Review v136
 
-**日期**: 2026-10-12
-**审查范围**: commit `c85284e`（fix: CODE_REVIEW v134 — MEDIUM-1 FCERR 语句级传播 + MEDIUM-2 形式判定回退）→ 工作区
-**测试状态**: 单元测试 **3102/3102 通过**（0 失败,0 警告）✅ | .bas 集成套件 **72/72 全 PASS（0 跳过）** ✅ | 孤儿 **805=805** ✅
-**工作区状态**: clean（v134 报告已随 c85284e 入库）
-**总体评分**: A（优秀）— v134 的 2 个 MEDIUM 全部修复验证通过，6 项 probe 全绿，**0 新问题**
+**日期**: 2026-10-14
+**审查范围**: commits `52c63d2` + `e7d4da3`（v135 报告入库 + DEVELOPMENT_PROGRESS.md 更新）→ 工作区
+**测试状态**: 单元测试 **3102/3102 通过**（0 失败,0 警告）✅ | .bas 集成套件 **72/72 全 PASS（0 跳过）** ✅
+**编译状态**: 重建确认（exit 0）| 编译警告 **0 条** | 孤儿 **805=805**（无测试文件变更，沿用 v135 核验）✅
+**工作区状态**: clean（v135 报告已随 52c63d2 入库）
+**总体评分**: A（优秀）— 复核确认轮，自 v135 无代码变更，**0 问题**
 
 ---
 
 ## 一、概述
 
-本次审查开发者对 v134 修复提交 `c85284e`（5 文件，+258/-134）。
+自 v135（2026-10-12）以来**无任何源码/测试变更**，仅 2 个文档提交：
 
-### v134 修复确认（全部验证通过）
+| 提交 | 内容 | 复核 |
+|------|------|------|
+| `52c63d2` | CODE_REVIEW v135 报告入库（v134 修复确认轮，0 问题） | ✅ v135 报告内容与实测一致 |
+| `e7d4da3` | DEVELOPMENT_PROGRESS.md 更新：INSTR 闭环总览（v132→v135 4 轮）、v135 验证结果表、下一步任务排序 | ✅ 与 v135 结论一致，下一步计划合理（见下） |
 
-| v134 问题 | 修复方式（c85284e） | 独立验证 |
-|-----------|--------------------|----------|
-| 🟨 MEDIUM-1 FCERR 未传播 | dispatch 3-arg 分支 `pos<0 → gwdata_set_error(5)`（Illegal function call）+ return 0 | ✅ probe `X = INSTR(-1, "ABC", "B")` → **`Error at line 10`**（不再静默 X=-1） |
-| 🟨 MEDIUM-2 形式判定歧义 | 三级分类：`"` → 2-arg（廉价无歧义）；`digit/'('/'-'/'+'` → 3-arg（廉价无歧义）；**字母开头 → 回退完整 parse_string_expression probe**（成功→2-arg，失败→rewind+3-arg） | ✅ probe `INSTR(N, ...)` → `X= 2`；`INSTR(LEN("BC")+1, "ABC", "C")` → `X= 3`（数字变量/函数 start 均恢复） |
-| 3 新单测 | numeric_var_start / numeric_func_start / stmt_fcerr；start_range 更新为 ERR=5 断言 | ✅ 注册完整（805=805） |
-
-### 验证结果（独立执行，当前 checkout 全量重跑）
+### 验证结果（独立执行，当前 checkout）
 
 | 验证项 | 结果 |
 |--------|------|
-| 干净重建（全量编译） | ✅ exit 0 |
+| 增量重建 + 单元测试 | ✅ **3102/3102 PASS**（Total tests run = 3102） |
 | 编译警告 | ✅ **0 条** |
-| 单元测试 | ✅ **3102/3102 PASS**（802 → 805，+3 测试） |
 | .bas 集成套件（72 项） | ✅ **72/72 全 PASS，0 跳过** |
-| 孤儿检测（唯一函数名） | ✅ **805 定义 = 805 注册，0 孤儿 / 0 多余** |
-| probe：`INSTR(-1, ...)`（MEDIUM-1） | ✅ `Error at line 10`（FCERR 传播） |
-| probe：`INSTR(N, "ABC", "B")`（N=2，数字变量 start） | ✅ `X= 2`（3-arg 恢复） |
-| probe：`INSTR(LEN(S$), "ABC", "B")`（数字函数 start） | ✅ `X= 0`（3-arg 路径，结果正确：start=3 搜 "B"(位置 2) → 找不到） |
-| probe：`INSTR(LEN("BC")+1, "ABC", "C")`（显式非零） | ✅ `X= 3`（start=3 搜 "C" → 位置 3；数字函数 3-arg 完整确认） |
-| probe：`ON INSTR(A$, ":") GOTO`（回归） | ✅ `b2`（引号感知 + 2-arg 保持） |
-| probe：`INSTR(A$)` 1-arg（SNERR 回归） | ✅ `Error at line 20` |
+| 孤儿检测 | ✅ **805=805**（自 v135 无测试文件变更，v135 已全量核验，保持） |
+| 源码一致性 | ✅ `git log v135..HEAD` 仅 docs（无 src/ tests/ 变更） |
 
-### 修复质量细节（代码复核）
+### DEVELOPMENT_PROGRESS.md 下一步计划评估
 
-```c
-/* v134 MEDIUM-2: 三级形式判定 */
-if (first == '"')                        { /* 2-arg: 无歧义廉价 */ }
-else if (isdigit(first) || first=='(' ||
-         first=='-' || first=='+')       { /* 3-arg: 无歧义廉价 */ }
-else { /* 字母/$/_ 开头: 歧义 → 完整 probe */
-    char *probe_s1 = parse_string_expression(p);
-    if (probe_s1) { ... 2-arg (probe_s1 直接复用, 无多余分配) ... }
-    else { p->pos = save_pos; ... 3-arg 重新解析 ... }
-}
-/* v134 MEDIUM-1: 两处 3-arg 分支统一 */
-int pos = bistrs_instr(str_val, s2, (int)start);
-if (pos < 0) { gwdata_set_error(5, ...); return 0.0f; }  /* FCERR */
-```
-- 字母分支 probe **成功时直接复用 probe_s1**（无重新分配浪费）；失败时 NULL 无分配 → rewind 干净 ✅
-- 数字变量 `N` probe 失败路径确认：`parse_string_expression` 变量分支仅 `VT_STRING` 才 return，数字变量 fall-through 返回 NULL → 3-arg ✅
-- 数字函数 `LEN(...)` 经"未识别字符串函数 → 数组引用尝试 → `biptrg_get_array_string` 返回 NULL"→ probe 失败 → 3-arg ✅（probe_len2 实证正确结果 3）
+| 计划项 | 评价 |
+|--------|------|
+| 1. 字符串函数一致性审计（LEFT$/MID$/RIGHT$/CHR$/STR$/SPACE$/STRING$/UCASE$/LCASE$ — 首参类型判定/错误传播同型检查） | ✅ 合理 — 与 INSTR 闭环同型问题的高价值审计 |
+| 2. M2 第 2 批：GENGRP 深化（PSET/PRESET/LINE） | ✅ 符合里程碑规划 |
+| 3. 中期：字符串堆耗尽 → OM 错误传播（v129 发现）/ INSTR 数字变量集成场景 / CI 门禁 | ✅ 完整 |
 
 ---
 
@@ -76,80 +56,70 @@ if (pos < 0) { gwdata_set_error(5, ...); return 0.0f; }  /* FCERR */
 
 无。
 
-本版为修复确认轮：v134 的 2 个 MEDIUM 已关闭，无新增问题。
-
-**备注（不计问题）**：
-1. 字母开头的 3-arg 形式（`INSTR(N, ...)`）走完整 probe 路径，多一次字符串解析尝试（无分配浪费，probe_s1 复用/失败零分配）— 与 v132 成本相当，可接受。
-2. INSTR 形式判定强度：现覆盖引号/数字/括号/符号/字母变量/字母函数；字符串字面量含 `%`/`&` 后缀变量等边角未逐一验证，后续 M2 字符串函数批次可一并审计。
+本版为复核确认轮：自 v135 后无代码变更，无新增/遗留问题。
 
 ---
 
 ## 三、架构评估
 
-### 修复质量（c85284e）
+### 文档一致性（52c63d2 / e7d4da3）
 
 | 决策 | 评价 |
 |------|------|
-| 三级形式判定（无歧义廉价分类 + 歧义完整 probe 回退） | ✅ 正确 — 覆盖全部形式，probe 复用/零分配失败 |
-| `pos<0 → set_error(5)`（FCERR 传播，与 SNERR 对称） | ✅ 正确 — 语句级报 Illegal function call |
-| 单测更新（start_range ERR=5 断言 + 3 新用例） | ✅ 质量好 — API/语句级/形式全覆盖 |
-| probe 失败 rewind（pos 恢复,无泄漏） | ✅ 干净 |
-| 回归保持（2-arg / 引号感知 / 紧凑 / SNERR） | ✅ probe 6 项全绿 |
-| v134 报告随提交入库 | ✅ 流程闭合，工作区 clean |
+| CODE_REVIEW v135 入库 | ✅ 报告入库流程闭合（HEAD 中 CODE_REVIEW.md = v135） |
+| DEVELOPMENT_PROGRESS INSTR 闭环总览（4 轮 v132→v135） | ✅ 记录准确（引号截断→start 校验→FCERR 传播+三级判定→确认轮） |
+| 下一步排序（字符串审计 → GENGRP 深化 → OM/CI） | ✅ 与 v135 建议一致 |
+| M2 里程碑表述（2/3: GWLIST / .bas 基线+ON..GOTO / INSTR 闭环） | ✅ 准确 |
 
-### 测试覆盖分析
+### 关键代码复核（无变更）
 
-| 功能 | 覆盖情况 |
-|------|----------|
-| INSTR 2-arg（字面量/变量）+ start=1 | ✅ |
-| INSTR 3-arg（字面量 start / 数字变量 N / 数字函数 LEN() / 算术表达式） | ✅ **全形式**（含 probe 复测） |
-| INSTR start 范围（0/负/超 255）→ FCERR（API + 语句级） | ✅ 修复 + 双重验证 |
-| INSTR 1-arg / 类型错误 → SNERR | ✅ |
-| ON..GOTO + INSTR 组合（引号感知） | ✅ 回归 b2 |
-| 注册一致性 | ✅ 805=805，0 孤儿 0 多余 |
+| 模块 | 状态 |
+|------|------|
+| INSTR（bistrs_instr + dispatch 三级判定 + FCERR/SNERR 传播） | ✅ 闭环（v135 全绿保持） |
+| ON..GOTO/GOSUB（语句边界 + 引号感知） | ✅ 保持 |
+| DELETE/RENUM/RESEQ/nodes[256]/链版本计数 | ✅ M1 状态保持 |
 
 ---
 
 ## 四、改进建议
 
-### 短期（可选）
-1. （备注项）边角形式审计（`%`/`&` 后缀变量等）随 M2 字符串函数批次处理
+### 短期（M2 下一批，按 DEVELOPMENT_PROGRESS 排序）
+1. **字符串函数一致性审计**：对 9 个字符串函数做 INSTR 同型检查（首参类型判定 / 错误传播 set_error / start 范围 1-255 FCERR）—— 预计可复用 INSTR 的三级判定与 FCERR 模式
+2. GENGRP 深化（PSET/PRESET/LINE，ASM 对照 + TDD）
 
-### 中期（M2 规划）
-2. 其余字符串函数做同型"形式判定/错误传播"一致性审计（LEFT$/MID$/RIGHT$/CHR$/STR$/SPACE$/STRING$/UCASE$/LCASE$）
-3. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 套件回归）
-4. .bas 套件补 INSTR 集成场景（含数字变量 start）
+### 中期
+3. 字符串堆耗尽 → OM 错误传播（v129 发现）
+4. .bas 套件补 INSTR 数字变量 start 集成场景
+5. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 套件回归）
 
 ### 长期
-5. ASAN 构建
-6. 定期 .bas 集成回归
+6. ASAN 构建
+7. 定期 .bas 集成回归
 
 ---
 
 ## 五、总结
 
-**总体评价**: v134 的 2 个 MEDIUM 全部修复且独立验证通过 — FCERR 语句级传播（`INSTR(-1,...)` → `Error at line 10`）、三级形式判定（数字变量 `INSTR(N,...)` → 2、数字函数 `INSTR(LEN("BC")+1,...)` → 3，字母分支 probe 复用/零分配），6 项 probe 全绿；单测 3102/3102、套件 72/72、0 警告、0 孤儿。
-**关键发现**: 0 CRITICAL / 0 HIGH / 0 MEDIUM / **0 LOW**。无阻塞性缺陷。INSTR 函数（含 ON..GOTO 组合）实现正式闭环。
-**建议**: M2 继续下一批（字符串函数一致性审计 → 下一语句/函数里程碑）。
+**总体评价**: 复核确认轮 —— 自 v135 无任何代码变更（仅 2 个 docs 提交），独立验证全绿：单测 3102/3102、套件 72/72、0 警告、孤儿 0。INSTR 闭环稳定保持，M2 进度 2/3（GWLIST / ON..GOTO / INSTR）。
+**关键发现**: 0 CRITICAL / 0 HIGH / 0 MEDIUM / **0 LOW**。无阻塞性缺陷。
+**建议**: 按计划推进字符串函数一致性审计（复用 INSTR 的三级判定/FCERR 模式）→ M2 第 2 批 GENGRP 深化；完成后进行 v137 review。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v134 | v135 | 变化 |
+| 指标 | v135 | v136 | 变化 |
 |------|------|------|------|
-| 单元测试通过（test_runner） | 3094 | **3102** | ✅ +8（+3 测试函数） |
-| 定义数（唯一函数） | 802 | **805** | +3 |
-| 注册数（run_test 调用） | 802 | **805** | +3 |
+| 单元测试通过（test_runner） | 3102 | **3102** | 保持 |
+| 定义数（唯一函数） | 805 | **805** | 保持 |
+| 注册数（run_test 调用） | 805 | **805** | 保持 |
 | 孤儿数 | 0 | **0** | 保持 |
 | 生产/测试警告 | 0 | **0** | 保持 |
 | .bas 通过 | 72/72 | **72/72** | 保持 |
-| FCERR 语句级传播 | ❌ MEDIUM-1 | ✅ **修复** | 关闭 |
-| 形式判定（数字变量/函数 start） | ❌ MEDIUM-2 | ✅ **修复** | 关闭 |
-| INSTR 函数状态 | 主体完成 + 3 修复轮 | **正式闭环** | 完成 |
-| M2 进度 | 1/N + 4 修复轮 | **1/N + 5 修复轮（INSTR 闭环）** | — |
+| INSTR 状态 | 正式闭环 | **闭环保持** | 保持 |
+| M2 进度 | 2/3 | **2/3**（GWLIST / ON..GOTO / INSTR） | 保持 |
 
 **注释**:
-- 独立验证全程重跑：干净重建 → 单测 3102 → 套件 72/72 → 孤儿 805=805 → 6 项 probe（4 验证 + 2 回归，已清理）
-- probe_len 首版结果 X=0 实为正确行为（start=LEN("ABC")=3，搜 "B"(位置 2) → 找不到）；补 probe_len2（`INSTR(LEN("BC")+1, ...)` → 3）作非零显式确认
-- **M2 状态**: ON..GOTO/GOSUB + INSTR 闭环完成；下一批待定（字符串函数一致性审计为建议起点）
+- 本轮无代码/测试变更，验证为基线确认（重建 + 单测 + 套件）
+- DEVELOPMENT_PROGRESS.md 已更新（v135 记录、INSTR 闭环总览、下一步排序）
+- **下一步**: 字符串函数一致性审计（推荐起点，复用 INSTR 模式）→ M2 第 2 批 GENGRP 深化
