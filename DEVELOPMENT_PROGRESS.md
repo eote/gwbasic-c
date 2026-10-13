@@ -4,51 +4,59 @@
 
 | 维度 | 定义 |
 |------|------|
-| **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅) |
-| **当前阶段** | CODE_REVIEW v136 复核确认轮 0 问题 (无代码变更, 基线保持)；等待 M2 第 2 批 (字符串审计 → GENGRP 深化) |
+| **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
+| **当前阶段** | M2 第 2 批第 1 项完成: 字符串函数一致性审计 (v136 计划项 1)；下一步 GENGRP 深化 (PSET/PRESET/LINE) |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
 ---
 
-## 当前轮: CODE_REVIEW v136 (复核确认轮, 0 问题) — 基线保持
+## 当前轮: M2 第 2 批第 1 项 — 字符串函数一致性审计 (复用 INSTR 模式)
 
-### 复核确认
+### ASM 语义依据 (BISTRS.ASM + GWEVAL.ASM)
 
-| v135 报告内容 | v136 独立验证 |
-|--------------|--------------|
-| INSTR 闭环 (v132→v135, 4 轮) | ✅ 无代码变更, 全绿保持 |
-| 3102/3102 / 72/72 / 0 警告 / 孤儿 805=805 | ✅ 全部保持 |
-| docs 提交 52c63d2 + e7d4da3 | ✅ 内容与实测一致 |
+| 函数 | ASM 证据 | 语义 |
+|------|---------|------|
+| CHR$ | CONINT (GWEVAL L1615-1621) | 参数 0..255, 高字节非 0 → FCERR |
+| LEFT$/RIGHT$ | PREAM/GETBYT | n 为字节 0..255, 越界 → FCERR; n=0 → ""; n>len → 整串 |
+| MID$ | L763-796 | start==0 → FCERR ("IT MUST NOT BE 0"); start/len 字节 0..255; 2-arg 形式 = 剩余串 |
+| SPACE$/STRING$ | STRNG$ L658/SPACE$ | n 字节 0..255 → FCERR; STRING$ 第二参 GETYPR: 串 → 首字符, 数值 → CONINT |
 
-### 独立验证结果（当前 checkout）
+### 修复内容
+
+| # | 修复 | 文件 |
+|---|------|------|
+| 1 | CHR$/LEFT$/RIGHT$/MID$/SPACE$/STRING$ dispatch 范围校验 → set_error(5) (FCERR) | gweval.c |
+| 2 | MID$ 2-arg 形式支持 (rest of string) | gweval.c |
+| 3 | STRING$ 第二参类型 probe (引号 → 串形式取首字符; 否则数值) | gweval.c |
+| 4 | 字符串字面量分配失败 → OM (ERR=14) + dispatch NULL → 错误感知 | gweval.c |
+| 5 | assign_value: eval NULL + error 已置 → 不再回退字面量 (修复源码文本污染) | gwsts.c |
+| 6 | PRINT: eval NULL + error → 中止 PRINT (不再数值回退打 " 0") | gwsts.c |
+| 7 | **错误处理器内错误 = FATAL** (was_in_handler 快照区分 ERROR 语句合法进入) — 消灭 OM 无限循环 | gwmain.c + gwdata.c |
+| 8 | test_gwram.expected 更新 (TEST 6 OM 传播新行为: Error at line 800) + TERMERROR_TESTS 注册 | .expected + run_bas_tests.sh |
+
+### 验证结果（一轮全套，全绿）
 
 | 验证项 | 结果 |
 |--------|------|
-| 增量重建 + 单元测试 | ✅ **3102/3102 PASS** |
+| 干净重建 + 单测 | ✅ **3123/3123 PASS** (+11 strfuncs: chr 256/neg/ok, left neg/zero, right neg, mid start0/2arg, space range, string strarg/range) |
 | 编译警告 | ✅ **0 条** |
-| .bas 集成套件 | ✅ **72/72 全 PASS, 0 跳过** |
-| 孤儿检测 | ✅ **805=805**（无测试文件变更, 保持） |
-| 源码一致性 | ✅ `git log v135..HEAD` 仅 docs |
+| .bas 套件 | ✅ **72/72** (test_gwram → termerror 内容匹配; test_string .expected 修正 STRING$(10,"*")="**********" — 旧 expected 系 bug 产物) |
+| 孤儿检测 | ✅ **816 = 816** |
+| probe 实证 | ✅ CHR$(256)→Error@10; MID$ 2-arg→BCDE; STRING$(3,"AB")→AAA; OM handler→fatal (无 " 0 2" 死循环); test_error_stmt ERR=11 回归通过 |
 
-### INSTR 函数闭环总览 (4 轮 review: v132→v135)
+### 附带修复 (v129 已知缺口部分闭合)
 
-| 轮 | 内容 |
-|----|------|
-| v132 | bistrs_instr 实现 (ASM INSTRC 1:1) + 引号感知冒号截断 + gweval dispatch |
-| v133 | start 1..255 范围校验 → FCERR + dispatch 失败 SNERR + probe 轻量化 |
-| v134 | FCERR 语句级传播 (set_error(5)) + 三级形式判定 (字母回退完整 probe) |
-| v135 | 确认轮 0 问题 — 正式闭环 |
+字符串堆耗尽 OM 传播: 字面量分配 → set_error(14); 错误处理器内再错 → FATAL 终止 (GW-BASIC 规则)。剩余: 非 PRINT 路径的 gwram_alloc NULL 全面审计 (中期项)。
 
 ---
 
-## 下一步 (M2 第 2 批)
+## 下一步 (M2 第 2 批续)
 
 | 优先级 | 任务 |
 |--------|------|
-| 1 | 字符串函数一致性审计 (LEFT$/MID$/RIGHT$/CHR$/STR$/SPACE$/STRING$/UCASE$/LCASE$ — 首参类型判定/错误传播同型检查) |
-| 2 | M2 第 2 批: GENGRP 深化 (PSET/PRESET/LINE) |
-| 3 | 中期: 字符串堆耗尽 → OM 错误传播 (v129 发现); .bas 套件补 INSTR 数字变量 start 集成场景; CI 门禁 |
+| 1 | GENGRP 深化: PSET/PRESET/LINE (ASM 对照 + TDD) |
+| 2 | 中期: gwram_alloc NULL 全面 OM 审计; INSTR 数字变量 start .bas 场景; CI 门禁 |
 
 ## 更新时间
 2026-10-14

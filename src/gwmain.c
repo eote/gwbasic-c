@@ -293,11 +293,23 @@ int main(int argc, char *argv[]) {
                 struct program_line *saved_next = curr->next;
                 long link_version = gwlist_get_link_version();
                 
+                int was_in_handler = gwdata_is_in_error_handler();
                 int rc = gwsts_exec_statement(curr->text);
                 DEBUG_PRINT("Statement returned %d", rc);
                 
                 /* Check if an error occurred during expression evaluation (e.g., division by zero) */
                                 if (gwdata_get_error() != 0) {
+                                    /* GW-BASIC: an error raised while ALREADY
+                                     * inside the handler is FATAL — never
+                                     * re-enter (prevents infinite OM loops).
+                                     * was_in_handler snapshot distinguishes
+                                     * this from the ERROR statement, which
+                                     * legitimately enters the handler itself. */
+                                    if (was_in_handler && gwdata_is_in_error_handler()) {
+                                        printf("Error at line %d\n", line_num);
+                                        exec_rc = ERROR;
+                                        break;
+                                    }
                                     /* Error occurred - check if ON ERROR GOTO is active */
                                     if (gwdata_is_on_error_active()) {
                                         int error_code = gwdata_get_error();

@@ -89,6 +89,11 @@ static char *parse_string_expression(parser_t *p) {
         buf[i] = '\0';
         result = gwdata_alloc_string(strlen(buf) + 1);
         if (result) strcpy(result, buf);
+        else {
+            /* String heap exhausted → OM error 14 (GW-BASIC). Prevents the
+             * silent numeric-fallback garbage print in PRINT (v137 audit). */
+            if (g_state) gwdata_set_error(14, g_state->current_line, 0);
+        }
     }
     
     /* Otherwise parse as general string expression (variable, array, function, concatenation) */
@@ -105,39 +110,67 @@ static char *parse_string_expression(parser_t *p) {
             parser_get(p);  /* consume '(' */
             
             if (strcasecmp_ascii(name, "LEFT") == 0 || strcasecmp_ascii(name, "LEFT$") == 0) {
-                /* LEFT$(str, n) */
+                /* LEFT$(str, n) — ASM PREAM/GETBYT: n 0..255 else FCERR */
                 char *str_val = parse_string_expression(p);
                 if (str_val) {
                     if (parser_match(p, ',')) {
                         float arg2 = parse_expression(p);
                         if (parser_match(p, ')')) {
-                            return bistrs_left(str_val, (int)arg2);
+                            int n = (int)arg2;
+                            if (n < 0 || n > 255) {
+                                if (g_state) gwdata_set_error(5, g_state->current_line, 0);
+                                return NULL;
+                            }
+                            return bistrs_left(str_val, n);
                         }
                     }
                 }
             }
             else if (strcasecmp_ascii(name, "RIGHT") == 0 || strcasecmp_ascii(name, "RIGHT$") == 0) {
-                /* RIGHT$(str, n) */
+                /* RIGHT$(str, n) — ASM PREAM/GETBYT: n 0..255 else FCERR */
                 char *str_val = parse_string_expression(p);
                 if (str_val) {
                     if (parser_match(p, ',')) {
                         float arg2 = parse_expression(p);
                         if (parser_match(p, ')')) {
-                            return bistrs_right(str_val, (int)arg2);
+                            int n = (int)arg2;
+                            if (n < 0 || n > 255) {
+                                if (g_state) gwdata_set_error(5, g_state->current_line, 0);
+                                return NULL;
+                            }
+                            return bistrs_right(str_val, n);
                         }
                     }
                 }
             }
             else if (strcasecmp_ascii(name, "MID") == 0 || strcasecmp_ascii(name, "MID$") == 0) {
-                /* MID$(str, start, len) */
+                /* MID$(str, start[, len]) — ASM MID$ L763-796:
+                 * start==0 → FCERR ("IT MUST NOT BE 0"); start/len are
+                 * GETBYT bytes (0..255, but start 0 → FCERR); 2-arg form
+                 * returns rest of string (len clamped to end). */
                 char *str_val = parse_string_expression(p);
                 if (str_val) {
                     if (parser_match(p, ',')) {
                         float arg2 = parse_expression(p);
+                        if (parser_match(p, ')')) {
+                            /* 2-arg: rest of string */
+                            int start = (int)arg2;
+                            if (start < 1 || start > 255) {
+                                if (g_state) gwdata_set_error(5, g_state->current_line, 0);
+                                return NULL;
+                            }
+                            return bistrs_mid(str_val, start, 0x7FFF);
+                        }
                         if (parser_match(p, ',')) {
                             float arg3 = parse_expression(p);
                             if (parser_match(p, ')')) {
-                                return bistrs_mid(str_val, (int)arg2, (int)arg3);
+                                int start = (int)arg2;
+                                int len = (int)arg3;
+                                if (start < 1 || start > 255 || len < 0 || len > 255) {
+                                    if (g_state) gwdata_set_error(5, g_state->current_line, 0);
+                                    return NULL;
+                                }
+                                return bistrs_mid(str_val, start, len);
                             }
                         }
                     }
@@ -169,26 +202,66 @@ static char *parse_string_expression(parser_t *p) {
                 }
             }
             else if (strcasecmp_ascii(name, "CHR") == 0 || strcasecmp_ascii(name, "CHR$") == 0) {
-                /* CHR$(num) */
+                /* CHR$(num) — ASM CHR$: CONINT → 0..255 else FCERR */
                 float arg = parse_expression(p);
                 if (parser_match(p, ')')) {
-                    return bistrs_chr((int)arg);
+                    int code = (int)arg;
+                    if (code < 0 || code > 255) {
+                        if (g_state) gwdata_set_error(5, g_state->current_line, 0);
+                        return NULL;
+                    }
+                    return bistrs_chr(code);
                 }
             }
             else if (strcasecmp_ascii(name, "SPACE") == 0 || strcasecmp_ascii(name, "SPACE$") == 0) {
-                /* SPACE$(num) */
+                /* SPACE$(num) — ASM SPACE$: CONINT → 0..255 else FCERR */
                 float arg = parse_expression(p);
                 if (parser_match(p, ')')) {
-                    return bistrs_space((int)arg);
+                    int n = (int)arg;
+                    if (n < 0 || n > 255) {
+                        if (g_state) gwdata_set_error(5, g_state->current_line, 0);
+                        return NULL;
+                    }
+                    return bistrs_space(n);
                 }
             }
             else if (strcasecmp_ascii(name, "STRING") == 0 || strcasecmp_ascii(name, "STRING$") == 0) {
-                /* STRING$(num, char) */
+                /* STRING$(num, char|str$) — ASM STRNG$ L658: n byte 0..255
+                 * else FCERR; arg2 via GETYPR: string → ASC2 (first char),
+                 * numeric → CONINT 0..255. Type probe like INSTR: quote
+                 * start = unambiguous string; else numeric. */
                 float arg1 = parse_expression(p);
                 if (parser_match(p, ',')) {
+                    int n = (int)arg1;
+                    if (n < 0 || n > 255) {
+                        if (g_state) gwdata_set_error(5, g_state->current_line, 0);
+                        return NULL;
+                    }
+                    size_t save_pos2 = p->pos;
+                    while (p->pos < p->len && isspace((unsigned char)p->input[p->pos])) p->pos++;
+                    char first2 = (p->pos < p->len) ? p->input[p->pos] : '\0';
+                    p->pos = save_pos2;
+                    if (first2 == '"') {
+                        /* STRING$(n, "str") — repeat first char of str */
+                        char *s2 = parse_string_expression(p);
+                        if (s2) {
+                            if (parser_match(p, ')')) {
+                                char ch = s2[0];
+                                return bistrs_string(n, ch);
+                            }
+                        }
+                        /* string form malformed → SNERR */
+                        if (g_state) gwdata_set_error(2, g_state->current_line, 0);
+                        return NULL;
+                    }
                     float arg2 = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return bistrs_string((int)arg1, (char)arg2);
+                        int code = (int)arg2;
+                        if (code < 0 || code > 255) {
+                            if (g_state) gwdata_set_error(5, g_state->current_line, 0);
+                            return NULL;
+                        }
+                        return bistrs_string(n, (char)code);
                     }
                 }
             }

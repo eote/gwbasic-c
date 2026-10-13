@@ -1053,6 +1053,12 @@ delete_done:
                                 char *str_val = gweval_eval_string(trim_start);
                                 if (str_val) {
                                     printf("%s", str_val);
+                                } else if (gwdata_get_error() != 0) {
+                                    /* String eval raised an error (e.g. OM on
+                                     * literal alloc with exhausted heap) —
+                                     * abort PRINT, let statement loop handle
+                                     * the error (v137: error-aware PRINT). */
+                                    ;
                                 } else {
                                     float val = gweval_eval_numeric(trim_start);
                                     /* GW-BASIC: positive numbers have leading space */
@@ -1704,6 +1710,11 @@ int assign_value(const char *var_ref, const char *expr) {
                         v->value.s.ptr = str_val;
                         v->value.s.len = strlen(str_val);
                         result = SUCCESS;
+                    } else if (gwdata_get_error() != 0) {
+                        /* String function raised FCERR/SNERR (e.g. CHR$(256),
+                         * MID$(s,0)) — do NOT fall back to literal; the error
+                         * propagates at statement level (v137 audit). */
+                        result = ERROR;
                     } else {
                         /* Not a recognized string expression — treat raw expr as literal string
                            (for LINE INPUT etc. which provide unquoted raw text) */

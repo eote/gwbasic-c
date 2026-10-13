@@ -213,6 +213,12 @@ int gwdata_get_on_error_line(void) {
 /* Handle error - returns true if error was handled (jump to handler), false otherwise */
 bool gwdata_handle_error(uint16_t line) {
     if (!g_state) return false;
+    /* GW-BASIC: an error inside an active error handler is FATAL — never
+     * re-enter the handler (prevents infinite OM handler loops). */
+    if (gwdata_is_in_error_handler()) {
+        printf("Error at line %d\n", line);
+        return false;
+    }
     if (gwdata_is_on_error_active()) {
         int handler_line = gwdata_get_on_error_line();
         if (handler_line > 0) {

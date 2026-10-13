@@ -136,6 +136,18 @@ void test_gweval_instr_start_range(void);
 void test_gweval_instr_numeric_var_start(void);
 void test_gweval_instr_numeric_func_start(void);
 void test_gweval_instr_stmt_fcerr(void);
+void test_gweval_strfuncs_chr_256_fcerr(void);
+void test_gweval_strfuncs_chr_neg_fcerr(void);
+void test_gweval_strfuncs_chr_ok(void);
+void test_gweval_strfuncs_left_neg_fcerr(void);
+void test_gweval_strfuncs_left_zero_ok(void);
+void test_gweval_strfuncs_right_neg_fcerr(void);
+void test_gweval_strfuncs_mid_start0_fcerr(void);
+void test_gweval_strfuncs_mid_2arg_rest(void);
+void test_gweval_strfuncs_space_range(void);
+void test_gweval_strfuncs_string_strarg(void);
+void test_gweval_strfuncs_string_range(void);
+
 void test_gwsts_delete_bare(void);
 void test_gwsts_delete_open_range(void);
 void test_gwsts_delete_from_start(void);
@@ -1001,6 +1013,18 @@ int main(void) {
     failed += run_test("gweval_instr_numeric_var_start", test_gweval_instr_numeric_var_start);
     failed += run_test("gweval_instr_numeric_func_start", test_gweval_instr_numeric_func_start);
     failed += run_test("gweval_instr_stmt_fcerr", test_gweval_instr_stmt_fcerr);
+failed += run_test("gweval_strfuncs_chr_256_fcerr", test_gweval_strfuncs_chr_256_fcerr);
+failed += run_test("gweval_strfuncs_chr_neg_fcerr", test_gweval_strfuncs_chr_neg_fcerr);
+failed += run_test("gweval_strfuncs_chr_ok", test_gweval_strfuncs_chr_ok);
+failed += run_test("gweval_strfuncs_left_neg_fcerr", test_gweval_strfuncs_left_neg_fcerr);
+failed += run_test("gweval_strfuncs_left_zero_ok", test_gweval_strfuncs_left_zero_ok);
+failed += run_test("gweval_strfuncs_right_neg_fcerr", test_gweval_strfuncs_right_neg_fcerr);
+failed += run_test("gweval_strfuncs_mid_start0_fcerr", test_gweval_strfuncs_mid_start0_fcerr);
+failed += run_test("gweval_strfuncs_mid_2arg_rest", test_gweval_strfuncs_mid_2arg_rest);
+failed += run_test("gweval_strfuncs_space_range", test_gweval_strfuncs_space_range);
+failed += run_test("gweval_strfuncs_string_strarg", test_gweval_strfuncs_string_strarg);
+failed += run_test("gweval_strfuncs_string_range", test_gweval_strfuncs_string_range);
+
     failed += run_test("gwsts_delete_bare", test_gwsts_delete_bare);
     failed += run_test("gwsts_delete_open_range", test_gwsts_delete_open_range);
     failed += run_test("gwsts_delete_from_start", test_gwsts_delete_from_start);

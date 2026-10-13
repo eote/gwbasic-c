@@ -12,3 +12,5 @@ PASS: CLEAR resets variables
 TEST 5: Large array
 PASS: Large array
 TEST 6: String space exhaustion
+
+Error at line 800
