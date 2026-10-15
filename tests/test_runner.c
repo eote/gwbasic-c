@@ -147,6 +147,14 @@ void test_gweval_strfuncs_mid_2arg_rest(void);
 void test_gweval_strfuncs_space_range(void);
 void test_gweval_strfuncs_string_strarg(void);
 void test_gweval_strfuncs_string_range(void);
+void test_gweval_strfuncs_string_vararg(void);
+void test_gweval_strfuncs_string_funcarg(void);
+void test_gweval_strfuncs_string_numericfuncarg(void);
+void test_gweval_strfuncs_numeric_ctx_chr(void);
+void test_gweval_strfuncs_numeric_ctx_left(void);
+void test_gweval_strfuncs_numeric_ctx_if(void);
+void test_gweval_strfuncs_strctx_chr_regression(void);
+
 
 void test_gwsts_delete_bare(void);
 void test_gwsts_delete_open_range(void);
@@ -1024,6 +1032,14 @@ failed += run_test("gweval_strfuncs_mid_2arg_rest", test_gweval_strfuncs_mid_2ar
 failed += run_test("gweval_strfuncs_space_range", test_gweval_strfuncs_space_range);
 failed += run_test("gweval_strfuncs_string_strarg", test_gweval_strfuncs_string_strarg);
 failed += run_test("gweval_strfuncs_string_range", test_gweval_strfuncs_string_range);
+failed += run_test("gweval_strfuncs_string_vararg", test_gweval_strfuncs_string_vararg);
+failed += run_test("gweval_strfuncs_string_funcarg", test_gweval_strfuncs_string_funcarg);
+failed += run_test("gweval_strfuncs_string_numericfuncarg", test_gweval_strfuncs_string_numericfuncarg);
+failed += run_test("gweval_strfuncs_numeric_ctx_chr", test_gweval_strfuncs_numeric_ctx_chr);
+failed += run_test("gweval_strfuncs_numeric_ctx_left", test_gweval_strfuncs_numeric_ctx_left);
+failed += run_test("gweval_strfuncs_numeric_ctx_if", test_gweval_strfuncs_numeric_ctx_if);
+failed += run_test("gweval_strfuncs_strctx_chr_regression", test_gweval_strfuncs_strctx_chr_regression);
+
 
     failed += run_test("gwsts_delete_bare", test_gwsts_delete_bare);
     failed += run_test("gwsts_delete_open_range", test_gwsts_delete_open_range);

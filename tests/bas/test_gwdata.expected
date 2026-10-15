@@ -6,6 +6,9 @@ PASS: mixed case lookup
 TEST 3: Max variable name length
 TEST 4: String operations
 PASS: LEN()
+PASS: LEFT$()
+PASS: RIGHT$()
+PASS: MID$()
 TEST 5: Array variables
 PASS: Array element assignment
 PASS: 2D array

@@ -5,14 +5,42 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | M2 第 2 批第 1 项完成: 字符串函数一致性审计 (v136 计划项 1)；下一步 GENGRP 深化 (PSET/PRESET/LINE) |
+| **当前阶段** | CODE_REVIEW v137 修复完成 (2 MEDIUM: STRING$ 变量参数 + 数字上下文 SNERR + IF 串比较真语义)；下一步 GENGRP 深化 (PSET/PRESET/LINE) |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
 ---
 
-## 当前轮: M2 第 2 批第 1 项 — 字符串函数一致性审计 (复用 INSTR 模式)
+## 上一轮: M2 第 2 批第 1 项 — 字符串函数一致性审计 (复用 INSTR 模式, 8cad67d)
 
+---
+
+## 当前轮: CODE_REVIEW v137 修复 — 2 MEDIUM (类型判定/类型安全)
+
+### 修复内容
+
+| # | 问题 | 修复 | 文件 |
+|---|------|------|------|
+| MEDIUM-1 | STRING$(3, S$) 字符串变量参数 → 空串 | 第 2 参字母/引号开头 → 完整字符串解析 probe (v134 INSTR 三级判定模式); 失败回退数字形式 (STRING$(3, LEN("XY")) 仍可用) | gweval.c |
+| MEDIUM-2 | 数字上下文字符串函数静默 0 (Y = CHR$(256)) | parse_factor: is_str_func → 消费参数至匹配 ')' → set_error(2) SNERR (类型不匹配); 覆盖全部 9 个字符串函数 | gweval.c |
+| 附带 | IF 字符串比较假语义 (两侧 accident-0 → 恒真) | gwsts IF: 顶层比较符扫描 (引号/括号感知) + 双侧字符串 → strcmp 真语义; 否则数值路径 | gwsts.c |
+| 附带 | test_gwdata.expected 缺 3 行 (LEFT$/RIGHT$/MID$ 比较旧行为被吞) | .expected 补真值 (真实串比较全 PASS) | .expected |
+
+### 新单测 (+7, 3138 总)
+
+string_vararg / string_funcarg / string_numericfuncarg / numeric_ctx_chr / numeric_ctx_left / numeric_ctx_if / strctx_chr_regression
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3138/3138 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 套件 | ✅ **72/72** (test_gwdata LEFT$/RIGHT$/MID$ 真串比较全 PASS) |
+| 孤儿检测 | ✅ **823 = 823** |
+| probe 实证 | ✅ STRING$(3,S$)→LEN=3; Y=CHR$(256)→Error@10; X=LEFT$→Error@10; IF CHR$(65)→Error@10; IF A$="X"→RIGHT-FALSE; IF LEFT$(...)=→FUNC-CMP-OK |
+
+---
 ### ASM 语义依据 (BISTRS.ASM + GWEVAL.ASM)
 
 | 函数 | ASM 证据 | 语义 |

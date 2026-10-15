@@ -1108,8 +1108,82 @@ delete_done:
             char *cond_expr = strdup_trim(trimmed + 3);
             char *then_stmt = strdup_trim(then_pos + 6);
             if (cond_expr && then_stmt) {
-                float cond_val = gweval_eval_numeric(cond_expr);
-                if (cond_val != 0.0f) {
+                /* v137: string comparison support — IF A$ = "X" / 
+                 * IF LEFT$(S$,5) = "HELLO". Find a top-level comparison
+                 * operator (outside quotes and parens); if BOTH sides
+                 * evaluate as strings, compare with strcmp semantics.
+                 * Otherwise fall back to numeric evaluation. (Previously
+                 * string comparisons silently evaluated both sides as 0
+                 * and compared equal — accidental-true bug.) */
+                int cond_val_int = -2;  /* -2 = not a string comparison */
+                {
+                    const char *ops[] = {"<=", ">=", "<>", "=", "<", ">"};
+                    const char *op_found = NULL;
+                    size_t op_len = 0;
+                    size_t op_at = 0;
+                    int depth = 0;
+                    bool in_quote = false;
+                    for (size_t ci = 0; cond_expr[ci]; ci++) {
+                        char cc = cond_expr[ci];
+                        if (cc == '"') { in_quote = !in_quote; continue; }
+                        if (in_quote) continue;
+                        if (cc == '(') { depth++; continue; }
+                        if (cc == ')') { depth--; continue; }
+                        if (depth == 0) {
+                            for (int oi = 0; oi < 6; oi++) {
+                                size_t l = strlen(ops[oi]);
+                                if (strncmp(&cond_expr[ci], ops[oi], l) == 0) {
+                                    /* prefer longest match: only take if
+                                     * no operator recorded yet or this is
+                                     * longer (<= before < in list already) */
+                                    if (!op_found || l > op_len) {
+                                        op_found = ops[oi];
+                                        op_len = l;
+                                        op_at = ci;
+                                    }
+                                    ci += l - 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (op_found) {
+                        char lhs_buf[256];
+                        char rhs_buf[256];
+                        size_t lhs_len = op_at;
+                        size_t rhs_off = op_at + op_len;
+                        if (lhs_len < sizeof(lhs_buf) && strlen(cond_expr) - rhs_off < sizeof(rhs_buf)) {
+                            memcpy(lhs_buf, cond_expr, lhs_len);
+                            lhs_buf[lhs_len] = '\0';
+                            strcpy(rhs_buf, cond_expr + rhs_off);
+                            char *lhs = strdup_trim(lhs_buf);
+                            char *rhs = strdup_trim(rhs_buf);
+                            char *lhs_s = lhs ? gweval_eval_string(lhs) : NULL;
+                            char *rhs_s = rhs ? gweval_eval_string(rhs) : NULL;
+                            if (lhs_s && rhs_s && gwdata_get_error() == 0) {
+                                int cmp = strcmp(lhs_s, rhs_s);
+                                if (strcmp(op_found, "=") == 0) cond_val_int = (cmp == 0) ? -1 : 0;
+                                else if (strcmp(op_found, "<>") == 0) cond_val_int = (cmp != 0) ? -1 : 0;
+                                else if (strcmp(op_found, "<") == 0) cond_val_int = (cmp < 0) ? -1 : 0;
+                                else if (strcmp(op_found, "<=") == 0) cond_val_int = (cmp <= 0) ? -1 : 0;
+                                else if (strcmp(op_found, ">") == 0) cond_val_int = (cmp > 0) ? -1 : 0;
+                                else cond_val_int = (cmp >= 0) ? -1 : 0;
+                            }
+                            /* Note: lhs_s/rhs_s point into the string heap
+                             * (bump allocator) — no free. */
+                            if (lhs) gwram_free(lhs);
+                            if (rhs) gwram_free(rhs);
+                        }
+                    }
+                }
+                int then_taken;
+                if (cond_val_int != -2) {
+                    then_taken = (cond_val_int != 0);
+                } else {
+                    float cond_val = gweval_eval_numeric(cond_expr);
+                    then_taken = (cond_val != 0.0f);
+                }
+                if (then_taken) {
                     result = gwsts_exec_statement(then_stmt);
                 } else {
                     result = SUCCESS;

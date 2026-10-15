@@ -241,8 +241,18 @@ static char *parse_string_expression(parser_t *p) {
                     while (p->pos < p->len && isspace((unsigned char)p->input[p->pos])) p->pos++;
                     char first2 = (p->pos < p->len) ? p->input[p->pos] : '\0';
                     p->pos = save_pos2;
-                    if (first2 == '"') {
-                        /* STRING$(n, "str") — repeat first char of str */
+                    if (first2 == '"' || isalpha((unsigned char)first2) || first2 == '_') {
+                        /* STRING$(n, "str") or STRING$(n, str$) or
+                         * STRING$(n, LEFT$(...)) — repeat first char of the
+                         * string (ASM STRNG$: GETYPR → string → ASC2).
+                         * v137 MEDIUM-1: letter start is AMBIGUOUS in theory
+                         * (string var S$ vs numeric func LEN) — fall back to
+                         * a FULL string-parse probe first (v134 INSTR three-
+                         * tier pattern); success → string form, failure →
+                         * rewind and numeric form. Quote start is
+                         * unambiguous string (probe cannot rewind past a
+                         * consumed string literal cleanly, and a quote can
+                         * never start a numeric expression anyway). */
                         char *s2 = parse_string_expression(p);
                         if (s2) {
                             if (parser_match(p, ')')) {
@@ -250,9 +260,14 @@ static char *parse_string_expression(parser_t *p) {
                                 return bistrs_string(n, ch);
                             }
                         }
-                        /* string form malformed → SNERR */
-                        if (g_state) gwdata_set_error(2, g_state->current_line, 0);
-                        return NULL;
+                        if (first2 == '"') {
+                            /* string literal form malformed → SNERR */
+                            if (g_state) gwdata_set_error(2, g_state->current_line, 0);
+                            return NULL;
+                        }
+                        /* Ambiguous start: rewind to the ',' and try the
+                         * numeric form (e.g. STRING$(3, LEN(A$))) */
+                        p->pos = save_pos2;
                     }
                     float arg2 = parse_expression(p);
                     if (parser_match(p, ')')) {
@@ -756,11 +771,19 @@ static float parse_factor(parser_t *p) {
                         }
                     }
                 }
-                /* String functions returning string - not valid in numeric context, return 0 */
+                /* String functions returning string - not valid in numeric
+                 * context. GW-BASIC: type mismatch → SNERR (v137 MEDIUM-2).
+                 * Consume args up to the matching ')' first so the parser
+                 * position is sane after the error is raised. */
                 else if (is_str_func) {
-                    if (parser_match(p, ')')) {
-                        return 0.0f;
+                    int paren_depth = 1;
+                    while (paren_depth > 0 && p->pos < p->len) {
+                        char ch = p->input[p->pos++];
+                        if (ch == '(') paren_depth++;
+                        else if (ch == ')') paren_depth--;
                     }
+                    if (g_state) gwdata_set_error(2, g_state->current_line, 0);
+                    return 0.0f;
                 }
             }
         }
