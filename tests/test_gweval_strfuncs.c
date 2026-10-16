@@ -230,6 +230,55 @@ void test_gweval_strfuncs_numeric_ctx_if(void) {
     TEST_PASS("gweval numeric ctx if");
 }
 
+/* Test: IF compound string condition AND (v138 MEDIUM-1) — true AND false */
+void test_gweval_strfuncs_if_compound_str_and(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    struct variable *z = gwdata_alloc_variable("Z", VT_SINGLE);
+    TEST_ASSERT(z, "Z allocated");
+    gwsts_exec_statement("IF \"A\" = \"A\" AND \"B\" = \"C\" THEN Z = 1 ELSE Z = 2");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 0, "compound AND no error");
+    TEST_ASSERT_EQ_INT((int)z->value.f, 2, "true AND false -> ELSE branch (Z=2)");
+    TEST_PASS("gweval if compound str and");
+}
+
+/* Test: IF compound string condition OR (v138 MEDIUM-1) — false OR true */
+void test_gweval_strfuncs_if_compound_str_or(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    struct variable *z = gwdata_alloc_variable("Z", VT_SINGLE);
+    TEST_ASSERT(z, "Z allocated");
+    gwsts_exec_statement("IF \"A\" = \"X\" OR \"B\" = \"B\" THEN Z = 1 ELSE Z = 2");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 0, "compound OR no error");
+    TEST_ASSERT_EQ_INT((int)z->value.f, 1, "false OR true -> THEN branch (Z=1)");
+    TEST_PASS("gweval if compound str or");
+}
+
+/* Test: IF..THEN..ELSE both branches (v138 MEDIUM-2) */
+void test_gweval_strfuncs_if_else_both(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    struct variable *z = gwdata_alloc_variable("Z", VT_SINGLE);
+    TEST_ASSERT(z, "Z allocated");
+    gwsts_exec_statement("IF 1 = 2 THEN Z = 1 ELSE Z = 2");
+    TEST_ASSERT_EQ_INT((int)z->value.f, 2, "numeric false -> ELSE (Z=2)");
+
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    z = gwdata_alloc_variable("Z", VT_SINGLE);
+    gwsts_exec_statement("IF 2 = 2 THEN Z = 1 ELSE Z = 2");
+    TEST_ASSERT_EQ_INT((int)z->value.f, 1, "numeric true -> THEN (Z=1)");
+    TEST_PASS("gweval if else both");
+}
+
 /* Test: A$ = CHR$(256) string context still FCERR=5 (MEDIUM-2 regression) */
 void test_gweval_strfuncs_strctx_chr_regression(void) {
     gwdata_init();

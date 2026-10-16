@@ -1,9 +1,13 @@
 TEST 1: Basic variable operations
+PASS: Integer assignment
+PASS: Single precision
+PASS: Double precision
 PASS: String assignment
 TEST 2: Case insensitive variable names
 PASS: lowercase lookup
 PASS: mixed case lookup
 TEST 3: Max variable name length
+PASS: 40-char variable name
 TEST 4: String operations
 PASS: LEN()
 PASS: LEFT$()

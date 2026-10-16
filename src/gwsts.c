@@ -236,6 +236,17 @@ int gwsts_handle_get(const char *trimmed) {
     return ERROR;
 }
 
+/* Case-insensitive keyword match (ASCII): s[0..n) vs kw, both length n */
+static bool gwsts_ieq_n(const char *s, const char *kw, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        char a = s[i], b = kw[i];
+        if (a >= 'a' && a <= 'z') a = (char)(a - 32);
+        if (b >= 'a' && b <= 'z') b = (char)(b - 32);
+        if (a != b) return false;
+    }
+    return true;
+}
+
 int gwsts_exec_statement(const char *text) {
     if (!text) return ERROR;
     
@@ -1100,96 +1111,236 @@ delete_done:
             }
         }
     }
-    /* IF statement (simplified: IF <expr> THEN <stmt>) */
+    /* IF statement: IF <cond> THEN <stmt> [ELSE <stmt>]
+     * v138 MEDIUM-2: single-line ELSE branch (was silently dropped).
+     * v138 MEDIUM-1: compound conditions — split at top-level OR then AND
+     * (GW-BASIC precedence), each atom evaluated with string semantics when
+     * both comparison sides are strings, numeric otherwise. The old code
+     * took only the first comparison and discarded the AND/OR tail, and
+     * never executed the ELSE branch. */
     else if (starts_with(trimmed, "IF ")) {
-        char *then_pos = strstr(trimmed + 3, " THEN ");
+        /* 1. Quote/paren-aware scan for top-level THEN / ELSE keywords */
+        char *then_pos = NULL;
+        char *else_pos = NULL;
+        {
+            bool in_quote = false;
+            int depth = 0;
+            for (char *s = (char *)trimmed + 3; *s; s++) {
+                if (*s == '"') { in_quote = !in_quote; continue; }
+                if (in_quote) continue;
+                if (*s == '(') { depth++; continue; }
+                if (*s == ')') { if (depth > 0) depth--; continue; }
+                if (depth == 0) {
+                    if (!then_pos && gwsts_ieq_n(s, " THEN ", 6)) {
+                        then_pos = s;
+                        s += 5;
+                        continue;
+                    }
+                    if (then_pos && !else_pos && gwsts_ieq_n(s, " ELSE ", 6)) {
+                        else_pos = s;
+                        s += 5;
+                        continue;
+                    }
+                }
+            }
+        }
         if (then_pos) {
+            /* 2. Split: NUL at ELSE first, then at THEN */
+            char *else_stmt = NULL;
+            if (else_pos) {
+                *else_pos = '\0';
+                else_stmt = strdup_trim(else_pos + 6);
+            }
             *then_pos = '\0';
             char *cond_expr = strdup_trim(trimmed + 3);
             char *then_stmt = strdup_trim(then_pos + 6);
             if (cond_expr && then_stmt) {
-                /* v137: string comparison support — IF A$ = "X" / 
-                 * IF LEFT$(S$,5) = "HELLO". Find a top-level comparison
-                 * operator (outside quotes and parens); if BOTH sides
-                 * evaluate as strings, compare with strcmp semantics.
-                 * Otherwise fall back to numeric evaluation. (Previously
-                 * string comparisons silently evaluated both sides as 0
-                 * and compared equal — accidental-true bug.) */
-                int cond_val_int = -2;  /* -2 = not a string comparison */
+                /* 3. Evaluate the condition.
+                 * eval_atom: -1 true, 0 false, -2 unknown/error. */
+                #define GWSIFS_MAX_ATOMS 16
+                char atoms[GWSIFS_MAX_ATOMS][256];
+                int  atom_op[GWSIFS_MAX_ATOMS];   /* 0=AND (binds tighter), 1=OR */
+                int  atom_count = 0;
+                bool split_ok = true;
                 {
-                    const char *ops[] = {"<=", ">=", "<>", "=", "<", ">"};
-                    const char *op_found = NULL;
-                    size_t op_len = 0;
-                    size_t op_at = 0;
                     int depth = 0;
                     bool in_quote = false;
-                    for (size_t ci = 0; cond_expr[ci]; ci++) {
+                    int start = 0;
+                    size_t clen = strlen(cond_expr);
+                    for (size_t ci = 0; ci <= clen && split_ok; ci++) {
                         char cc = cond_expr[ci];
-                        if (cc == '"') { in_quote = !in_quote; continue; }
-                        if (in_quote) continue;
-                        if (cc == '(') { depth++; continue; }
-                        if (cc == ')') { depth--; continue; }
-                        if (depth == 0) {
-                            for (int oi = 0; oi < 6; oi++) {
-                                size_t l = strlen(ops[oi]);
-                                if (strncmp(&cond_expr[ci], ops[oi], l) == 0) {
-                                    /* prefer longest match: only take if
-                                     * no operator recorded yet or this is
-                                     * longer (<= before < in list already) */
-                                    if (!op_found || l > op_len) {
-                                        op_found = ops[oi];
-                                        op_len = l;
-                                        op_at = ci;
+                        if (ci < clen) {
+                            if (cc == '"') { in_quote = !in_quote; continue; }
+                            if (in_quote) continue;
+                            if (cc == '(') { depth++; continue; }
+                            if (cc == ')') { if (depth > 0) depth--; continue; }
+                            if (depth != 0) continue;
+                        }
+                        /* top-level: check AND/OR word boundaries */
+                        bool prev_nonword = (ci == 0) ||
+                            (!isalnum((unsigned char)cond_expr[ci-1]) && cond_expr[ci-1] != '_');
+                        if (prev_nonword && gwsts_ieq_n(&cond_expr[ci], "AND", 3) &&
+                            (ci + 3 >= clen || (!isalnum((unsigned char)cond_expr[ci+3]) && cond_expr[ci+3] != '_'))) {
+                            if (atom_count >= GWSIFS_MAX_ATOMS) { split_ok = false; break; }
+                            size_t e = ci;
+                            while (e > (size_t)start && cond_expr[e-1] == ' ') e--;
+                            size_t b = start;
+                            while (b < e && cond_expr[b] == ' ') b++;
+                            size_t copy = e - b;
+                            if (copy == 0 || copy >= 256) { split_ok = false; break; }
+                            memcpy(atoms[atom_count], &cond_expr[b], copy);
+                            atoms[atom_count][copy] = '\0';
+                            atom_count++;
+                            /* op sits between the just-appended atom and the
+                             * NEXT one → index atom_count-1 */
+                            if (atom_count >= 1) atom_op[atom_count - 1] = 0;
+                            start = (int)(ci + 3);
+                            ci += 2;
+                        } else if (prev_nonword && gwsts_ieq_n(&cond_expr[ci], "OR", 2) &&
+                            (ci + 2 >= clen || (!isalnum((unsigned char)cond_expr[ci+2]) && cond_expr[ci+2] != '_'))) {
+                            if (atom_count >= GWSIFS_MAX_ATOMS) { split_ok = false; break; }
+                            size_t e = ci;
+                            while (e > (size_t)start && cond_expr[e-1] == ' ') e--;
+                            size_t b = start;
+                            while (b < e && cond_expr[b] == ' ') b++;
+                            size_t copy = e - b;
+                            if (copy == 0 || copy >= 256) { split_ok = false; break; }
+                            memcpy(atoms[atom_count], &cond_expr[b], copy);
+                            atoms[atom_count][copy] = '\0';
+                            atom_count++;
+                            if (atom_count >= 1) atom_op[atom_count - 1] = 1;
+                            start = (int)(ci + 2);
+                            ci += 1;
+                        }
+                    }
+                    /* tail atom */
+                    if (split_ok) {
+                        size_t e = clen;
+                        while (e > (size_t)start && cond_expr[e-1] == ' ') e--;
+                        size_t b = start;
+                        while (b < e && cond_expr[b] == ' ') b++;
+                        size_t copy = e - b;
+                        if (copy > 0) {
+                            if (atom_count >= GWSIFS_MAX_ATOMS || copy >= 256) {
+                                split_ok = false;
+                            } else {
+                                memcpy(atoms[atom_count], &cond_expr[b], copy);
+                                atoms[atom_count][copy] = '\0';
+                                atom_count++;
+                            }
+                        } else if (atom_count == 0) {
+                            split_ok = false;  /* empty condition */
+                        }
+                    }
+                }
+
+                int then_taken = 0;
+                bool use_atoms = split_ok && atom_count > 0;
+                if (use_atoms) {
+                    /* eval each atom */
+                    int aval[GWSIFS_MAX_ATOMS];
+                    for (int ai = 0; ai < atom_count && use_atoms; ai++) {
+                        const char *atom = atoms[ai];
+                        int cv = -2;
+                        /* find top-level comparison op */
+                        const char *ops[] = {"<=", ">=", "<>", "=", "<", ">"};
+                        const char *opf = NULL; size_t opl = 0, opa = 0;
+                        int depth = 0; bool inq = false;
+                        for (size_t ci = 0; atom[ci]; ci++) {
+                            char c2 = atom[ci];
+                            if (c2 == '"') { inq = !inq; continue; }
+                            if (inq) continue;
+                            if (c2 == '(') { depth++; continue; }
+                            if (c2 == ')') { if (depth > 0) depth--; continue; }
+                            if (depth == 0) {
+                                for (int oi = 0; oi < 6; oi++) {
+                                    size_t l = strlen(ops[oi]);
+                                    if (strncmp(&atom[ci], ops[oi], l) == 0) {
+                                        if (!opf || l > opl) { opf = ops[oi]; opl = l; opa = ci; }
+                                        ci += l - 1;
+                                        break;
                                     }
-                                    ci += l - 1;
-                                    break;
                                 }
                             }
                         }
-                    }
-                    if (op_found) {
-                        char lhs_buf[256];
-                        char rhs_buf[256];
-                        size_t lhs_len = op_at;
-                        size_t rhs_off = op_at + op_len;
-                        if (lhs_len < sizeof(lhs_buf) && strlen(cond_expr) - rhs_off < sizeof(rhs_buf)) {
-                            memcpy(lhs_buf, cond_expr, lhs_len);
-                            lhs_buf[lhs_len] = '\0';
-                            strcpy(rhs_buf, cond_expr + rhs_off);
-                            char *lhs = strdup_trim(lhs_buf);
-                            char *rhs = strdup_trim(rhs_buf);
-                            char *lhs_s = lhs ? gweval_eval_string(lhs) : NULL;
-                            char *rhs_s = rhs ? gweval_eval_string(rhs) : NULL;
-                            if (lhs_s && rhs_s && gwdata_get_error() == 0) {
-                                int cmp = strcmp(lhs_s, rhs_s);
-                                if (strcmp(op_found, "=") == 0) cond_val_int = (cmp == 0) ? -1 : 0;
-                                else if (strcmp(op_found, "<>") == 0) cond_val_int = (cmp != 0) ? -1 : 0;
-                                else if (strcmp(op_found, "<") == 0) cond_val_int = (cmp < 0) ? -1 : 0;
-                                else if (strcmp(op_found, "<=") == 0) cond_val_int = (cmp <= 0) ? -1 : 0;
-                                else if (strcmp(op_found, ">") == 0) cond_val_int = (cmp > 0) ? -1 : 0;
-                                else cond_val_int = (cmp >= 0) ? -1 : 0;
+                        if (opf) {
+                            char lb[256], rb[256];
+                            size_t ll = opa, ro = opa + opl;
+                            if (ll < sizeof(lb) && strlen(atom) - ro < sizeof(rb)) {
+                                memcpy(lb, atom, ll); lb[ll] = '\0';
+                                strcpy(rb, atom + ro);
+                                char *lt = strdup_trim(lb);
+                                char *rt = strdup_trim(rb);
+                                char *ls = lt ? gweval_eval_string(lt) : NULL;
+                                char *rs = rt ? gweval_eval_string(rt) : NULL;
+                                if (ls && rs && gwdata_get_error() == 0) {
+                                    int cmp = strcmp(ls, rs);
+                                    if (strcmp(opf, "=") == 0) cv = (cmp == 0) ? -1 : 0;
+                                    else if (strcmp(opf, "<>") == 0) cv = (cmp != 0) ? -1 : 0;
+                                    else if (strcmp(opf, "<") == 0) cv = (cmp < 0) ? -1 : 0;
+                                    else if (strcmp(opf, "<=") == 0) cv = (cmp <= 0) ? -1 : 0;
+                                    else if (strcmp(opf, ">") == 0) cv = (cmp > 0) ? -1 : 0;
+                                    else cv = (cmp >= 0) ? -1 : 0;
+                                }
+                                if (lt) gwram_free(lt);
+                                if (rt) gwram_free(rt);
                             }
-                            /* Note: lhs_s/rhs_s point into the string heap
-                             * (bump allocator) — no free. */
-                            if (lhs) gwram_free(lhs);
-                            if (rhs) gwram_free(rhs);
+                        }
+                        if (cv == -2) {
+                            /* numeric atom (handles numeric comparisons and
+                             * plain values); error → whole-cond fallback */
+                            gwdata_clear_error();
+                            float nv = gweval_eval_numeric(atom);
+                            if (gwdata_get_error() == 0) cv = (nv != 0.0f) ? -1 : 0;
+                            else cv = -2;
+                        }
+                        if (cv == -2) { use_atoms = false; break; }
+                        aval[ai] = cv;
+                    }
+                    if (use_atoms) {
+                        /* AND binds tighter than OR: fold AND groups first */
+                        int val = aval[0];
+                        int or_val = -2;
+                        for (int ai = 0; ai < atom_count - 1; ai++) {
+                            if (atom_op[ai] == 0) {
+                                val = (val != 0 && aval[ai + 1] != 0) ? -1 : 0;
+                            } else {
+                                if (or_val == -2) or_val = val;
+                                else or_val = (or_val != 0 || val != 0) ? -1 : 0;
+                                val = aval[ai + 1];
+                            }
+                        }
+                        if (or_val == -2) {
+                            then_taken = (val != 0);
+                        } else {
+                            or_val = (or_val != 0 || val != 0) ? -1 : 0;
+                            then_taken = (or_val != 0);
                         }
                     }
                 }
-                int then_taken;
-                if (cond_val_int != -2) {
-                    then_taken = (cond_val_int != 0);
-                } else {
+                if (!use_atoms) {
+                    /* fallback: whole-condition numeric eval */
+                    gwdata_clear_error();
                     float cond_val = gweval_eval_numeric(cond_expr);
                     then_taken = (cond_val != 0.0f);
                 }
+                #undef GWSIFS_MAX_ATOMS
+
+                /* 4. THEN / ELSE dispatch (v138 MEDIUM-2) */
                 if (then_taken) {
                     result = gwsts_exec_statement(then_stmt);
+                } else if (else_stmt) {
+                    result = gwsts_exec_statement(else_stmt);
                 } else {
                     result = SUCCESS;
                 }
+                if (else_stmt) gwram_free(else_stmt);
                 gwram_free(cond_expr);
                 gwram_free(then_stmt);
+            } else {
+                if (cond_expr) gwram_free(cond_expr);
+                if (then_stmt) gwram_free(then_stmt);
+                if (else_stmt) gwram_free(else_stmt);
             }
         }
     }
@@ -1777,9 +1928,14 @@ int assign_value(const char *var_ref, const char *expr) {
             bool is_string_var = (name_len > 0 && base_name[name_len - 1] == '$');
             
             if (is_string_var) {
+                /* v138: evaluate RHS BEFORE alloc_variable — alloc on an
+                 * EXISTING string variable clears value.s.ptr (gwdata.c
+                 * L82-84), so self-referential assignment S$ = S$ + "X"
+                 * read the CLEARED (NULL) value. Numeric path already
+                 * evaluates first (same file, numeric branch). */
+                char *str_val = gweval_eval_string(expr);
                 struct variable *v = gwdata_alloc_variable(base_name, VT_STRING);
                 if (v) {
-                    char *str_val = gweval_eval_string(expr);
                     if (str_val) {
                         v->value.s.ptr = str_val;
                         v->value.s.len = strlen(str_val);

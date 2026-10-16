@@ -21,7 +21,7 @@
 ' 测试 3: 变量名最大长度 (40 字符)
 140 PRINT "TEST 3: Max variable name length"
 150 VARIABLENAMELONGENOUGHTOBETESTED = 42
-160 IF variablelongenoughtobetested = 42 THEN PRINT "PASS: 40-char variable name" ELSE PRINT "FAIL: 40-char variable name"
+160 IF variableNameLongEnoughToBeTested = 42 THEN PRINT "PASS: 40-char variable name" ELSE PRINT "FAIL: 40-char variable name"
 
 ' 测试 4: 字符串操作
 170 PRINT "TEST 4: String operations"

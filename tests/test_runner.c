@@ -154,6 +154,10 @@ void test_gweval_strfuncs_numeric_ctx_chr(void);
 void test_gweval_strfuncs_numeric_ctx_left(void);
 void test_gweval_strfuncs_numeric_ctx_if(void);
 void test_gweval_strfuncs_strctx_chr_regression(void);
+void test_gweval_strfuncs_if_compound_str_and(void);
+void test_gweval_strfuncs_if_compound_str_or(void);
+void test_gweval_strfuncs_if_else_both(void);
+
 
 
 void test_gwsts_delete_bare(void);
@@ -1039,6 +1043,10 @@ failed += run_test("gweval_strfuncs_numeric_ctx_chr", test_gweval_strfuncs_numer
 failed += run_test("gweval_strfuncs_numeric_ctx_left", test_gweval_strfuncs_numeric_ctx_left);
 failed += run_test("gweval_strfuncs_numeric_ctx_if", test_gweval_strfuncs_numeric_ctx_if);
 failed += run_test("gweval_strfuncs_strctx_chr_regression", test_gweval_strfuncs_strctx_chr_regression);
+failed += run_test("gweval_strfuncs_if_compound_str_and", test_gweval_strfuncs_if_compound_str_and);
+failed += run_test("gweval_strfuncs_if_compound_str_or", test_gweval_strfuncs_if_compound_str_or);
+failed += run_test("gweval_strfuncs_if_else_both", test_gweval_strfuncs_if_else_both);
+
 
 
     failed += run_test("gwsts_delete_bare", test_gwsts_delete_bare);

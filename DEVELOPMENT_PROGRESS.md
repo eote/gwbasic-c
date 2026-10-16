@@ -5,12 +5,42 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v137 修复完成 (2 MEDIUM: STRING$ 变量参数 + 数字上下文 SNERR + IF 串比较真语义)；下一步 GENGRP 深化 (PSET/PRESET/LINE) |
+| **当前阶段** | CODE_REVIEW v138 修复完成 (IF 复合串条件 AND/OR + IF..THEN..ELSE + 自赋值 S$=S$+X 根因) ；下一步 GENGRP 深化 (PSET/PRESET/LINE) |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
 ---
 
+---
+
+## 当前轮: CODE_REVIEW v138 修复 — 2 MEDIUM + 暴露的 2 个既有根因
+
+### 修复内容
+
+| # | 问题 | 修复 | 文件 |
+|---|------|------|------|
+| MEDIUM-1 | IF 串复合条件 `"A"="A" AND "B"="C"` 错误 true（旧串比较只取第一个比较符，AND/OR 尾被丢弃） | 条件按顶层 AND/OR 分词（引号/括号感知, GW-BASIC AND 优先于 OR），逐 atom 求值（双侧串 → strcmp 真比较，否则数值），AND 组先折叠再 OR 合并 | gwsts.c |
+| MEDIUM-2 | IF..THEN..ELSE 的 ELSE 分支静默不执行（既有缺口） | 引号/括号感知扫描顶层 " THEN "/" ELSE "，else_stmt 分支执行；was_in_handler 快照不影响 | gwsts.c |
+| 暴露-1 | **自赋值 `S$ = S$ + "X"` 丢旧值**（probe 实证 LEN=1）— 既有根因 | assign_value 字符串路径先求值 RHS 再 alloc_variable（alloc 对已存在串变量清 ptr=NULL，旧顺序自引用读到 NULL）；数值路径本就先求值 | gwsts.c |
+| 暴露-2 | **类型后缀变量 `A%`/`A!`/`A#` 表达式不可读**（parse 在 % 截断 → find_variable("A") 落空 → 恒 0）— 既有根因 | parse_factor 名字字符集补 %/!/# | gweval.c |
+| 附带 | .expected 3 个文件系旧 bug 产物（test_gwdata 缺 A% 行/40-char 名字长度不等、test_int_var/let 记录 0、test_gwram 缺 concat PASS） | 按修正后真值更新 + test_gwdata.bas 变量名长度 bug 修正（28≠32） | tests/bas/ |
+| 新增 | test_if_else.bas+.expected（ELSE/复合/函数比较 6 场景）+ run_bas_tests.sh 注册 | tests/bas/ + run_bas_tests.sh |
+
+### 新单测 (+9, 3147 总)
+
+if_compound_str_and / if_compound_str_or / if_else_both (+v137 轮 7 个 IF/STRING$ 用例后总计 18)
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3147/3147 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 套件 | ✅ **73/73**（+test_if_else；test_gwdata/let/int_var/gwram 真值修正后全 PASS） |
+| 孤儿检测 | ✅ **826 = 826** |
+| probe 实证 | ✅ AND(真/假)/OR(假/真)/优先级 (T AND T) OR F=T；ELSE 双分支；自赋值 LEN 1→2→3；A%=100 IF/赋值 |
+
+---
 ## 上一轮: M2 第 2 批第 1 项 — 字符串函数一致性审计 (复用 INSTR 模式, 8cad67d)
 
 ---

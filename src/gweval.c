@@ -309,7 +309,10 @@ static char *parse_string_expression(parser_t *p) {
             if (index < 0) index = 0;
             
             if (parser_match(p, ')')) {
-                return biptrg_get_array_string(name, index);
+                result = biptrg_get_array_string(name, index);
+                /* fall through to concat loop (v138: S$ = S$ + "X" idiom —
+                 * early return silently dropped the "+ ..." tail) */
+                goto after_name;
             }
         }
         
@@ -318,17 +321,22 @@ static char *parse_string_expression(parser_t *p) {
         if (v && v->type == VT_STRING && v->value.s.ptr) {
             if (v->is_field) {
                 /* Field variables may not be null-terminated - create a copy */
-                char *result = gwdata_alloc_string(v->value.s.len + 1);
-                if (result) {
-                    memcpy(result, v->value.s.ptr, v->value.s.len);
-                    result[v->value.s.len] = '\0';
+                char *fcopy = gwdata_alloc_string(v->value.s.len + 1);
+                if (fcopy) {
+                    memcpy(fcopy, v->value.s.ptr, v->value.s.len);
+                    fcopy[v->value.s.len] = '\0';
                 }
-                return result;
+                result = fcopy;
+            } else {
+                result = v->value.s.ptr;
             }
-            return v->value.s.ptr;
+            /* fall through to concat loop (v138: S$ = S$ + "X" idiom — the
+             * early return silently dropped the "+ ..." tail) */
+            goto after_name;
         }
     }
     
+after_name:
     /* Check for string concatenation with + */
     /* Handle cases like "Line " + STR$(I) */
     while (p->pos < p->len) {
@@ -421,7 +429,10 @@ static float parse_factor(parser_t *p) {
     if (isalpha((unsigned char)c)) {
         char name[41];
         size_t i = 0;
-        while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_' || p->input[p->pos] == '$') && i < sizeof(name) - 1) {
+        /* v138: include GW-BASIC type suffixes %, !, # — typed numeric
+         * variables (A%, A!, A#) were unreadable in expressions (parse cut
+         * at the suffix, find_variable("A") missed "A%") */
+        while (p->pos < p->len && (isalnum((unsigned char)p->input[p->pos]) || p->input[p->pos] == '_' || p->input[p->pos] == '$' || p->input[p->pos] == '%' || p->input[p->pos] == '!' || p->input[p->pos] == '#') && i < sizeof(name) - 1) {
             name[i++] = p->input[p->pos++];
         }
         name[i] = '\0';

@@ -83,6 +83,7 @@ IMPLEMENTED_TESTS=(
     "test_gwdata.bas"
     "test_gwram.bas"
     "test_on_goto.bas"
+    "test_if_else.bas"
     "test_onerr_off.bas"
 )
 

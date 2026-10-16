@@ -3,10 +3,11 @@ FRE(0) = 16342
 FRE(str) = 16330
 PASS: FRE(0) returns memory
 TEST 2: String memory allocation
-FRE after strings: 16048
+PASS: String concatenation
+FRE after strings: 10822
 TEST 3: Array memory allocation
 PASS: Array assignment
-FRE after array: 15974
+FRE after array: 10748
 TEST 4: CLEAR statement
 PASS: CLEAR resets variables
 TEST 5: Large array
