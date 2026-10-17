@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v138 修复完成 (IF 复合串条件 AND/OR + IF..THEN..ELSE + 自赋值 S$=S$+X 根因) ；下一步 GENGRP 深化 (PSET/PRESET/LINE) |
+| **当前阶段** | CODE_REVIEW v139 复核确认轮 0 问题 (v138 全部关闭, IF 语义正式闭环)；下一步 M2 第 2 批 GENGRP 深化 (PSET/PRESET/LINE) |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -13,7 +13,37 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v138 修复 — 2 MEDIUM + 暴露的 2 个既有根因
+---
+
+## 当前轮: CODE_REVIEW v139 (复核确认轮, 0 问题) — IF 语义正式闭环
+
+### 复核确认
+
+| v138 修复 | v139 独立验证 |
+|----------|--------------|
+| MEDIUM-1 IF 复合串条件 (AND/OR 拆分 + AND 优先折叠) | ✅ probe R1N/R2Y/R3Y + 优先级 P1Y/P2N |
+| MEDIUM-2 IF..THEN..ELSE | ✅ probe R4N (else 执行) / R5Y |
+| 根因: 拼接链丢尾部 (S$=AX) | ✅ |
+| 根因: 类型后缀变量不可读 (B=6/C=5) | ✅ |
+| 根因: 自赋值清值 | ✅ |
+
+### 独立验证结果（当前 checkout）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单元测试 | ✅ **3147/3147 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 集成套件 | ✅ **73/73 全 PASS, 0 跳过** |
+| 孤儿检测 | ✅ **826=826** |
+
+### 观察项（不计问题, 后续批次）
+
+1. IF atom 上限 16 — 超限降级数字回退（实际条件极少超此规模）
+2. `IF <cond> THEN <line#>` 行号跳转路径 — M2 IF 深化时验证
+3. 后缀与数组/字段组合（`A%()`、`A!$`）+ 无括号字符串函数调用 — 类型系统审计收尾
+
+---
+## 上一轮: CODE_REVIEW v138 修复 — 2 MEDIUM + 暴露的 2 个既有根因
 
 ### 修复内容
 
@@ -117,7 +147,7 @@ string_vararg / string_funcarg / string_numericfuncarg / numeric_ctx_chr / numer
 | 2 | 中期: gwram_alloc NULL 全面 OM 审计; INSTR 数字变量 start .bas 场景; CI 门禁 |
 
 ## 更新时间
-2026-10-14
+2026-10-17
 
 ## 原则
 严格按 PLAN_FRESH.md "每模块 7 步 TDD 工作流" 执行。实现前先查 ASM 源码定位；添加测试/实现前先查是否已存在。回归同时跑 mingw32-make test + ./tests/test_gwbasic.exe + run_bas_tests.sh。每逻辑组只跑一轮全套验证 (v131 教训)。
