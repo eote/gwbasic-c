@@ -482,6 +482,166 @@ int gwsts_exec_statement(const char *text) {
             if (expr) gwram_free(expr);
         }
     }
+    /* SCREEN statement: SCREEN <mode> (v138 M2: 0/1/2 → gengrp mode) */
+    else if (starts_with(trimmed, "SCREEN ")) {
+        float mode = gweval_eval_numeric(trimmed + 7);
+        if (gwdata_get_error() == 0) {
+            gengrp_set_screen_mode((int)mode);
+            result = SUCCESS;
+        } else {
+            result = ERROR;
+        }
+    }
+    /* PSET/PRESET statement: PSET[(x,y)][,color] — coordinates are
+     * expressions (ASM SCAND); default color FORCLR/BAKCLR; out-of-bounds
+     * silently skipped (ASM JAE PSTNOT) */
+    else if (starts_with(trimmed, "PSET") || starts_with(trimmed, "PRESET")) {
+        bool is_preset = starts_with(trimmed, "PRESET");
+        const char *p = trimmed + (is_preset ? 6 : 4);
+        while (*p && isspace((unsigned char)*p)) p++;
+        int x = 0, y = 0, color = -1;
+        if (*p == '(') {
+            p++;
+            char *xbuf[1]; (void)xbuf;
+            /* 表达式坐标: 用 gweval_eval_numeric 逐段解析 (逗号/括号切分) */
+            const char *comma = strchr(p, ',');
+            const char *closep = strchr(p, ')');
+            if (comma && closep && comma < closep) {
+                char xbuf2[128], ybuf2[128];
+                size_t xl = (size_t)(comma - p);
+                if (xl < sizeof(xbuf2)) {
+                    memcpy(xbuf2, p, xl); xbuf2[xl] = '\0';
+                    x = (int)gweval_eval_numeric(xbuf2);
+                    const char *seg = comma + 1;
+                    const char *rest_end = closep;
+                    /* y 段到 ')' 或下一个 ',' (color 分隔) */
+                    int depth = 0; bool inq = false; const char *e = seg;
+                    while (e < rest_end) {
+                        char cc2 = *e;
+                        if (cc2 == '"') { inq = !inq; continue; }
+                        if (!inq) {
+                            if (cc2 == '(') depth++;
+                            else if (cc2 == ')') { if (depth == 0) break; depth--; }
+                            else if (cc2 == ',' && depth == 0) break;
+                        }
+                        e++;
+                    }
+                    size_t yl = (size_t)(e - seg);
+                    if (yl < sizeof(ybuf2)) {
+                        memcpy(ybuf2, seg, yl); ybuf2[yl] = '\0';
+                        y = (int)gweval_eval_numeric(ybuf2);
+                    }
+                    p = closep + 1;
+                }
+            }
+            /* optional ,color */
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p == ',') {
+                p++;
+                char cbuf[128];
+                size_t cl = strlen(p);
+                if (cl >= sizeof(cbuf)) cl = sizeof(cbuf) - 1;
+                memcpy(cbuf, p, cl); cbuf[cl] = '\0';
+                color = (int)gweval_eval_numeric(cbuf);
+            }
+        }
+        if (gwdata_get_error() != 0) {
+            result = ERROR;
+        } else {
+            if (is_preset) gengrp_preset(x, y, color);
+            else gengrp_pset(x, y, color);
+            result = SUCCESS;
+        }
+    }
+    /* LINE statement: LINE [(x1,y1)]-(x2,y2)[,color[,B[F]]] — expression
+     * coordinates; omitted first coord = current graphics cursor.
+     * NOTE: must not shadow "LINE INPUT #n, var$" (its own branch below) */
+    else if (starts_with(trimmed, "LINE ") && !starts_with(trimmed, "LINE INPUT ")) {
+        const char *p = trimmed + 5;
+        while (*p && isspace((unsigned char)*p)) p++;
+        int x1 = 0, y1 = 0, x2 = 0, y2 = 0, color = -1;
+        bool box = false, box_fill = false;
+        bool has_first = false;
+        char segbuf[128];
+        /* helper: read one parenthesized coordinate pair at p */
+        if (*p == '(') {
+            const char *closep = strchr(p, ')');
+            if (closep) {
+                size_t segl = (size_t)(closep - p - 1);
+                if (segl < sizeof(segbuf)) {
+                    memcpy(segbuf, p + 1, segl); segbuf[segl] = '\0';
+                    char *cm = strchr(segbuf, ',');
+                    if (cm) {
+                        *cm = '\0';
+                        x1 = (int)gweval_eval_numeric(segbuf);
+                        y1 = (int)gweval_eval_numeric(cm + 1);
+                        has_first = true;
+                    }
+                }
+                p = closep + 1;
+            }
+        }
+        while (*p && isspace((unsigned char)*p)) p++;
+        /* '-' 分隔符: 无论首坐标是否省略都要消费 (GW-BASIC LINE -(x,y)
+         * 省略首坐标 = 从当前 graphics cursor 画) */
+        if (*p == '-') p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == '(') {
+            const char *closep = strchr(p, ')');
+            if (closep) {
+                size_t segl = (size_t)(closep - p - 1);
+                if (segl < sizeof(segbuf)) {
+                    memcpy(segbuf, p + 1, segl); segbuf[segl] = '\0';
+                    char *cm = strchr(segbuf, ',');
+                    if (cm) {
+                        *cm = '\0';
+                        x2 = (int)gweval_eval_numeric(segbuf);
+                        y2 = (int)gweval_eval_numeric(cm + 1);
+                    }
+                }
+                p = closep + 1;
+            }
+        }
+        /* [,color[,B[F]]] */
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ',') {
+            p++;
+            while (*p && isspace((unsigned char)*p)) p++;
+            const char *seg = p;
+            int depth = 0;
+            while (*seg && (*seg != ',' || depth > 0)) {
+                if (*seg == '(') depth++;
+                else if (*seg == ')') depth--;
+                seg++;
+            }
+            size_t cl = (size_t)(seg - p);
+            if (cl < sizeof(segbuf)) {
+                memcpy(segbuf, p, cl); segbuf[cl] = '\0';
+                color = (int)gweval_eval_numeric(segbuf);
+            }
+            p = seg;
+            if (*p == ',') {
+                p++;
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (*p == 'B' || *p == 'b') {
+                    box = true;
+                    p++;
+                    if (*p == 'F' || *p == 'f') box_fill = true;
+                }
+            }
+        }
+        if (gwdata_get_error() != 0) {
+            result = ERROR;
+        } else {
+            if (!has_first) {
+                x1 = gengrp_get_grpacx();
+                y1 = gengrp_get_grpacy();
+            }
+            if (color < 0) color = gengrp_get_forclr();
+            gengrp_line_coords(x1, y1, x2, y2, color, box ? 1 : 0, box_fill ? 1 : 0);
+            result = SUCCESS;
+        }
+    }
     /* FOR statement: FOR var = start TO limit [STEP step] */
     else if (starts_with(trimmed, "FOR ")) {
         extern int next86_for(const char **text);

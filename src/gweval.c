@@ -495,6 +495,21 @@ static float parse_factor(parser_t *p) {
                                    strcasecmp_ascii(name, "FRE") == 0 ||
                                    strcasecmp_ascii(name, "INSTR") == 0);
             
+            /* POINT(x,y) — graphics pixel read (ASM POINT GENGRP L172):
+             * returns attribute or -1 if out of bounds */
+            if (strcasecmp_ascii(name, "POINT") == 0) {
+                parser_get(p);  /* consume '(' */
+                float px = parse_expression(p);
+                if (parser_match(p, ',')) {
+                    float py = parse_expression(p);
+                    if (parser_match(p, ')')) {
+                        return (float)gengrp_point((int)px, (int)py);
+                    }
+                }
+                /* malformed → SNERR */
+                if (g_state) gwdata_set_error(2, g_state->current_line, 0);
+                return 0.0f;
+            }
             /* Check for string functions that return string: LEFT$, RIGHT$, MID$, UCASE$, LCASE$, STR$, CHR$, SPACE$, STRING$, MKI$, MKS$ */
             bool is_str_func = (strcasecmp_ascii(name, "LEFT") == 0 || strcasecmp_ascii(name, "LEFT$") == 0 ||
                                 strcasecmp_ascii(name, "RIGHT") == 0 || strcasecmp_ascii(name, "RIGHT$") == 0 ||

@@ -280,13 +280,16 @@ int gioscn_point(int x, int y);
 void gengrp_init(void);
 void gengrp_scan_coord(int *x, int *y, bool relative);
 void gengrp_pset(int x, int y, int color);
-void gengrp_preset(int x, int y);
+void gengrp_preset(int x, int y, int color);
 int gengrp_point(int x, int y);
 void gengrp_line(const char *params);
+void gengrp_line_coords(int x1, int y1, int x2, int y2, int color, int box, int box_fill);
 void gengrp_grpini(void);
 void gengrp_grprst(void);
 void gengrp_set_atr(int color);
 int gengrp_get_atr(void);
+int gengrp_get_forclr(void);
+int gengrp_get_bakclr(void);
 void gengrp_direct_pset(int x, int y, int color);
 
 /* SCNDRV module functions - Screen Driver (text mode) */
@@ -836,12 +839,13 @@ void gengrp_grpini(void);
 void gengrp_grprst(void);
 void gengrp_scan_coord(int *x, int *y, bool relative);
 void gengrp_pset(int x, int y, int color);
-void gengrp_preset(int x, int y);
+void gengrp_preset(int x, int y, int color);
 int gengrp_point(int x, int y);
 void gengrp_set_atr(int color);
 void gengrp_direct_pset(int x, int y, int color);
 int gengrp_get_atr(void);
 void gengrp_line(const char *params);
+void gengrp_line_coords(int x1, int y1, int x2, int y2, int color, int box, int box_fill);
 
 /* GENGRP accessor functions for testing */
 int gengrp_get_gxpos(void);

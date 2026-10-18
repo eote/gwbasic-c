@@ -84,6 +84,7 @@ IMPLEMENTED_TESTS=(
     "test_gwram.bas"
     "test_on_goto.bas"
     "test_if_else.bas"
+    "test_graphics.bas"
     "test_onerr_off.bas"
 )
 

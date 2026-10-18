@@ -64,7 +64,7 @@ void test_gengrp_pset(void) {
 void test_gengrp_preset(void) {
     gengrp_init();
     gengrp_grpini();
-    gengrp_preset(100, 100);  /* Background color */
+    gengrp_preset(100, 100, -1);  /* Background color (default) */
     TEST_PASS("gengrp_preset");
 }
 

@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v139 复核确认轮 0 问题 (v138 全部关闭, IF 语义正式闭环)；下一步 M2 第 2 批 GENGRP 深化 (PSET/PRESET/LINE) |
+| **当前阶段** | M2 第 2 批进行中: 图形语句批 (SCREEN/PSET/PRESET/LINE/POINT 接线) 完成；下一步 GRAPHIC 深化 (DRAW/PAINT/CIRCLE) 或类型系统审计收尾 |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -15,7 +15,51 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v139 (复核确认轮, 0 问题) — IF 语义正式闭环
+---
+
+## 当前轮: M2 第 2 批 — 图形语句接线 (SCREEN/PSET/PRESET/LINE/POINT)
+
+### ASM 依据 (GENGRP.ASM L149-186 + ADVGRP)
+
+PSET (X,Y)[,attr] 默认 FORCLR; PRESET 默认 BAKCLR; 越界静默 (JAE PSTNOT);
+LINE [(x1,y1)]-(x2,y2)[,attr[,B[F]]] 省略首坐标用 graphics cursor;
+POINT(x,y) 越界返回 -1。坐标/属性为表达式 (ASM SCAND/FRMEVL)。
+
+### 实现
+
+| # | 内容 | 文件 |
+|---|------|------|
+| 1 | gengrp_line_coords() 核心重构 (坐标已解析版, cursor=(x1,y1)→执行→(x2,y2)) | gengrp.c |
+| 2 | gengrp_preset 加 color 参数 (-1=默认 BAKCLR) + accessor get_forclr/bakclr | gengrp.c + gwbasic.h |
+| 3 | gwsts 语句分支: SCREEN/PSET/PRESET/LINE (表达式坐标, LINE 排除 LINE INPUT 遮蔽) | gwsts.c |
+| 4 | gweval POINT(x,y) 数字函数 dispatch (越界 -1) | gweval.c |
+| 5 | test_gwsts_graphics.c (10 测试) + test_graphics.bas/.expected + 注册 | tests/ + run_bas_tests.sh |
+
+### 实施中修的 2 个接线 bug
+
+1. LINE 分支遮蔽 LINE INPUT (starts_with "LINE " 先于 LINE INPUT 分支命中)
+   → file_seq 挂死 (LINE INPUT 失效, WHILE NOT EOF 恒真) — 加
+   !starts_with("LINE INPUT ") 排除
+2. gengrp_line_coords 旧代码用 g_gxpos 而非 x1 画线 (首坐标设置不同步) —
+   统一 g_gxpos=x1; 非框线 draw(x1,y1,x2,y2)
+
+### 新单测 (+30 → 3177)
+
+gfx_screen / pset_point / pset_default / preset_default / pset_oob /
+line_simple / line_bf / line_expr / line_default_start / point_oob
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3177/3177 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 套件 | ✅ **74/74**（+test_graphics；test_file_seq 等 LINE INPUT 回归全绿） |
+| 孤儿检测 | ✅ **836 = 836** |
+| .bas 实证 | PSET-POINT/PSET-DEF/PRESET-DEF=1/1/0, OOB-SILENT, LINE-P1/P2/BF/EXPR/DEF=1, POINT-OOB=-1 |
+
+---
+## 上一轮: CODE_REVIEW v139 (复核确认轮, 0 问题) — IF 语义正式闭环
 
 ### 复核确认
 
@@ -147,7 +191,7 @@ string_vararg / string_funcarg / string_numericfuncarg / numeric_ctx_chr / numer
 | 2 | 中期: gwram_alloc NULL 全面 OM 审计; INSTR 数字变量 start .bas 场景; CI 门禁 |
 
 ## 更新时间
-2026-10-17
+2026-10-18
 
 ## 原则
 严格按 PLAN_FRESH.md "每模块 7 步 TDD 工作流" 执行。实现前先查 ASM 源码定位；添加测试/实现前先查是否已存在。回归同时跑 mingw32-make test + ./tests/test_gwbasic.exe + run_bas_tests.sh。每逻辑组只跑一轮全套验证 (v131 教训)。

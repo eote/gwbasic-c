@@ -140,9 +140,10 @@ void gengrp_pset(int x, int y, int color) {
     }
 }
 
-/* PRESET (x,y)[,color] - set pixel to background color (or specified color) */
-void gengrp_preset(int x, int y) {
-    gengrp_pset(x, y, g_bakclr);
+/* PRESET (x,y)[,color] - set pixel to background color (or specified color)
+ * v138 M2: color < 0 = default BAKCLR (ASM PRESET 默认 BAKCLR) */
+void gengrp_preset(int x, int y, int color) {
+    gengrp_pset(x, y, (color < 0) ? g_bakclr : color);
 }
 
 /* POINT (x,y) - return attribute at point, or -1 if out of bounds */
@@ -196,6 +197,10 @@ void gengrp_direct_pset(int x, int y, int color) {
         fb[y * MAX_WIDTH + x] = (unsigned char)g_atrbyt;
     }
 }
+
+/* Foreground/background color accessors (v138 M2) */
+int gengrp_get_forclr(void) { return g_forclr; }
+int gengrp_get_bakclr(void) { return g_bakclr; }
 
 /* Get current attribute */
 int gengrp_get_atr(void) {
@@ -270,6 +275,43 @@ static void draw_line_bresenham(int x0, int y0, int x1, int y1, int color) {
             y0 += sy;
         }
     }
+}
+
+/* LINE core execution — coordinate/attr already resolved by caller
+ * (v138 M2: gwsts 表达式求值后调用; box=画框, box_fill=填充)
+ * ASM GENGRP: 省略首坐标用当前 graphics cursor; 执行后 cursor=(x2,y2) */
+void gengrp_line_coords(int x1, int y1, int x2, int y2, int color, int box, int box_fill) {
+    if (g_screen_mode == 0) return;
+    /* 首坐标成为当前 graphics cursor (ASM: SCAND 设置 GXPOS/GYPOS) */
+    g_gxpos = x1;
+    g_gypos = y1;
+    g_grpacx = x1;
+    g_grpacy = y1;
+    if (box) {
+        if (box_fill) {
+            int x_min = (x1 < x2) ? x1 : x2;
+            int x_max = (x1 > x2) ? x1 : x2;
+            int y_min = (y1 < y2) ? y1 : y2;
+            int y_max = (y1 > y2) ? y1 : y2;
+            for (int y = y_min; y <= y_max; y++) {
+                for (int x = x_min; x <= x_max; x++) {
+                    gengrp_pset(x, y, color);
+                }
+            }
+        } else {
+            draw_line_bresenham(x1, y1, x2, y1, color);
+            draw_line_bresenham(x2, y1, x2, y2, color);
+            draw_line_bresenham(x2, y2, x1, y2, color);
+            draw_line_bresenham(x1, y2, x1, y1, color);
+        }
+    } else {
+        draw_line_bresenham(g_gxpos, g_gypos, x2, y2, color);
+    }
+    /* ASM: 终点成为新 graphics cursor */
+    g_gxpos = x2;
+    g_gypos = y2;
+    g_grpacx = x2;
+    g_grpacy = y2;
 }
 
 /* LINE command - parse and execute LINE statement */
@@ -388,8 +430,8 @@ void gengrp_line(const char *params) {
             draw_line_bresenham(x1, y2, x1, y1, color);  /* Left */
         }
     } else {
-        /* Simple line from current position to (x2,y2) */
-        draw_line_bresenham(g_gxpos, g_gypos, x2, y2, color);
+        /* Simple line from (x1,y1) (cursor) to (x2,y2) */
+        draw_line_bresenham(x1, y1, x2, y2, color);
     }
     
     /* Update graphics cursor to end point */

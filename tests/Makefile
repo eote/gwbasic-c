@@ -89,6 +89,7 @@ TEST_SRCS = \
 	../tests/test_gwsts_renum.c \
 	../tests/test_gwsts_delete.c test_gwsts_ongoto.c \
   test_gweval_strfuncs.c \
+  test_gwsts_graphics.c \
 	../tests/test_gwmain_uaf.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)

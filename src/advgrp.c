@@ -11,7 +11,7 @@
 /* External references from gengrp/gioscn */
 extern void gengrp_init(void);
 extern void gengrp_pset(int x, int y, int color);
-extern void gengrp_preset(int x, int y);
+extern void gengrp_preset(int x, int y, int color);
 extern int gengrp_point(int x, int y);
 extern void gengrp_direct_pset(int x, int y, int color);
 extern int g_fb_width;
@@ -355,7 +355,7 @@ int advgrp_put(int x, int y, const char *array_name, int action) {
                     gengrp_direct_pset(sx, sy, pixel);
                     break;
                 case 2:  /* PRESET */
-                    gengrp_preset(sx, sy);
+                    gengrp_preset(sx, sy, -1);
                     break;
                 case 3:  /* AND */
                     {
