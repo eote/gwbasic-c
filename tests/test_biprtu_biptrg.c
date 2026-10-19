@@ -131,23 +131,29 @@ void test_array_bounds(void) {
     val = biptrg_get_array_element("A", 9);
     TEST_ASSERT_EQ_INT((int)val, 2, "get A(9)");
     
-    /* Negative index clamped to 0 */
+    /* v141 MEDIUM-1: out-of-range subscript → ERRBS (ASM FCERRG), not clamp */
+    gwdata_clear_error();
     rc = biptrg_set_array_element("A", -1, 3.0f);
-    TEST_ASSERT_EQ_INT(rc, 0, "set A(-1) clamped");
+    TEST_ASSERT(rc != 0, "set A(-1) rejected");
+    TEST_ASSERT(gwdata_get_error() != 0, "set A(-1) raises ERRBS");
+    gwdata_clear_error();
     val = biptrg_get_array_element("A", 0);
-    TEST_ASSERT_EQ_INT((int)val, 3, "A(-1) -> A(0)");
+    TEST_ASSERT_EQ_INT((int)val, 1, "A(0) unchanged after A(-1) reject");
     
-    /* Index >= size clamped to size-1 */
-    rc = biptrg_set_array_element("A", 10, 4.0f);  /* 10 is now valid (DIM A(10) creates 0..10) */
+    /* Index 10 is valid (DIM A(10) creates 0..10) */
+    rc = biptrg_set_array_element("A", 10, 4.0f);
     TEST_ASSERT_EQ_INT(rc, 0, "set A(10) - valid index");
     val = biptrg_get_array_element("A", 10);
     TEST_ASSERT_EQ_INT((int)val, 4, "A(10) stored at 10");
     
-    /* Index > size clamped to size-1 */
+    /* Index > size → ERRBS */
+    gwdata_clear_error();
     rc = biptrg_set_array_element("A", 11, 5.0f);
-    TEST_ASSERT_EQ_INT(rc, 0, "set A(11) clamped");
+    TEST_ASSERT(rc != 0, "set A(11) rejected");
+    TEST_ASSERT(gwdata_get_error() != 0, "set A(11) raises ERRBS");
+    gwdata_clear_error();
     val = biptrg_get_array_element("A", 10);
-    TEST_ASSERT_EQ_INT((int)val, 5, "A(11) -> A(10)");
+    TEST_ASSERT_EQ_INT((int)val, 4, "A(10) unchanged after A(11) reject");
     
     TEST_PASS("array bounds clamp");
 }

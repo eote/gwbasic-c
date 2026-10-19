@@ -122,11 +122,15 @@ void test_biptrg_index_clamp_high(void) {
     float val = biptrg_get_array_element("ARR", 5);
     TEST_ASSERT_EQ_INT((int)val, 77, "index 5 is valid");
     
-    /* Out of bounds high - should clamp to last */
-    biptrg_set_array_element("ARR", 100, 88.0f);
-    val = biptrg_get_array_element("ARR", 100);
-    TEST_ASSERT_EQ_INT((int)val, 88, "clamped to last element (5)");
-    TEST_PASS("index clamp high");
+    /* v141: out of bounds high → ERRBS, value not written */
+    gwdata_clear_error();
+    int rc = biptrg_set_array_element("ARR", 100, 88.0f);
+    TEST_ASSERT(rc != 0, "set ARR(100) rejected");
+    TEST_ASSERT(gwdata_get_error() != 0, "set ARR(100) raises ERRBS");
+    gwdata_clear_error();
+    val = biptrg_get_array_element("ARR", 5);
+    TEST_ASSERT_EQ_INT((int)val, 77, "ARR(5) unchanged after OOB reject");
+    TEST_PASS("index oob high errors");
 }
 
 /* Test array bounds (indices clamp low) */
@@ -134,11 +138,12 @@ void test_biptrg_index_clamp_low(void) {
     setup();
     biptrg_dim_array("ARR", 5, VT_SINGLE);
     
-    /* Out of bounds low - should clamp to first */
-    biptrg_set_array_element("ARR", -5, 33.0f);
-    float val = biptrg_get_array_element("ARR", -5);
-    TEST_ASSERT_EQ_INT((int)val, 33, "clamped to first element");
-    TEST_PASS("index clamp low");
+    /* v141: out of bounds low → ERRBS */
+    gwdata_clear_error();
+    int rc = biptrg_set_array_element("ARR", -5, 33.0f);
+    TEST_ASSERT(rc != 0, "set ARR(-5) rejected");
+    TEST_ASSERT(gwdata_get_error() != 0, "set ARR(-5) raises ERRBS");
+    TEST_PASS("index oob low errors");
 }
 
 /* Test get array element from non-existent array */
@@ -152,9 +157,13 @@ void test_biptrg_get_nonexistent(void) {
 /* Test set array element on non-existent array */
 void test_biptrg_set_nonexistent(void) {
     setup();
+    /* v141 MEDIUM-1: implicit declaration — set on unknown name auto-DIMs
+     * A(10) then writes successfully (GW-BASIC ASM semantics) */
     int rc = biptrg_set_array_element("NOEXIST", 0, 1.0f);
-    TEST_ASSERT(rc != 0, "set on nonexistent returns error");
-    TEST_PASS("set on non-existent");
+    TEST_ASSERT_EQ_INT(rc, 0, "implicit array set succeeds");
+    float val = biptrg_get_array_element("NOEXIST", 0);
+    TEST_ASSERT_EQ_INT((int)val, 1, "implicit array read back 1");
+    TEST_PASS("set on non-existent implicit-dims");
 }
 
 /* Test set string on numeric array (type mismatch) */

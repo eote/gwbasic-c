@@ -21,6 +21,31 @@ void biptrg_init(void) {
     /* No initialization needed */
 }
 
+
+/* ===== v141 MEDIUM-1: implicit array declaration =====
+ * GW-BASIC ASM: an array reference to an un-DIMed name auto-declares it
+ * with subscript 0..10 (11 elements) on first use (FNDFRD/ARRAY machinery).
+ * Type inferred from the name's type suffix ($ # ! %), default single. */
+static var_type_t biptrg_infer_type_from_name(const char *name) {
+    size_t n = strlen(name);
+    if (n == 0) return VT_SINGLE;
+    char last = name[n - 1];
+    if (last == '$') return VT_STRING;
+    if (last == '#') return VT_DOUBLE;
+    if (last == '%') return VT_INTEGER;
+    return VT_SINGLE;   /* ! or no suffix */
+}
+
+/* Ensure an array variable exists; if the name is unknown, auto-DIM it as
+ * A(10) (indices 0..10). Returns the variable or NULL. */
+static struct variable *biptrg_ensure_array(const char *name) {
+    struct variable *v = gwdata_find_variable(name);
+    if (v) return v;
+    var_type_t type = biptrg_infer_type_from_name(name);
+    if (biptrg_dim_array(name, 10, type) != SUCCESS) return NULL;
+    return gwdata_find_variable(name);
+}
+
 /* DIM statement - create array */
 int biptrg_dim_array(const char *name, int size, var_type_t type) {
     if (!name || size <= 0) return ERROR;
@@ -140,7 +165,7 @@ int biptrg_set_array_element_multi(const char *name, const int *indices, float v
     
     DEBUG_PRINT("biptrg_set_array_element_multi: name='%s', indices=[%d, %d], val=%f", name, indices[0], indices[1], val);
     
-    struct variable *v = gwdata_find_variable(name);
+    struct variable *v = biptrg_ensure_array(name);
     if (!v) return ERROR;
     
     array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
@@ -148,6 +173,15 @@ int biptrg_set_array_element_multi(const char *name, const int *indices, float v
     
     if (desc->magic != ARRAY_MAGIC) return ERROR;
     if (desc->type == VT_STRING) return ERROR;
+    
+    /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
+    for (int i = 0; i < desc->dimensions; i++) {
+        if (indices[i] < 0 || indices[i] >= desc->dim_sizes[i]) {
+            extern uint16_t g_curlin;
+            gwdata_set_error(ERRBS, g_curlin, 0);
+            return ERROR;
+        }
+    }
     
     int flat_index = compute_flat_index(desc, indices);
     DEBUG_PRINT("biptrg_set_array_element_multi: flat_index=%d, dim_sizes=[%d, %d], val=%f", flat_index, desc->dim_sizes[0], desc->dim_sizes[1], val);
@@ -174,7 +208,7 @@ float biptrg_get_array_element_multi(const char *name, const int *indices) {
     
     DEBUG_PRINT("biptrg_get_array_element_multi: name='%s', indices=[%d, %d]", name, indices[0], indices[1]);
     
-    struct variable *v = gwdata_find_variable(name);
+    struct variable *v = biptrg_ensure_array(name);
     if (!v) return 0.0f;
     
     array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
@@ -183,6 +217,15 @@ float biptrg_get_array_element_multi(const char *name, const int *indices) {
     if (desc->magic != ARRAY_MAGIC) return 0.0f;
     if (desc->type == VT_STRING) return 0.0f;
     if (!desc->data) return 0.0f;
+    
+    /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
+    for (int i = 0; i < desc->dimensions; i++) {
+        if (indices[i] < 0 || indices[i] >= desc->dim_sizes[i]) {
+            extern uint16_t g_curlin;
+            gwdata_set_error(ERRBS, g_curlin, 0);
+            return 0.0f;
+        }
+    }
     
     int flat_index = compute_flat_index(desc, indices);
     DEBUG_PRINT("biptrg_get_array_element_multi: flat_index=%d, dim_sizes=[%d, %d]", flat_index, desc->dim_sizes[0], desc->dim_sizes[1]);
@@ -213,7 +256,7 @@ int biptrg_set_array_element(const char *name, int index, float val) {
     
     DEBUG_PRINT("biptrg_set_array_element: name='%s', index=%d, val=%f", name, index, val);
     
-    struct variable *v = gwdata_find_variable(name);
+    struct variable *v = biptrg_ensure_array(name);
     if (!v) {
         DEBUG_PRINT("biptrg_set_array_element: variable not found");
         return ERROR;
@@ -237,9 +280,12 @@ int biptrg_set_array_element(const char *name, int index, float val) {
     
     DEBUG_PRINT("biptrg_set_array_element: desc->size=%d, desc->dimensions=%d", desc->size, desc->dimensions);
     
-    /* GW-BASIC: clamp index to valid range */
-    if (index < 0) index = 0;
-    if (index >= desc->size) index = desc->size - 1;
+    /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
+    if (index < 0 || index >= desc->size) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(ERRBS, g_curlin, 0);
+        return ERROR;
+    }
     
     DEBUG_PRINT("biptrg_set_array_element: final index=%d", index);
     
@@ -265,7 +311,7 @@ float biptrg_get_array_element(const char *name, int index) {
     
     DEBUG_PRINT("biptrg_get_array_element: name='%s', index=%d", name, index);
     
-    struct variable *v = gwdata_find_variable(name);
+    struct variable *v = biptrg_ensure_array(name);
     if (!v) {
         DEBUG_PRINT("biptrg_get_array_element: variable not found");
         return 0.0f;
@@ -293,9 +339,12 @@ float biptrg_get_array_element(const char *name, int index) {
     
     DEBUG_PRINT("biptrg_get_array_element: desc->size=%d, desc->dimensions=%d", desc->size, desc->dimensions);
     
-    /* GW-BASIC: clamp index to valid range */
-    if (index < 0) index = 0;
-    if (index >= desc->size) index = desc->size - 1;
+    /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
+    if (index < 0 || index >= desc->size) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(ERRBS, g_curlin, 0);
+        return 0.0f;
+    }
     
     DEBUG_PRINT("biptrg_get_array_element: final index=%d", index);
     
@@ -317,7 +366,7 @@ float biptrg_get_array_element(const char *name, int index) {
 int biptrg_set_array_string(const char *name, int index, const char *str) {
     if (!name || !str) return ERROR;
     
-    struct variable *v = gwdata_find_variable(name);
+    struct variable *v = biptrg_ensure_array(name);
     if (!v) return ERROR;
     
     array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
@@ -325,9 +374,12 @@ int biptrg_set_array_string(const char *name, int index, const char *str) {
     
     if (desc->type != VT_STRING) return ERROR;
     
-    /* GW-BASIC: clamp index to valid range */
-    if (index < 0) index = 0;
-    if (index >= desc->size) index = desc->size - 1;
+    /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
+    if (index < 0 || index >= desc->size) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(ERRBS, g_curlin, 0);
+        return ERROR;
+    }
     
     char **data = (char **)desc->data;
     
@@ -348,7 +400,7 @@ int biptrg_set_array_string(const char *name, int index, const char *str) {
 char *biptrg_get_array_string(const char *name, int index) {
     if (!name) return NULL;
     
-    struct variable *v = gwdata_find_variable(name);
+    struct variable *v = biptrg_ensure_array(name);
     if (!v) return NULL;
     
     array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
@@ -356,9 +408,12 @@ char *biptrg_get_array_string(const char *name, int index) {
     
     if (desc->type != VT_STRING) return NULL;
     
-    /* GW-BASIC: clamp index to valid range */
-    if (index < 0) index = 0;
-    if (index >= desc->size) index = desc->size - 1;
+    /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
+    if (index < 0 || index >= desc->size) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(ERRBS, g_curlin, 0);
+        return NULL;
+    }
     
     char **data = (char **)desc->data;
     return data[index];

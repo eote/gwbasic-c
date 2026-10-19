@@ -63,9 +63,12 @@ static WORD *g_bvtab[4] = {0};
 
 /* Module initialization */
 void itsa86_init(void) {
-    /* Initialize data segment base */
-    g_data_seg = (WORD)(uintptr_t)&g_data_seg & 0xF000;
-    g_code_seg = (WORD)(uintptr_t)itsa86_init & 0xF000;
+    /* Initialize data segment base.
+     * v141: |= 0x1000 guarantees a non-zero segment (real .exe load
+     * segments are never 0); (addr & 0xF000) alone can be 0 depending on
+     * code layout, making mapclc's NEWDS flaky. */
+    g_data_seg = (WORD)((uintptr_t)&g_data_seg & 0xF000) | 0x1000;
+    g_code_seg = (WORD)((uintptr_t)itsa86_init & 0xF000) | 0x1000;
     
     /* Initialize memory map variables */
     g_cswflg = 0;

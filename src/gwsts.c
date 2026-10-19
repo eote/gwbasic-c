@@ -31,6 +31,64 @@ void gwsts_init(void) {
     /* No initialization needed */
 }
 
+
+/* ===== v141 MEDIUM-2: shared coordinate-pair scanner =====
+ * Depth/quote-aware: finds the matching ')' for the '(' at **pp (which must
+ * point at '('), splits the inside at the first top-level ',' and evaluates
+ * both halves as expressions. Advances *pp past ')'. Returns false on
+ * malformed input (no comma / buffer overflow). Nested parens and quoted
+ * strings inside either half are skipped, so PSET(A(1),A(2)) works. */
+static bool gwsts_parse_coord_pair(const char **pp, int *x, int *y) {
+    const char *p = *pp;          /* at '(' */
+    const char *q = p + 1;        /* inside */
+    int depth = 0;
+    bool inq = false;
+    const char *closep = NULL;
+    while (*q) {
+        char c = *q;
+        if (inq) {
+            if (c == '"') inq = false;
+        } else if (c == '"') {
+            inq = true;
+        } else if (c == '(') {
+            depth++;
+        } else if (c == ')') {
+            if (depth == 0) { closep = q; break; }
+            depth--;
+        }
+        q++;
+    }
+    if (!closep) return false;
+
+    /* top-level comma inside (p+1 .. closep) */
+    const char *seg = p + 1;
+    depth = 0; inq = false;
+    const char *cm = NULL;
+    for (const char *e = seg; e < closep; e++) {
+        char c = *e;
+        if (inq) {
+            if (c == '"') inq = false;
+            continue;
+        }
+        if (c == '"') { inq = true; continue; }
+        if (c == '(') { depth++; continue; }
+        if (c == ')') { depth--; continue; }
+        if (c == ',' && depth == 0) { cm = e; break; }
+    }
+    if (!cm) return false;
+
+    char xbuf[128], ybuf[128];
+    size_t xl = (size_t)(cm - seg);
+    size_t yl = (size_t)(closep - (cm + 1));
+    if (xl >= sizeof(xbuf) || yl >= sizeof(ybuf)) return false;
+    memcpy(xbuf, seg, xl); xbuf[xl] = '\0';
+    memcpy(ybuf, cm + 1, yl); ybuf[yl] = '\0';
+    *x = (int)gweval_eval_numeric(xbuf);
+    *y = (int)gweval_eval_numeric(ybuf);
+    *pp = closep + 1;
+    return true;
+}
+
 /* FIELD statement: FIELD #filenum, width AS var$, width AS var$, ... */
 int gwsts_handle_field(const char *trimmed) {
     /* Make a mutable copy since we need to modify the string */
@@ -482,9 +540,15 @@ int gwsts_exec_statement(const char *text) {
             if (expr) gwram_free(expr);
         }
     }
-    /* SCREEN statement: SCREEN <mode> (v138 M2: 0/1/2 → gengrp mode) */
-    else if (starts_with(trimmed, "SCREEN ")) {
-        float mode = gweval_eval_numeric(trimmed + 7);
+    /* SCREEN statement: SCREEN <mode> (v138 M2: 0/1/2 → gengrp mode).
+     * v141 LOW-1: compact "SCREEN1" allowed — keyword followed by space
+     * or digit (GW-BASIC keywords don't require the space). */
+    else if (starts_with(trimmed, "SCREEN") &&
+             (trimmed[6] == ' ' || trimmed[6] == '\t' ||
+              isdigit((unsigned char)trimmed[6]))) {
+        const char *mp = trimmed + 6;
+        while (*mp && isspace((unsigned char)*mp)) mp++;
+        float mode = gweval_eval_numeric(mp);
         if (gwdata_get_error() == 0) {
             gengrp_set_screen_mode((int)mode);
             result = SUCCESS;
@@ -501,39 +565,9 @@ int gwsts_exec_statement(const char *text) {
         while (*p && isspace((unsigned char)*p)) p++;
         int x = 0, y = 0, color = -1;
         if (*p == '(') {
-            p++;
-            char *xbuf[1]; (void)xbuf;
-            /* 表达式坐标: 用 gweval_eval_numeric 逐段解析 (逗号/括号切分) */
-            const char *comma = strchr(p, ',');
-            const char *closep = strchr(p, ')');
-            if (comma && closep && comma < closep) {
-                char xbuf2[128], ybuf2[128];
-                size_t xl = (size_t)(comma - p);
-                if (xl < sizeof(xbuf2)) {
-                    memcpy(xbuf2, p, xl); xbuf2[xl] = '\0';
-                    x = (int)gweval_eval_numeric(xbuf2);
-                    const char *seg = comma + 1;
-                    const char *rest_end = closep;
-                    /* y 段到 ')' 或下一个 ',' (color 分隔) */
-                    int depth = 0; bool inq = false; const char *e = seg;
-                    while (e < rest_end) {
-                        char cc2 = *e;
-                        if (cc2 == '"') { inq = !inq; continue; }
-                        if (!inq) {
-                            if (cc2 == '(') depth++;
-                            else if (cc2 == ')') { if (depth == 0) break; depth--; }
-                            else if (cc2 == ',' && depth == 0) break;
-                        }
-                        e++;
-                    }
-                    size_t yl = (size_t)(e - seg);
-                    if (yl < sizeof(ybuf2)) {
-                        memcpy(ybuf2, seg, yl); ybuf2[yl] = '\0';
-                        y = (int)gweval_eval_numeric(ybuf2);
-                    }
-                    p = closep + 1;
-                }
-            }
+            /* v141 MEDIUM-2: depth/quote-aware shared scanner (handles
+             * nested parens like PSET(A(1),A(2))) */
+            gwsts_parse_coord_pair(&p, &x, &y);
             /* optional ,color */
             while (*p && isspace((unsigned char)*p)) p++;
             if (*p == ',') {
@@ -556,30 +590,19 @@ int gwsts_exec_statement(const char *text) {
     /* LINE statement: LINE [(x1,y1)]-(x2,y2)[,color[,B[F]]] — expression
      * coordinates; omitted first coord = current graphics cursor.
      * NOTE: must not shadow "LINE INPUT #n, var$" (its own branch below) */
-    else if (starts_with(trimmed, "LINE ") && !starts_with(trimmed, "LINE INPUT ")) {
-        const char *p = trimmed + 5;
+    else if (starts_with(trimmed, "LINE") && !starts_with(trimmed, "LINE INPUT") &&
+             (trimmed[4] == '\0' || trimmed[4] == ' ' || trimmed[4] == '\t' ||
+              trimmed[4] == '(')) {
+        /* v141 LOW-1: compact "LINE(" allowed — keyword must be followed by
+         * space/tab/'('/end (not an identifier char, avoiding LINEABC hits) */
+        const char *p = trimmed + 4;
         while (*p && isspace((unsigned char)*p)) p++;
         int x1 = 0, y1 = 0, x2 = 0, y2 = 0, color = -1;
         bool box = false, box_fill = false;
         bool has_first = false;
-        char segbuf[128];
-        /* helper: read one parenthesized coordinate pair at p */
+        /* v141 MEDIUM-2: depth/quote-aware shared scanner for both coords */
         if (*p == '(') {
-            const char *closep = strchr(p, ')');
-            if (closep) {
-                size_t segl = (size_t)(closep - p - 1);
-                if (segl < sizeof(segbuf)) {
-                    memcpy(segbuf, p + 1, segl); segbuf[segl] = '\0';
-                    char *cm = strchr(segbuf, ',');
-                    if (cm) {
-                        *cm = '\0';
-                        x1 = (int)gweval_eval_numeric(segbuf);
-                        y1 = (int)gweval_eval_numeric(cm + 1);
-                        has_first = true;
-                    }
-                }
-                p = closep + 1;
-            }
+            has_first = gwsts_parse_coord_pair(&p, &x1, &y1);
         }
         while (*p && isspace((unsigned char)*p)) p++;
         /* '-' 分隔符: 无论首坐标是否省略都要消费 (GW-BASIC LINE -(x,y)
@@ -587,20 +610,7 @@ int gwsts_exec_statement(const char *text) {
         if (*p == '-') p++;
         while (*p && isspace((unsigned char)*p)) p++;
         if (*p == '(') {
-            const char *closep = strchr(p, ')');
-            if (closep) {
-                size_t segl = (size_t)(closep - p - 1);
-                if (segl < sizeof(segbuf)) {
-                    memcpy(segbuf, p + 1, segl); segbuf[segl] = '\0';
-                    char *cm = strchr(segbuf, ',');
-                    if (cm) {
-                        *cm = '\0';
-                        x2 = (int)gweval_eval_numeric(segbuf);
-                        y2 = (int)gweval_eval_numeric(cm + 1);
-                    }
-                }
-                p = closep + 1;
-            }
+            gwsts_parse_coord_pair(&p, &x2, &y2);
         }
         /* [,color[,B[F]]] */
         while (*p && isspace((unsigned char)*p)) p++;
@@ -615,9 +625,10 @@ int gwsts_exec_statement(const char *text) {
                 seg++;
             }
             size_t cl = (size_t)(seg - p);
-            if (cl < sizeof(segbuf)) {
-                memcpy(segbuf, p, cl); segbuf[cl] = '\0';
-                color = (int)gweval_eval_numeric(segbuf);
+            char colorbuf[128];
+            if (cl < sizeof(colorbuf)) {
+                memcpy(colorbuf, p, cl); colorbuf[cl] = '\0';
+                color = (int)gweval_eval_numeric(colorbuf);
             }
             p = seg;
             if (*p == ',') {

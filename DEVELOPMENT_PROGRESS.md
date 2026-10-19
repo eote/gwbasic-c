@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | M2 第 2 批进行中: 图形语句批 (SCREEN/PSET/PRESET/LINE/POINT 接线) 完成；下一步 GRAPHIC 深化 (DRAW/PAINT/CIRCLE) 或类型系统审计收尾 |
+| **当前阶段** | CODE_REVIEW v141 修复完成 (MEDIUM-1 隐式数组声明 + MEDIUM-2 嵌套坐标解析 + LOW-1 紧凑写法)；下一步 M2 图形深化 (CIRCLE/PAINT/GET/PUT) |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -17,7 +17,50 @@
 
 ---
 
-## 当前轮: M2 第 2 批 — 图形语句接线 (SCREEN/PSET/PRESET/LINE/POINT)
+---
+
+## 当前轮: CODE_REVIEW v141 修复 — 隐式数组 + 嵌套坐标 + 紧凑写法
+
+### 修复内容 (2 MEDIUM + 1 LOW + 1 flaky)
+
+| # | 问题 | 修复 | 文件 |
+|---|------|------|------|
+| MEDIUM-1 | 未 DIM 数组隐式声明缺失 (A(1)=5 → Error) | biptrg 6 个数组入口 (get/set 单/多维 + 字符串) 加 biptrg_ensure_array: 未知名自动 DIM(10) 0-10, 类型按后缀 $ # ! % 推断; 下标越界 → ERRBS=9 (ASM FCERRG, 修复旧 clamp 静默) | biptrg.c |
+| MEDIUM-2 | PSET/PRESET 坐标裸 strchr 不感知嵌套括号 (PSET(A(1),A(1)),3 静默错位) | 抽取 gwsts_parse_coord_pair (depth/引号感知) 共享 scanner; PSET/PRESET/LINE 两处坐标全部换用 | gwsts.c |
+| LOW-1 | LINE( / SCREEN1 紧凑写法 (关键字后无空格) | LINE: starts_with("LINE") + 下一字符 ∈ {空,tab,(} (保持 LINE INPUT 排除); SCREEN: 下一字符 ∈ {空,tab,数字} | gwsts.c |
+| flaky | itsa86_mapclc_c_option 随 build 布局随机红 (addr & 0xF000 可为 0 → NEWDS=0) | itsa86_init 段值 |= 0x1000 保证非零 (真实 .exe 加载段非 0) | itsa86.c |
+
+### 旧测试断言修正 (记录 clamp bug 行为 → ASM 真值)
+
+test_biprtu_biptrg.c (A(-1)/A(11) clamp → ERRBS), test_biptrg.c
+(clamp_high/clamp_low → ERRBS; set_nonexistent → 隐式 DIM 成功) —
+与 v132 教训同型: 旧断言是 bug 产物, 按修正后语义重写。
+
+### 新测试 (+22 → 3199; 3195 红 → 3199 绿)
+
+- test_gwsts_graphics.c +6: implicit_array_assign_read / implicit_string_array
+  / implicit_array_oob / pset_array_coords / line_array_coords / compact_line_screen
+- test_biptrg.c +? (计数含 clamp 重写) — 注册后 842=842, 0 孤儿
+- test_gfx_v141.bas/.expected (套件 74→75): PSET-ARR/LINE-ARR×2/
+  COMPACT-SCREEN/LINE/IMPLICIT-NUM/STR 全绿
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3199/3199 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 套件 | ✅ **75/75**（+test_gfx_v141） |
+| 孤儿检测 | ✅ **842 = 842** |
+| .bas 实证 | PSET(A(1),A(2))→POINT=1; LINE(A(1),A(2))-(B(1),B(2)) 双端点=1; SCREEN1/LINE( 紧凑 OK; C(2)=9 隐式; S$(1)="HI" 隐式; A(11) → Error (ERRBS) |
+
+### 新发现（不计本轮问题，报 reviewer）
+
+- **观察项**: 冒号复合语句第二段赋值丢失 — `X = 1: Y = 2` → Y=0
+  (v141 前已存在, 独立既有 bug; 单行赋值正常)
+
+---
+## 上一轮: M2 第 2 批 — 图形语句接线 (SCREEN/PSET/PRESET/LINE/POINT)
 
 ### ASM 依据 (GENGRP.ASM L149-186 + ADVGRP)
 
