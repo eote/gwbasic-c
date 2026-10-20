@@ -89,6 +89,71 @@ static bool gwsts_parse_coord_pair(const char **pp, int *x, int *y) {
     return true;
 }
 
+/* ===== v143 M2: graphics GET/PUT statement handlers (ASM ADVGRP GPUTG) ===== */
+
+/* GET (x1,y1)-(x2,y2),array — save screen block into numeric array */
+static int gwsts_handle_gfx_get(const char *trimmed) {
+    const char *p = trimmed + 3;
+    while (*p && isspace((unsigned char)*p)) p++;
+    int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+    if (*p != '(') return ERROR;
+    if (!gwsts_parse_coord_pair(&p, &x1, &y1)) return ERROR;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == '-') p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '(') return ERROR;
+    if (!gwsts_parse_coord_pair(&p, &x2, &y2)) return ERROR;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != ',') return ERROR;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    /* array name (letters/digits, optional type suffix) */
+    char arrname[MAX_VAR_NAME + 1];
+    size_t n = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '%' || *p == '!' ||
+                  *p == '#' || *p == '$') && n < MAX_VAR_NAME) {
+        arrname[n++] = *p++;
+    }
+    arrname[n] = '\0';
+    if (n == 0) return ERROR;
+    return advgrp_get(x1, y1, x2, y2, arrname);
+}
+
+/* PUT (x,y),array[,action] — action: PSET/PRESET/AND/OR/XOR (default XOR) */
+static int gwsts_handle_gfx_put(const char *trimmed) {
+    const char *p = trimmed + 3;
+    while (*p && isspace((unsigned char)*p)) p++;
+    int px = 0, py = 0;
+    if (*p != '(') return ERROR;
+    if (!gwsts_parse_coord_pair(&p, &px, &py)) return ERROR;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != ',') return ERROR;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    char arrname[MAX_VAR_NAME + 1];
+    size_t n = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '%' || *p == '!' ||
+                  *p == '#' || *p == '$') && n < MAX_VAR_NAME) {
+        arrname[n++] = *p++;
+    }
+    arrname[n] = '\0';
+    if (n == 0) return ERROR;
+    /* optional ,action */
+    int action = -1;  /* -1 = default XOR (ASM GFUNTB default) */
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == ',') {
+        p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (starts_with(p, "PSET")) action = 1;
+        else if (starts_with(p, "PRESET")) action = 2;
+        else if (starts_with(p, "AND")) action = 3;
+        else if (starts_with(p, "OR")) action = 4;
+        else if (starts_with(p, "XOR")) action = 5;
+        else return ERROR;
+    }
+    return advgrp_put(px, py, arrname, action);
+}
+
 /* FIELD statement: FIELD #filenum, width AS var$, width AS var$, ... */
 int gwsts_handle_field(const char *trimmed) {
     /* Make a mutable copy since we need to modify the string */
@@ -651,6 +716,165 @@ int gwsts_exec_statement(const char *text) {
             if (color < 0) color = gengrp_get_forclr();
             gengrp_line_coords(x1, y1, x2, y2, color, box ? 1 : 0, box_fill ? 1 : 0);
             result = SUCCESS;
+        }
+    }
+    /* CIRCLE statement: CIRCLE (x,y),radius[,color[,start[,end[,aspect]]]]
+     * (ASM ADVGRP CIRCLE L460: SCAN1 coords, angles in radians, 0=east CCW;
+     * negative angle draws radius line to center; aspect<1 scales Y) */
+    else if (starts_with(trimmed, "CIRCLE") &&
+             (trimmed[6] == ' ' || trimmed[6] == '\t' || trimmed[6] == '(')) {
+        const char *p = trimmed + 6;
+        while (*p && isspace((unsigned char)*p)) p++;
+        int cx = 0, cy = 0;
+        bool ok = false;
+        if (*p == '(') {
+            ok = gwsts_parse_coord_pair(&p, &cx, &cy);
+        }
+        int radius = 0, color = -1;
+        float start_ang = 0.0f, end_ang = 6.283185f, aspect = 1.0f;
+        if (ok) {
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p == ',') {
+                p++;
+                while (*p && isspace((unsigned char)*p)) p++;
+                /* radius expression up to top-level ',' or end */
+                const char *seg = p;
+                int depth = 0;
+                while (*seg && (*seg != ',' || depth > 0)) {
+                    if (*seg == '(') depth++;
+                    else if (*seg == ')') depth--;
+                    seg++;
+                }
+                size_t cl = (size_t)(seg - p);
+                char rbuf[128];
+                if (cl < sizeof(rbuf)) {
+                    memcpy(rbuf, p, cl); rbuf[cl] = '\0';
+                    radius = (int)gweval_eval_numeric(rbuf);
+                }
+                p = seg;
+                /* [,color[,start[,end[,aspect]]]] */
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (*p == ',') {
+                    p++;
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    seg = p; depth = 0;
+                    while (*seg && (*seg != ',' || depth > 0)) {
+                        if (*seg == '(') depth++;
+                        else if (*seg == ')') depth--;
+                        seg++;
+                    }
+                    cl = (size_t)(seg - p);
+                    char cbuf[128];
+                    if (cl < sizeof(cbuf)) {
+                        memcpy(cbuf, p, cl); cbuf[cl] = '\0';
+                        color = (int)gweval_eval_numeric(cbuf);
+                    }
+                    p = seg;
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    if (*p == ',') {
+                        p++;
+                        while (*p && isspace((unsigned char)*p)) p++;
+                        seg = p; depth = 0;
+                        while (*seg && (*seg != ',' || depth > 0)) {
+                            if (*seg == '(') depth++;
+                            else if (*seg == ')') depth--;
+                            seg++;
+                        }
+                        cl = (size_t)(seg - p);
+                        char sbuf[128];
+                        if (cl < sizeof(sbuf)) {
+                            memcpy(sbuf, p, cl); sbuf[cl] = '\0';
+                            start_ang = (float)gweval_eval_numeric(sbuf);
+                        }
+                        p = seg;
+                        while (*p && isspace((unsigned char)*p)) p++;
+                        if (*p == ',') {
+                            p++;
+                            while (*p && isspace((unsigned char)*p)) p++;
+                            seg = p; depth = 0;
+                            while (*seg && (*seg != ',' || depth > 0)) {
+                                if (*seg == '(') depth++;
+                                else if (*seg == ')') depth--;
+                                seg++;
+                            }
+                            cl = (size_t)(seg - p);
+                            char ebuf[128];
+                            if (cl < sizeof(ebuf)) {
+                                memcpy(ebuf, p, cl); ebuf[cl] = '\0';
+                                end_ang = (float)gweval_eval_numeric(ebuf);
+                            }
+                            p = seg;
+                            while (*p && isspace((unsigned char)*p)) p++;
+                            if (*p == ',') {
+                                p++;
+                                char abuf[128];
+                                size_t al = strlen(p);
+                                if (al >= sizeof(abuf)) al = sizeof(abuf) - 1;
+                                memcpy(abuf, p, al); abuf[al] = '\0';
+                                aspect = (float)gweval_eval_numeric(abuf);
+                            }
+                        }
+                    }
+                }
+            }
+            if (gwdata_get_error() != 0) {
+                result = ERROR;
+            } else {
+                advgrp_circle(cx, cy, radius, color, start_ang, end_ang, aspect);
+                result = SUCCESS;
+            }
+        } else {
+            result = ERROR;
+        }
+    }
+    /* PAINT statement: PAINT (x,y)[,fill[,border]] (ASM ADVGRP PAINT L121) */
+    else if (starts_with(trimmed, "PAINT") &&
+             (trimmed[5] == ' ' || trimmed[5] == '\t' || trimmed[5] == '(')) {
+            const char *p = trimmed + 5;
+        while (*p && isspace((unsigned char)*p)) p++;
+        int px = 0, py = 0;
+        bool ok = false;
+        if (*p == '(') {
+            ok = gwsts_parse_coord_pair(&p, &px, &py);
+        }
+        int fill = -1, border = -1;
+        if (ok) {
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p == ',') {
+                p++;
+                while (*p && isspace((unsigned char)*p)) p++;
+                const char *seg = p;
+                int depth = 0;
+                while (*seg && (*seg != ',' || depth > 0)) {
+                    if (*seg == '(') depth++;
+                    else if (*seg == ')') depth--;
+                    seg++;
+                }
+                size_t cl = (size_t)(seg - p);
+                char fbuf[128];
+                if (cl < sizeof(fbuf)) {
+                    memcpy(fbuf, p, cl); fbuf[cl] = '\0';
+                    fill = (int)gweval_eval_numeric(fbuf);
+                }
+                p = seg;
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (*p == ',') {
+                    p++;
+                    char bbuf[128];
+                    size_t bl = strlen(p);
+                    if (bl >= sizeof(bbuf)) bl = sizeof(bbuf) - 1;
+                    memcpy(bbuf, p, bl); bbuf[bl] = '\0';
+                    border = (int)gweval_eval_numeric(bbuf);
+                }
+            }
+            if (gwdata_get_error() != 0) {
+                result = ERROR;
+            } else {
+                advgrp_paint(px, py, fill, border);
+                result = SUCCESS;
+            }
+        } else {
+            result = ERROR;
         }
     }
     /* FOR statement: FOR var = start TO limit [STEP step] */
@@ -1841,13 +2065,25 @@ delete_done:
     else if (starts_with(trimmed, "RSET ")) {
         result = gwsts_handle_rset(trimmed);
     }
-    /* PUT statement: PUT #filenum, [record], var */
-    else if (starts_with(trimmed, "PUT ")) {
-        result = gwsts_handle_put(trimmed);
+    /* PUT statement: PUT #filenum,... (file) or PUT (x,y),arr[,action] (gfx) */
+    else if (starts_with(trimmed, "PUT")) {
+        const char *q = trimmed + 3;
+        while (*q && isspace((unsigned char)*q)) q++;
+        if (*q == '(') {
+            result = gwsts_handle_gfx_put(trimmed);
+        } else {
+            result = gwsts_handle_put(trimmed);
+        }
     }
-    /* GET statement: GET #filenum, [record], var */
-    else if (starts_with(trimmed, "GET ")) {
-        result = gwsts_handle_get(trimmed);
+    /* GET statement: GET #filenum,... (file) or GET (x1,y1)-(x2,y2),arr (gfx) */
+    else if (starts_with(trimmed, "GET")) {
+        const char *q = trimmed + 3;
+        while (*q && isspace((unsigned char)*q)) q++;
+        if (*q == '(') {
+            result = gwsts_handle_gfx_get(trimmed);
+        } else {
+            result = gwsts_handle_get(trimmed);
+        }
     }
     /* INPUT statement */
     else if (starts_with(trimmed, "INPUT ")) {

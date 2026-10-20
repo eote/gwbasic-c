@@ -286,6 +286,7 @@ void gengrp_line(const char *params);
 void gengrp_line_coords(int x1, int y1, int x2, int y2, int color, int box, int box_fill);
 void gengrp_grpini(void);
 void gengrp_grprst(void);
+void gengrp_fb_clear(void);
 void gengrp_set_atr(int color);
 int gengrp_get_atr(void);
 int gengrp_get_forclr(void);

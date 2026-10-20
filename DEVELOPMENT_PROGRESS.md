@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v142 复核确认轮 0 问题 (v141 全部关闭)；下一步 M2 图形深化 (CIRCLE/PAINT/GET/PUT)，观察项随批次处理 |
+| **当前阶段** | M2 图形深化批完成 (CIRCLE/PAINT/GET/PUT 语句接线 + fb 统一根因修复)；下一步 M2 收尾或类型系统审计 |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -21,7 +21,57 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v142 (复核确认轮, 0 问题) — v141 修复全部关闭
+---
+
+## 当前轮: M2 图形深化 — CIRCLE/PAINT/GET/PUT 语句接线 + fb 统一根因
+
+### ASM 依据 (ADVGRP.ASM L108-1000)
+
+- CIRCLE L460: SCAN1 圆心, CNPNTS=R*SQR(2)/2, 点计数圆周 8*CNPNTS,
+  负角画半径线 (CLINEF), end<start 反转极性 (超 360°), aspect<1 压 Y / >1 压 X
+- PAINT L121: 边界色停止, fill 填充, 默认 border=fill
+- GET/PUT GPUTG L864: 头 4 字节 x-bits+y-bits; PUT 默认 XOR
+  (GFUNTB: PSET/PRESET/AND/OR/XOR)
+
+### 实现
+
+| # | 内容 | 文件 |
+|---|------|------|
+| 1 | CIRCLE/PAINT 语句分支 (表达式坐标, 复用 gwsts_parse_coord_pair) | gwsts.c |
+| 2 | GET/PUT 图形分派: '(' → 图形 handler, 其余 → 文件 handler | gwsts.c |
+| 3 | gwsts_handle_gfx_get/gfx_put (数组名解析 + action PSET/PRESET/AND/OR/XOR) | gwsts.c |
+| 4 | advgrp_circle 弧线: 点计数筛选 (8 反射 × octant 计数) + aspect + 半径线 | advgrp.c |
+| 5 | **根因修复: 双 framebuffer 统一** — gengrp_set_screen_mode 同步 g_fb_width/height (ASM SCRN 单一入口); advgrp_paint 全部改走 gengrp API (gengrp_point/direct_pset, 与 gengrp 同源 fb) — 修复 PAINT NULL fb 段错误 + 语句/直调两路径不一致 | gengrp.c + advgrp.c |
+| 6 | gengrp_fb_clear() 测试隔离 API (fb 残留跨测试) | gengrp.c + gwbasic.h |
+| 7 | test_gwsts_gfx2.c (6 测试) + test_gfx_circle.bas/.expected + 注册 | tests/ + run_bas_tests.sh |
+
+### 实施中定位的根因 (v142 观察项 2 相关)
+
+- **双 fb**: gengrp (g_local_framebuffer) 与 gioiscn (g_framebuffer) 两套,
+  get_framebuffer() 优先 gfb → 语句路径 (SCREEN 1 不触发 gioiscn init) 时
+  gfb=NULL → advgrp_paint 直用 g_framebuffer 段错误 (mini exe 铁证
+  target_fb=0000000000000000)
+- **fb 尺寸不同步**: SCREEN 1 → gengrp_set_screen_mode 不设 g_fb_width →
+  advgrp 边界检查 x >= 0 恒真静默 return / midpoint 点全部被拒
+- 修复后: SCREEN 语句 → g_fb_*=320x200 + gengrp/advgrp 同一 fb
+
+### 新单测 (+24 → 3223)
+
+gfx2: circle_basic / circle_arc / paint_region / get_put_roundtrip /
+put_pset_action / file_get_regression (LINE INPUT # 不被图形 GET 遮蔽)
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3223/3223 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **76/76**（+test_gfx_circle） |
+| 孤儿检测 | ✅ **848 = 848**, 0 孤儿 0 幽灵 |
+| .bas 实证 | CIRCLE 四方位点/圆心未画; PAINT 内=2 外=0; GET/PUT roundtrip+XOR 二次擦除; 弧 0..π 北画南不画; PUT PSET 动作 |
+
+---
+## 上一轮: CODE_REVIEW v142 (复核确认轮, 0 问题) — v141 修复全部关闭
 
 ### 结论: 0 CRITICAL / 0 HIGH / 0 MEDIUM / 0 LOW + 4 观察项
 
@@ -256,7 +306,7 @@ string_vararg / string_funcarg / string_numericfuncarg / numeric_ctx_chr / numer
 | 2 | 中期: gwram_alloc NULL 全面 OM 审计; INSTR 数字变量 start .bas 场景; CI 门禁 |
 
 ## 更新时间
-2026-10-18
+2026-10-21
 
 ## 原则
 严格按 PLAN_FRESH.md "每模块 7 步 TDD 工作流" 执行。实现前先查 ASM 源码定位；添加测试/实现前先查是否已存在。回归同时跑 mingw32-make test + ./tests/test_gwbasic.exe + run_bas_tests.sh。每逻辑组只跑一轮全套验证 (v131 教训)。

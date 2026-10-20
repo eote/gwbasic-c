@@ -170,6 +170,12 @@ void test_gwsts_gfx_implicit_array_oob(void);
 void test_gwsts_gfx_pset_array_coords(void);
 void test_gwsts_gfx_line_array_coords(void);
 void test_gwsts_gfx_compact_line_screen(void);
+void test_gwsts_gfx2_circle_basic(void);
+void test_gwsts_gfx2_circle_arc(void);
+void test_gwsts_gfx2_paint_region(void);
+void test_gwsts_gfx2_get_put_roundtrip(void);
+void test_gwsts_gfx2_put_pset_action(void);
+void test_gwsts_gfx2_file_get_regression(void);
 void test_gweval_strfuncs_if_compound_str_and(void);
 void test_gweval_strfuncs_if_compound_str_or(void);
 void test_gweval_strfuncs_if_else_both(void);
@@ -1075,6 +1081,12 @@ failed += run_test("test_gwsts_gfx_implicit_array_oob", test_gwsts_gfx_implicit_
 failed += run_test("test_gwsts_gfx_pset_array_coords", test_gwsts_gfx_pset_array_coords);
 failed += run_test("test_gwsts_gfx_line_array_coords", test_gwsts_gfx_line_array_coords);
 failed += run_test("test_gwsts_gfx_compact_line_screen", test_gwsts_gfx_compact_line_screen);
+failed += run_test("test_gwsts_gfx2_circle_basic", test_gwsts_gfx2_circle_basic);
+failed += run_test("test_gwsts_gfx2_circle_arc", test_gwsts_gfx2_circle_arc);
+failed += run_test("test_gwsts_gfx2_paint_region", test_gwsts_gfx2_paint_region);
+failed += run_test("test_gwsts_gfx2_get_put_roundtrip", test_gwsts_gfx2_get_put_roundtrip);
+failed += run_test("test_gwsts_gfx2_put_pset_action", test_gwsts_gfx2_put_pset_action);
+failed += run_test("test_gwsts_gfx2_file_get_regression", test_gwsts_gfx2_file_get_regression);
 
 failed += run_test("gweval_strfuncs_if_compound_str_and", test_gweval_strfuncs_if_compound_str_and);
 failed += run_test("gweval_strfuncs_if_compound_str_or", test_gweval_strfuncs_if_compound_str_or);

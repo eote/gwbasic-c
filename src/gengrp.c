@@ -215,11 +215,29 @@ int gengrp_get_grpacy(void) { return g_grpacy; }
 int gengrp_get_screen_mode(void) { return g_screen_mode; }
 int gengrp_get_fb_width(void) { return g_fb_width > 0 ? g_fb_width : g_local_fb_width; }
 int gengrp_get_fb_height(void) { return g_fb_height > 0 ? g_fb_height : g_local_fb_height; }
-void gengrp_set_screen_mode(int mode) { g_screen_mode = mode; }
+void gengrp_set_screen_mode(int mode) {
+    g_screen_mode = mode;
+    /* v143: keep framebuffer dimensions in sync (same semantics as
+     * gioscn_screen; ASM SCRN is the single entry for mode changes —
+     * advgrp boundary checks read g_fb_width/g_fb_height) */
+    switch (mode) {
+        case 0: g_fb_width = 80;  g_fb_height = 25;  break;
+        case 1: g_fb_width = 320; g_fb_height = 200; break;
+        case 2: g_fb_width = 640; g_fb_height = 200; break;
+    }
+}
 void gengrp_set_grpacx(int x) { g_grpacx = x; }
 void gengrp_set_grpacy(int y) { g_grpacy = y; }
 void gengrp_set_gxpos(int x) { g_gxpos = x; }
 void gengrp_set_gypos(int y) { g_gypos = y; }
+/* v142-gfx: clear framebuffer (test isolation; screen-fill equivalent) */
+void gengrp_fb_clear(void) {
+    unsigned char *fb = get_framebuffer();
+    int w = (g_fb_width > 0 ? g_fb_width : g_local_fb_width);
+    int h = (g_fb_height > 0 ? g_fb_height : g_local_fb_height);
+    if (fb && w > 0 && h > 0) memset(fb, 0, (size_t)w * (size_t)h);
+}
+
 /* Get framebuffer (external or local) */
 static unsigned char* get_framebuffer(void) {
     if (g_framebuffer) return g_framebuffer;

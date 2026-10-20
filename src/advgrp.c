@@ -102,36 +102,41 @@ void advgrp_paint(int x, int y, int fill_color, int border_color) {
     /* Default border color to fill color */
     if (border_color < 0) border_color = fill_color;
     
-    /* Check bounds */
-    if (x < 0 || x >= g_fb_width || y < 0 || y >= g_fb_height) return;
+    /* Check bounds (g_fb_width synced by gengrp_set_screen_mode) */
+    int fb_w = gengrp_get_fb_width();
+    int fb_h = gengrp_get_fb_height();
+    if (x < 0 || x >= fb_w || y < 0 || y >= fb_h) return;
     
-    /* Check if starting point is already border color */
-    if (g_framebuffer && g_framebuffer[y * MAX_WIDTH + x] == (unsigned char)border_color) return;
+    /* Check if starting point is already border color
+     * (v143: all fb access via gengrp API — single framebuffer source,
+     * ASM ADVGRP shares GENGRP's MAPXYC/SETC) */
+    unsigned char start_px = (unsigned char)gengrp_point(x, y);
+    if (start_px == (unsigned char)border_color) return;
     
     /* Simple flood fill using stack */
     typedef struct { int x, y; } Point;
-    Point *stack = (Point *)malloc(g_fb_width * g_fb_height * sizeof(Point));
+    Point *stack = (Point *)malloc((size_t)fb_w * (size_t)fb_h * sizeof(Point));
     if (!stack) return;
     
     int stack_top = 0;
     stack[stack_top++] = (Point){x, y};
     
-    unsigned char target_color = g_framebuffer[y * MAX_WIDTH + x];
+    unsigned char target_color = start_px;
     
     while (stack_top > 0) {
         Point p = stack[--stack_top];
         
         /* Check bounds */
-        if (p.x < 0 || p.x >= g_fb_width || p.y < 0 || p.y >= g_fb_height) continue;
+        if (p.x < 0 || p.x >= fb_w || p.y < 0 || p.y >= fb_h) continue;
         
-        unsigned char current = g_framebuffer[p.y * MAX_WIDTH + p.x];
+        unsigned char current = (unsigned char)gengrp_point(p.x, p.y);
         if (current != target_color || current == (unsigned char)border_color) continue;
         
         /* Fill */
-        g_framebuffer[p.y * MAX_WIDTH + p.x] = (unsigned char)fill_color;
+        gengrp_direct_pset(p.x, p.y, fill_color);
         
         /* Add neighbors */
-        if (stack_top < g_fb_width * g_fb_height - 4) {
+        if (stack_top < fb_w * fb_h - 4) {
             stack[stack_top++] = (Point){p.x + 1, p.y};
             stack[stack_top++] = (Point){p.x - 1, p.y};
             stack[stack_top++] = (Point){p.x, p.y + 1};
@@ -143,11 +148,13 @@ void advgrp_paint(int x, int y, int fill_color, int border_color) {
 }
 
 /* CIRCLE - Draw circle with aspect ratio and angles */
-/* Syntax: CIRCLE (x,y),radius[,color[,start_angle[,end_angle[,aspect]]]] */
+/* Syntax: CIRCLE (x,y),radius[,color[,start_angle[,end_angle[,aspect]]]]
+ * ASM ADVGRP CIRCLE L460-800: angles in radians, 0 = east, CCW; negative
+ * angle draws a radius line to center; end < start wraps past 360;
+ * aspect < 1 scales Y, aspect > 1 scales X by 1/aspect. Arc selection by
+ * point count: total = 8 * (radius*SQR(2)/2) points around the circle. */
+#include <math.h>
 void advgrp_circle(int x, int y, int radius, int color, float start_angle, float end_angle, float aspect) {
-    (void)start_angle;
-    (void)end_angle;
-    (void)aspect;
     if (g_screen_mode == 0) return;  /* Text mode */
     if (radius <= 0) return;
     
@@ -155,42 +162,110 @@ void advgrp_circle(int x, int y, int radius, int color, float start_angle, float
     
     if (color < 0) color = g_atrbyt;
     
-    /* Simple circle drawing using midpoint algorithm */
-    int x0 = x;
-    int y0 = y;
-    int r = radius;
+    /* negative angles: draw radius line to center, use absolute value */
+    bool line_start = (start_angle < 0.0f);
+    bool line_end = (end_angle < 0.0f);
+    if (line_start) start_angle = -start_angle;
+    if (line_end) end_angle = -end_angle;
     
-    int draw_x = r;
-    int draw_y = 0;
-    int err = 1 - r;
+    /* point counts around circumference (ASM CNPNTS = R*SQR(2)/2) */
+    int cnpnts = (int)(radius * 0.70710678f + 0.5f);
+    if (cnpnts < 1) cnpnts = 1;
+    int total = cnpnts * 8;
+    int start_cnt = (int)(start_angle / 6.2831853f * total + 0.5f);
+    int end_cnt = (int)(end_angle / 6.2831853f * total + 0.5f);
     
-    while (draw_x >= draw_y) {
-        /* 8-way symmetry - draw all 8 points */
-        int points[8][2] = {
-            {x0 + draw_x, y0 + draw_y},
-            {x0 + draw_y, y0 + draw_x},
-            {x0 - draw_y, y0 + draw_x},
-            {x0 - draw_x, y0 + draw_y},
-            {x0 - draw_x, y0 - draw_y},
-            {x0 - draw_y, y0 - draw_x},
-            {x0 + draw_y, y0 - draw_x},
-            {x0 + draw_x, y0 - draw_y}
+    bool plot_outside = false;
+    if (end_cnt < start_cnt) {
+        /* ASM CSTPLT: end < start → plot points ABOVE & BELOW (outside) */
+        plot_outside = true;
+        int t = start_cnt; start_cnt = end_cnt; end_cnt = t;
+    }
+    
+    /* aspect handling (ASM GTASPC/CIRC11): <1 scales Y, >1 scales X */
+    float ax = 1.0f, ay = 1.0f;
+    if (aspect > 0.0f && aspect != 1.0f) {
+        if (aspect < 1.0f) {
+            ay = aspect;            /* y compressed */
+        } else {
+            ax = 1.0f / aspect;     /* x compressed */
+        }
+    }
+    
+    int fb_w = gengrp_get_fb_width();
+    int fb_h = gengrp_get_fb_height();
+    
+    /* helper: point-count for offset (dx right, dy up) on octant k */
+    #define CIRCLE_PLOT(cx_, cy_) do { \
+        int px_ = (cx_), py_ = (cy_); \
+        if (px_ >= 0 && px_ < fb_w && py_ >= 0 && py_ < fb_h) \
+            gengrp_pset(px_, py_, color); \
+    } while (0)
+    
+    /* midpoint octant walk: 0..45° (dx from r down to dy up) */
+    int dx0 = radius, dy0 = 0;
+    int err = 1 - radius;
+    while (dx0 >= dy0) {
+        /* this point's count within the first (east→north) octant */
+        int cnt0 = dy0;  /* ASM CPCNT = Y */
+        
+        /* 8 reflections; octant counts: even octants count up (dy0),
+         * odd octants count down from 2*CNPNTS boundary (ASM CPCNT8
+         * reversal). Approximate ASM mapping:
+         *   oct0 (east→north):   cnt = cnt0
+         *   oct1 (north→west):   cnt = 2*CNPNTS - cnt0
+         *   oct2 (west→south):   cnt = 2*CNPNTS + cnt0
+         *   oct3 (south→east):   cnt = 4*CNPNTS - cnt0
+         *   oct4 (east→south):   cnt = 4*CNPNTS + cnt0
+         *   oct5 (south→west):   cnt = 6*CNPNTS - cnt0
+         *   oct6 (west→north):   cnt = 6*CNPNTS + cnt0
+         *   oct7 (north→east):   cnt = 8*CNPNTS - cnt0 */
+        int cnt[8] = {
+            cnt0,
+            2*cnpnts - cnt0,
+            2*cnpnts + cnt0,
+            4*cnpnts - cnt0,
+            4*cnpnts + cnt0,
+            6*cnpnts - cnt0,
+            6*cnpnts + cnt0,
+            8*cnpnts - cnt0
         };
         
-        for (int i = 0; i < 8; i++) {
-            if (points[i][0] >= 0 && points[i][0] < g_fb_width && 
-                points[i][1] >= 0 && points[i][1] < g_fb_height) {
-                gengrp_pset(points[i][0], points[i][1], color);
+        /* offsets with aspect applied (dy up = -y on screen) */
+        int ox = (int)(dx0 * ax + 0.5f);
+        int oy = (int)(dy0 * ay + 0.5f);
+        
+        /* reflect 8 ways: (+x,+y_up) (+y_up,+x) (-y_up,+x) (-x,+y_up)
+         * (-x,-y_up) (-y_up,-x) (+y_up,-x) (+x,-y_up) */
+        int pxs[8] = { x+ox, x+oy, x-oy, x-ox, x-ox, x-oy, x+oy, x+ox };
+        int pys[8] = { y-oy, y-ox, y-ox, y-oy, y+oy, y+ox, y+ox, y+oy };
+        
+        for (int k = 0; k < 8; k++) {
+            bool in_range = (cnt[k] >= start_cnt && cnt[k] <= end_cnt);
+            if (plot_outside) in_range = !in_range;
+            if (in_range) {
+                CIRCLE_PLOT(pxs[k], pys[k]);
             }
         }
         
-        draw_y++;
+        dy0++;
         if (err < 0) {
-            err += 2 * draw_y + 1;
+            err += 2 * dy0 + 1;
         } else {
-            draw_x--;
-            err += 2 * (draw_y - draw_x + 1);
+            dx0--;
+            err += 2 * (dy0 - dx0 + 1);
         }
+    }
+    #undef CIRCLE_PLOT
+    
+    /* radius lines for negative angles (ASM CLINE → DOGRPH) */
+    if (line_start || line_end) {
+        float ang = line_start ? start_angle : end_angle;
+        float rad = ang;  /* radians */
+        int ex = x + (int)(radius * cosf(rad) * ax + 0.5f);
+        int ey = y - (int)(radius * sinf(rad) * ay + 0.5f);
+        extern void gengrp_line_coords(int x1, int y1, int x2, int y2, int color, int box, int box_fill);
+        gengrp_line_coords(x, y, ex, ey, color, 0, 0);
     }
 }
 
