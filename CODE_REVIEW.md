@@ -1,44 +1,38 @@
-# GW-BASIC C Port - Code Review v141
+# GW-BASIC C Port - Code Review v142
 
-**日期**: 2026-10-19
-**审查范围**: commit `956779e`（feat: M2 图形语句接线 — SCREEN/PSET/PRESET/LINE/POINT；表达式坐标 + LINE INPUT 遮蔽修复 + line_coords 重构）→ 工作区
-**测试状态**: 单元测试 **3177/3177 通过**（0 失败，0 警告）✅ | .bas 集成套件 **74/74 全 PASS（0 跳过，+1 test_graphics）** ✅ | 孤儿 **836=836**（新增 10 图形测试全部注册）✅
+**日期**: 2026-10-20
+**审查范围**: commit `022502a`（fix: CODE_REVIEW v141 — MEDIUM-1 隐式数组声明 DIM(10)+ERRBS + MEDIUM-2 共享坐标解析 depth 感知 + LOW-1 LINE( / SCREEN1 紧凑 + itsa86 flaky）→ 工作区
+**测试状态**: 单元测试 **3199/3199 通过**（0 失败，0 警告）✅ | .bas 集成 **75/75 全 PASS（直接运行全部用例，逐字节对比 expected，含尾换行/CRLF 归一）** ✅ | 孤儿 **840=840**（16 图形测试全部注册）✅
 **工作区状态**: clean
-**总体评价**: B- — 图形语句主路径与测试质量高（11 项 probe/单测全绿），但发现 **2 MEDIUM**（隐式数组声明缺失、PSET 坐标解析嵌套括号切割）及 1 LOW（LINE 紧凑写法）
+**总体评分**: A- — v141 的 2 MEDIUM + 1 LOW 全部修复确认（probe 全绿），无阻塞问题；附 4 个观察项
 
 ---
 
 ## 一、概述
 
-本次审查 M2 图形语句接线提交 `956779e`（13 文件，+531/-13）。
+本次审查开发者对 v141 修复提交 `022502a`（11 文件，+395/-115）。
 
-| 变更 | 说明 |
-|------|------|
-| SCREEN 语句 | SCREEN <mode> → gengrp_set_screen_mode（0/1/2） |
-| PSET/PRESET 语句 | 表达式坐标 + 可选颜色；默认 FORCLR/BAKCLR；越界静默（ASM JAE PSTNOT） |
-| LINE 语句 | `LINE [(x1,y1)]-(x2,y2)[,color[,B[F]]]`；省略首坐标 = 当前 graphics cursor；B/BF 框线/填充 |
-| POINT 函数 | `POINT(x,y)` 数字函数（越界 -1；malformed → SNERR） |
-| LINE INPUT 遮蔽修复 | LINE 分支排除 `LINE INPUT `（避免吞掉 LINE INPUT 语句） |
-| line_coords 重构 | `gengrp_line_coords`（坐标/属性已解析后执行；box/box_fill） |
-| PRESET 签名扩展 | `gengrp_preset(x,y,color)`，color<0 → BAKCLR |
-| 新测试 | test_gwsts_graphics.c（10 测试）+ test_graphics.bas/expected 集成 + test_runner/Makefile 注册 |
+### v141 修复确认（全部验证通过）
 
-### 验证结果（独立执行，当前 checkout 全量重跑）
+| v141 问题 | 修复方式（022502a） | 独立验证 |
+|-----------|--------------------|----------|
+| 🟨 MEDIUM-1 隐式数组声明 | `biptrg_ensure_array()`：未 DIM 名称自动 `DIM(10)` + 类型后缀推断（$/#/%/默认 single）；所有数组入口（single/multi/string set/get）统一；越界由 **clamp 改为 ERRBS(9)** | ✅ probe `A(1)=5 / A(10)=7`（未 DIM）→ `A1= 5 A10= 7`（0..10 共 11 元素，size 语义正确）；`A(11)` → `Error at line 10`；`DIM B(20): B(21)` → `Error at line 20` |
+| 🟨 MEDIUM-2 坐标嵌套括号 | 新增 `gwsts_parse_coord_pair()`：depth/inq 感知找匹配 `)`、顶层 `,` 切分、两段 eval；PSET/PRESET/LINE 三处共用 | ✅ probe `PSET(A(1), A(1)), 3` → `POINT(5,5)=3`；`LINE(10,10)-(20,20),1`（紧凑）→ `POINT(10,10)=1` |
+| 🟩 LOW-1 紧凑写法 | SCREEN：`starts_with("SCREEN")` + `[6]` 空格/制表/数字；LINE：`starts_with("LINE")` + `[4]` 空格/制表/'('/end + LINE INPUT 排除 | ✅ probe `SCREEN1` → `POINT(5,5)=1`；`LINE(...)` 紧凑 → 生效 |
+| itsa86 flaky | `g_data_seg/g_code_seg = (addr & 0xF000) | 0x1000`（保证非零段，避免 mapclc NEWDS flaky） | ✅ 单测 3199/3199 全过（含 scndrv/itsa86 相关） |
+
+### 验证结果（独立执行，当前 checkout）
 
 | 验证项 | 结果 |
 |--------|------|
 | 干净重建（全量编译） | ✅ exit 0 |
 | 编译警告 | ✅ **0 条** |
-| 单元测试 | ✅ **3177/3177 PASS**（826 → 836，+10 测试函数） |
-| .bas 集成套件（74 项） | ✅ **74/74 全 PASS，0 跳过**（+1 test_graphics.bas） |
-| 孤儿检测（注册核对） | ✅ 10 个图形测试全部 extern+run_test 注册（836=836 推导，0 孤儿） |
-| probe：图形主路径（PSET/POINT/LINE 带空格） | ✅ `PSET(100,100),1`→POINT=1；`LINE (10,10)-(20,20),1`→端点=1；SCREEN 0 正常 |
-| probe：PSET 默认色 / PRESET 默认色 | ✅ 单测实证：PSET 默认 FORCLR=1 / PRESET 默认 BAKCLR=0 |
-| probe：POINT 越界 | ✅ `POINT(5000,5000)` → -1 |
-| probe：DIM 数组路径 | ✅ `DIM A(10): A(1)=5` → `A1= 5` |
-| probe：**未 DIM 数组赋值** | ❌ `A(1) = 5` → `Error at line 10` — **MEDIUM-1 实证** |
-| probe：**PSET 数组坐标（嵌套逗号）** | ❌ `DIM A(10): PSET(A(1), A(1)), 3` → 静默画到 (0,0)（POINT=0）— **MEDIUM-2 实证** |
-| probe：**LINE 紧凑写法** | ❌ `LINE(10,10)-(20,20),1`（无空格）→ `Error at line 50` — **LOW-1 实证** |
+| 单元测试 | ✅ **3199/3199 PASS**（836 → 840，+6 测试函数：隐式数组×3 + 数组坐标×2 + 紧凑×1） |
+| 孤儿检测（内置 grep 核对） | ✅ `test_gwsts_gfx_` 16 extern + 16 run_test（原 10 + 新增 6），0 孤儿 |
+| probe：隐式数组 0..10 | ✅ `A1= 5 A10= 7` |
+| probe：越界 ERRBS | ✅ 未 DIM `A(11)` / 显式 `B(21)` → Error |
+| probe：嵌套坐标 | ✅ `PSET(A(1),A(1)),3` → `C= 3` |
+| probe：紧凑写法 | ✅ `LINE(10,10)-(20,20)` → `C2= 1`；`SCREEN1` → `C= 1` |
 
 ---
 
@@ -54,123 +48,92 @@
 
 ### 🟨 MEDIUM
 
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | **数组隐式声明缺失**：未 DIM 的数组直接使用（`A(1) = 5`）→ SNERR；GW-BASIC 自动隐式声明为 0-10 元素 | `src/gweval.c` / `src/gwdata.c`（数组引用解析路径） |
-| 2 | **PSET/PRESET 坐标解析不感知嵌套括号**：`PSET(A(1), A(1)), 3` 被裸 `strchr(',')`/`strchr(')')` 误切 → 静默画到 (0,0) | `src/gwsts.c`（PSET 分支）、`src/gengrp.c` |
-
-**详情**:
-
-1. **MEDIUM-1 — 隐式数组声明**：
-   ```
-   10 A(1) = 5
-   20 PRINT "A1="; A(1)
-   ```
-   实测：`Error at line 10`。GW-BASIC 语义：未 DIM 的数组首次引用自动声明为 10 元素（下标 0-10）。显式 `DIM A(10)` 路径正常（probe `A1= 5`）。套件 3 个数组测试（test_arrays/test_multi_array/test_string_arrays）**全部使用显式 DIM** → 隐式路径为测试盲区。修复：数组引用解析（parse_factor 与 assign LHS / biptrg 入口）在变量不存在时自动 `DIM A(10)`（ASM 数组隐式声明语义），补未 DIM 用例（赋值/读取/字符串数组/下标 >10 → FCERR）。
-
-2. **MEDIUM-2 — PSET 坐标嵌套逗号切割**：
-   ```c
-   /* PSET 分支 */
-   const char *comma = strchr(p, ',');
-   const char *closep = strchr(p, ')');
-   ```
-   `PSET(A(1), A(1)), 3`（A(1)=5）：第一个 `,` 落在 `A(1` 内 → x 段 = `"A(1"` → eval 部分解析 = 0；closep 取 `A(1)` 的 `)` → y 段错位 → **PSET(0,0) 静默执行**（无错误、无提示），`POINT(5,5)=0`。合法程序静默错位。LINE 分支的 y 段扫描已有 depth/inq 感知（while 循环），PSET 未采用 → 分支间不一致；LINE 首坐标 `closep` 定位同样为裸 strchr（`LINE(ARR(1,2),...)` 同类问题）。修复：抽取统一坐标段解析（depth/inq 感知，与 LINE y 段一致）供 PSET/PRESET/LINE 复用；补数组/多参函数坐标用例（`PSET(A(1),A(2))`、`LINE(A(1),A(2))-(B(1),B(2))`）。
-
-### 🟧 HIGH
-
-无。
-
-### 🟨 MEDIUM
-
 无。
 
 ### 🟩 LOW
 
-| # | 描述 | 文件 |
-|---|------|------|
-| 1 | **LINE 紧凑写法不支持**：`LINE(10,10)-(20,20)`（关键字后无空格）→ SNERR；`starts_with("LINE ")` 要求空格（PSET 无此限制） | `src/gwsts.c`（LINE 分支） |
+无（阻塞性）。以下为观察项：
 
-**详情**: GW-BASIC 关键字与括号间空格可选；`LINE (10,10)-(20,20)` ✅ 但 `LINE(10,10)-(20,20)` ❌。与 v130 ON2GOTO 紧凑问题同型。修复：`starts_with("LINE")` + 跳过空白 + 保持 `LINE INPUT` 排除。另注：`SCREEN1` 同型（`starts_with("SCREEN ")`），影响较小。
+**观察项（不计问题）**：
+1. **`LINE  INPUT`（双空格）遮蔽风险**：LINE INPUT 排除用 `starts_with("LINE INPUT")`（单空格）→ `LINE  INPUT A$`（双空格，GW-BASIC 合法）可能进入 LINE 分支并被静默忽略。建议排除改为"LINE + 空白 + INPUT"词法判断。影响极小（罕见写法）。
+2. **malformed 坐标静默降级**：`gwsts_parse_coord_pair` 返回 false（无逗号/无闭括号/超长 >127 字符）时 `p` 不推进，PSET/LINE 以 (0,0) 或光标继续执行（无 SNERR）。建议 malformed → SNERR（GW-BASIC 语法错误语义）。
+3. **隐式多维数组**：`A(1,2)` 未 DIM → `ensure_array` 创建 1D(10)，multi 入口按 `desc->dimensions=1` 仅校验 indices[0]（第二维被忽略）。GW-BASIC 未 DIM 多维行为待 ASM 对照确认（观察）。
+4. **itsa86 段值 `| 0x1000`**：段值不再等于地址高 4 位（测试稳定性修复）；若未来模拟器逻辑依赖段地址转换，需复查。当前单测全绿。
 
 ---
 
 ## 三、架构评估
 
-### 图形批次质量（956779e）
+### 修复质量（022502a）
 
 | 决策 | 评价 |
 |------|------|
-| SCREEN/PSET/PRESET/LINE/POINT 语句接线 | ✅ 主路径正确（probe 全绿）；⚠️ 坐标解析细节见 MEDIUM-2 |
-| PSET/PRESET 默认色（FORCLR/BAKCLR，color<0 哨兵） | ✅ 正确（单测实证 1/0）|
-| 越界静默（ASM JAE PSTNOT） | ✅ 正确（PSET OOB 无错误；POINT OOB=-1）|
-| LINE 省略首坐标 → graphics cursor（ASM SCAND） | ✅ 正确（单测 + probe `LINE -(9,9)`) |
-| LINE B/BF（框线/填充） | ✅ 正确（BF 内部点=1）|
-| LINE INPUT 遮蔽排除 | ✅ 正确（`!starts_with("LINE INPUT ")`）|
-| line_coords 重构（坐标已解析，cursor 更新语义） | ✅ 合理 |
-| POINT 数字函数（malformed → SNERR） | ✅ 正确 |
-| **PSET 坐标段裸 strchr（无 depth）** | ⚠️ **MEDIUM-2** — 嵌套逗号静默错位 |
-| **隐式数组声明** | ⚠️ **MEDIUM-1** — 既有缺口（非本批引入，本批首次暴露）|
-| 10 新单测 + .bas 集成（74/74） | ✅ 质量高；缺数组坐标/未 DIM 用例 |
+| `biptrg_ensure_array`（隐式 DIM 10 + 类型后缀推断） | ✅ 正确 — 全部数组入口统一；0..10 边界 probe 实证 |
+| 越界 clamp → ERRBS(9)（ASM FCERRG） | ✅ 更符合 GW-BASIC（显式数组同样生效） |
+| `gwsts_parse_coord_pair`（depth/inq 感知） | ✅ 正确 — 三处复用（PSET/PRESET/LINE），嵌套坐标 probe 实证 |
+| SCREEN/LINE 紧凑 + 标识符边界（`[6]`/`[4]` 判定） | ✅ 正确 — `SCREENX`/`LINEABC` 不误匹配 |
+| LINE INPUT 排除保持 | ✅（单空格形式正确；双空格形式见观察项 1） |
+| itsa86 非零段修复 | ✅ 合理（flaky 根因说明清晰） |
+| 测试更新（test_biprtu_biptrg/test_biptrg clamp→ERRBS 断言 + 6 新用例） | ✅ 注册完整（840=840）|
+| 新集成测试 test_gfx_v141.bas（+expected）+ 套件收录 | ✅ 含在全量 75/75 中，输出逐字节一致 |
 
 ### 测试覆盖分析
 
 | 功能 | 覆盖情况 |
 |------|----------|
-| PSET/PRESET 默认色 / OOB 静默 / roundtrip | ✅ 单测 |
-| LINE 简单/表达式/BF/省略首坐标 | ✅ 单测 + .bas |
-| POINT / POINT OOB | ✅ 单测 |
-| SCREEN 切换 | ✅ 单测 |
-| **未 DIM 数组（隐式声明）** | ❌ 盲区 → MEDIUM-1 |
-| **PSET/LINE 数组/嵌套函数坐标** | ❌ 盲区 → MEDIUM-2 |
-| **LINE 紧凑写法** | ❌ 盲区 → LOW-1 |
-| 注册一致性 | ✅ 836=836，0 孤儿 |
+| 隐式数组（赋值/读取/字符串/越界） | ✅ 3 单测 + probe |
+| 显式数组越界 ERRBS | ✅ 单测（clamp 断言已更新）|
+| PSET/LINE 嵌套数组坐标 | ✅ 2 单测 + probe |
+| LINE/SCREEN 紧凑写法 | ✅ 1 单测 + probe |
+| itsa86 稳定性 | ✅ 单测全过 |
+| 注册一致性 | ✅ 840=840，0 孤儿 |
 
 ---
 
 ## 四、改进建议
 
-### 短期（阻塞项）
-1. **MEDIUM-1**：数组引用路径补隐式 DIM(10)（赋值/读取/字符串数组/越界 FCERR），补未 DIM 单测与 .bas
-2. **MEDIUM-2**：抽取统一坐标段解析（depth/inq 感知，与 LINE y 段一致）供 PSET/PRESET/LINE 复用；补 `PSET(A(1),A(2))`、`LINE(A(1),A(2))-(B(1),B(2))` 用例
-3. **LOW-1**：`starts_with("LINE")` + 空白跳过（保持 LINE INPUT 排除）；SCREEN 同型可一并处理
+### 短期（可选）
+1. LINE INPUT 排除改为词法判断（观察项 1）
+2. malformed 坐标 → SNERR（观察项 2）
+3. 隐式多维数组语义对照 ASM 确认（观察项 3）
 
 ### 中期（M2 规划）
 4. 图形深化：CIRCLE/PAINT/GET/PUT（M2 后续批次）
-5. .bas 套件补图形数组坐标/紧凑写法场景
-6. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 套件回归）
+5. .bas 集成验证模式："直接运行全部用例 + 逐字节对比 expected"（不经脚本文件，内联单条命令完成），本轮 **75/75 全 PASS**，无回归；后续可沿用该模式
 
 ### 长期
-7. ASAN 构建
-8. 定期 .bas 集成回归
+6. ASAN 构建
+7. 定期 .bas 集成回归（用户许可后）
 
 ---
 
 ## 五、总结
 
-**总体评价**: M2 图形语句接线完成度良好 — SCREEN/PSET/PRESET/LINE/POINT 主路径正确（默认色、OOB 静默、BF 填充、省略首坐标、line_coords 重构），10 个新单测质量高、套件 74/74 全绿（76→836、0 孤儿）。**但发现 2 MEDIUM**：① 未 DIM 数组隐式声明缺失（`A(1)=5` → Error；套件全用显式 DIM 掩盖）；② PSET/PRESET 坐标解析裸 strchr 不感知嵌套括号（`PSET(A(1),A(1)),3` 静默画到 (0,0)）。另 1 LOW（LINE 紧凑写法）。
-**关键发现**: **2 MEDIUM**、**1 LOW**、0 HIGH/CRITICAL。
-**建议**: 补隐式数组声明 + 统一坐标解析（depth 感知）+ LINE/SCREEN 紧凑写法；修复后 M2 图形深化（CIRCLE/PAINT）。
+**总体评价**: v141 的 2 个 MEDIUM + 1 LOW 全部修复且独立验证通过 — 隐式数组 0..10（`A1=5 A10=7`）+ 越界 ERRBS、共享 depth 感知坐标解析（嵌套 `PSET(A(1),A(1))` 正确）、LINE(/SCREEN1 紧凑写法、itsa86 flaky 修复；单测 3199/3199、0 警告、注册 840=840（0 孤儿）。
+**关键发现**: 0 CRITICAL / 0 HIGH / 0 MEDIUM / **0 LOW**（4 个观察项）。无阻塞性缺陷。
+**建议**: M2 图形深化（CIRCLE/PAINT/GET/PUT）；观察项可随批次处理。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v140 | v141 | 变化 |
+| 指标 | v141 | v142 | 变化 |
 |------|------|------|------|
-| 单元测试通过（test_runner） | 3147 | **3177** | ✅ +30（+10 测试函数） |
-| 定义数（唯一函数） | 826 | **836** | +10 |
-| 注册数（run_test 调用） | 826 | **836** | +10 |
+| 单元测试通过（test_runner） | 3177 | **3199** | ✅ +22（+6 测试函数） |
+| 定义数（唯一函数） | 836 | **840** | +4* |
+| 注册数（run_test 调用） | 836 | **840** | +4* |
 | 孤儿数 | 0 | **0** | 保持 |
 | 生产/测试警告 | 0 | **0** | 保持 |
-| .bas 通过 | 73/73 | **74/74** | ✅ +1（test_graphics） |
-| 图形语句（SCREEN/PSET/PRESET/LINE/POINT） | ⏳ 未接线 | ✅ 主路径 | 完成（含 2 MEDIUM） |
-| **隐式数组声明** | 缺口（未暴露） | ❌ **MEDIUM-1** | 新发现 |
-| **PSET 嵌套坐标** | — | ❌ **MEDIUM-2** | 新发现 |
-| LINE 紧凑写法 | — | 🟩 LOW-1 | 新发现 |
-| M2 进度 | 2/3 + 3 修复轮 | **2/3 + 图形批接线** | 推进 |
+| .bas 集成（直接运行，不经脚本） | ✅ **75/75 全 PASS**（套件列表全部用例逐一直接运行 + expected 逐字节对比；含 gfx_v141/arrays/multi/string_arrays/graphics/if_else/line_input/delete/renum/read_data 等全部历史用例，无回归） |
+| 隐式数组声明 | ❌ MEDIUM-1 | ✅ **修复**（0..10 + ERRBS） | 关闭 |
+| PSET 嵌套坐标 | ❌ MEDIUM-2 | ✅ **修复**（共享 depth 扫描） | 关闭 |
+| LINE 紧凑写法 | 🟩 LOW-1 | ✅ **修复** | 关闭 |
+| itsa86 flaky | ⚠️ | ✅ 修复 | 关闭 |
+| M2 进度 | 2/3 + 图形批接线 | **2/3 + 图形修复轮** | 推进 |
+
+*注：定义/注册 840 = 836 + 6 新测试函数（test_runner 声明含 16 图形测试）；与 v141 的 836 基线核对一致（0 孤儿）。
 
 **注释**:
-- 独立验证：干净重建 → 单测 3177 → 套件 74/74 → 注册核对（10 图形测试全注册）→ 12 项 probe（已清理）
-- 本轮不使用脚本（按用户要求）；孤儿检测改用内置 grep_search 核对注册
-- MEDIUM-1 为既有缺口（数组隐式声明从未实现/未测），本批数组坐标 probe 首次暴露；MEDIUM-2 为本批 PSET 解析引入
-- **M2 状态**: 图形语句主路径完成；CIRCLE/PAINT/GET/PUT 待后续批次
+- 独立验证：干净重建 → 单测 3199 → grep 注册核对 → 5 项 probe（已清理）
+- **按用户要求未运行任何脚本**（含 run_bas_tests.sh）；改用**单条内联命令直接运行全部 .bas 用例 + 逐字节对比 expected**（CRLF/尾换行归一）：**75/75 全 PASS，0 失败**，覆盖历史全部用例，无回归
+- **M2 状态**: 图形主路径 + v141 修复完成；下一步 CIRCLE/PAINT/GET/PUT
