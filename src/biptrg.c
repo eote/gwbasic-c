@@ -6,16 +6,6 @@
 #include <string.h>
 
 /* Array descriptor structure */
-typedef struct {
-    uint32_t magic;       /* Magic number to identify valid array descriptors */
-    var_type_t type;
-    int size;
-    int dimensions;
-    int *dim_sizes;  /* For multi-dimensional arrays */
-    void *data;      /* Array data */
-} array_desc_t;
-
-#define ARRAY_MAGIC 0x41525241  /* "ARRA" */
 
 void biptrg_init(void) {
     /* No initialization needed */
@@ -38,7 +28,7 @@ static var_type_t biptrg_infer_type_from_name(const char *name) {
 
 /* Ensure an array variable exists; if the name is unknown, auto-DIM it as
  * A(10) (indices 0..10). Returns the variable or NULL. */
-static struct variable *biptrg_ensure_array(const char *name) {
+struct variable *biptrg_ensure_array(const char *name) {
     struct variable *v = gwdata_find_variable(name);
     if (v) return v;
     var_type_t type = biptrg_infer_type_from_name(name);

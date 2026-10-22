@@ -124,6 +124,9 @@ void test_advgrp_circle_zero_radius(void) {
 void test_advgrp_get_basic(void) {
     ADVGRP_TEST_SETUP();
     
+    /* v144 CRITICAL-1: GET stores into a standard NUMERIC array */
+    biptrg_dim_array("TESTARR", 100, VT_SINGLE);
+    
     /* Draw a pattern using colors 1-3 (valid in mode 1) */
     g_framebuffer[10 * MAX_WIDTH + 10] = 1;
     g_framebuffer[10 * MAX_WIDTH + 11] = 2;
@@ -134,10 +137,11 @@ void test_advgrp_get_basic(void) {
     int rc = advgrp_get(10, 10, 11, 11, "TESTARR");
     TEST_ASSERT_EQ_INT(rc, SUCCESS, "GET succeeds");
     
-    /* Verify array was created */
+    /* Verify the target is a numeric array (not string private format) */
     struct variable *v = gwdata_find_variable("TESTARR");
-    TEST_ASSERT(v != NULL, "Array variable created");
-    TEST_ASSERT_EQ_INT(v->type, VT_STRING, "Array stored as string");
+    TEST_ASSERT(v != NULL, "Array variable found");
+    TEST_ASSERT(v->is_array, "Target is an array");
+    TEST_ASSERT(v->type == VT_SINGLE, "Numeric array type preserved");
     
     ADVGRP_TEST_TEARDOWN();
     TEST_PASS("advgrp_get basic");
@@ -175,33 +179,25 @@ void test_advgrp_get_data_correctness(void) {
     TEST_ASSERT_EQ_INT(g_framebuffer[10 * MAX_WIDTH + 11], 2, "Debug: direct framebuffer[10,11] = 2");
     TEST_ASSERT_EQ_INT(g_framebuffer[11 * MAX_WIDTH + 11], 1, "Debug: direct framebuffer[11,11] = 1");
     
+    /* v144: numeric-array target */
+    biptrg_dim_array("TESTARR2", 100, VT_SINGLE);
+    
     /* GET 2x2 region */
     int rc = advgrp_get(10, 10, 11, 11, "TESTARR2");
     TEST_ASSERT_EQ_INT(rc, SUCCESS, "GET succeeds");
     
-    /* Debug: dump buffer content */
-    struct variable *v_dbg = gwdata_find_variable("TESTARR2");
-    char *buf_dbg = v_dbg->value.s.ptr;
-    for (int i = 0; i < 8; i++) {
-        char msg[64];
-        sprintf(msg, "buf[%d] = 0x%02X", i, (unsigned char)buf_dbg[i]);
-        TEST_ASSERT(buf_dbg[i] >= 0, msg);
-    }
-    
-    /* Verify array was created */
+    /* v144: numeric-array storage — header words in first 2 elements */
     struct variable *v = gwdata_find_variable("TESTARR2");
-    TEST_ASSERT(v != NULL, "Array variable created");
-    TEST_ASSERT_EQ_INT(v->type, VT_STRING, "Array stored as string");
+    TEST_ASSERT(v != NULL && v->is_array, "Numeric array target");
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
+    TEST_ASSERT(desc && desc->magic == ARRAY_MAGIC, "desc valid");
+    unsigned char *buf = (unsigned char *)desc->data;
     
-    /* Verify header */
-    char *buf = v->value.s.ptr;
-    TEST_ASSERT_EQ_INT(buf[0], 0, "Header width high byte");
-    TEST_ASSERT_EQ_INT(buf[1], 2, "Header width low byte");
-    TEST_ASSERT_EQ_INT(buf[2], 0, "Header height high byte");
-    TEST_ASSERT_EQ_INT(buf[3], 2, "Header height low byte");
+    /* header: x-bits word = 4 (2px*2bpp), y-count word = 2 */
+    TEST_ASSERT_EQ_INT(buf[0] | (buf[1] << 8), 4, "Header x-bits = 4");
+    TEST_ASSERT_EQ_INT(buf[2] | (buf[3] << 8), 2, "Header y-count = 2");
     
-    /* Verify pixel data packed continuously (4 pixels into 1 byte) */
-    /* Pixels: [1, 2, 3, 1] -> bits: 01 10 11 01 = 0x6D */
+    /* bitmap at byte 4: pixels [1, 2, 3, 1] → bits 01 10 11 01 = 0x6D */
     TEST_ASSERT_EQ_INT(buf[4], 0x6D, "Pixel data packed correctly (01 10 11 01 = 0x6D)");
     
     ADVGRP_TEST_TEARDOWN();
@@ -216,6 +212,9 @@ void test_advgrp_get_put_roundtrip(void) {
     g_framebuffer[10 * MAX_WIDTH + 11] = 2;
     g_framebuffer[11 * MAX_WIDTH + 10] = 3;
     g_framebuffer[11 * MAX_WIDTH + 11] = 1;
+    
+    /* v144: numeric-array target */
+    biptrg_dim_array("TESTARR3", 100, VT_SINGLE);
     
     /* GET the pattern */
     int rc = advgrp_get(10, 10, 11, 11, "TESTARR3");
@@ -243,20 +242,19 @@ void test_advgrp_get_put_roundtrip(void) {
 void test_advgrp_put_basic(void) {
     ADVGRP_TEST_SETUP();
     
-    /* Test that PUT doesn't crash with a valid array */
-    char *buf = (char *)gwram_alloc(100);
-    buf[0] = 0; buf[1] = 2;  /* width = 2 */
-    buf[2] = 0; buf[3] = 2;  /* height = 2 */
-    buf[4] = 1; buf[5] = 2;  /* row 1 */
-    buf[6] = 3; buf[7] = 1;  /* row 2 (colors 1-3) */
-    
-    struct variable *v = gwdata_alloc_variable("TESTARR4", VT_STRING);
-    v->value.s.ptr = buf;
-    v->value.s.len = 8;
-    v->is_array = false;
+    /* v144: PUT reads from a standard numeric array (ASM GPUTG) */
+    biptrg_dim_array("TESTARR4", 100, VT_SINGLE);
+    struct variable *v = gwdata_find_variable("TESTARR4");
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
+    unsigned char *buf = (unsigned char *)desc->data;
+    buf[0] = 4; buf[1] = 0;  /* x-bits = 4 (2px * 2bpp) */
+    buf[2] = 2; buf[3] = 0;  /* y-count = 2 */
+    buf[4] = 0x6D;           /* pixels 01 10 11 01 (colors 1,2,3,1) */
     
     int rc = advgrp_put(10, 10, "TESTARR4", 1);  /* PSET */
     TEST_ASSERT_EQ_INT(rc, SUCCESS, "PUT PSET succeeds");
+    TEST_ASSERT_EQ_INT(gengrp_point(10, 10), 1, "PUT pixel (10,10)=1");
+    TEST_ASSERT_EQ_INT(gengrp_point(11, 10), 2, "PUT pixel (11,10)=2");
     
     ADVGRP_TEST_TEARDOWN();
     TEST_PASS("advgrp_put basic");

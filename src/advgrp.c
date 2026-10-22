@@ -269,13 +269,32 @@ void advgrp_circle(int x, int y, int radius, int color, float start_angle, float
     }
 }
 
-/* GET - Read graphics area into array */
-/* Syntax: GET (x1,y1)-(x2,y2), array_name */
+/* ===== v144 CRITICAL-1 fix: graphics GET/PUT storage =====
+ * ASM ADVGRP GPUTG L864: the block is stored in a standard NUMERIC array —
+ * first 2 elements = x-bits (word) + y-count (word) header, the bitmap
+ * follows packed MSB-first across rows (mode 1: 2 bits/pixel, mode 2:
+ * 1 bit/pixel). Array elements are 32-bit ints in our port (ASM used
+ * whatever element size the array had; we normalize to 4 bytes/element,
+ * matching DIM default single-precision storage). Capacity shortfall →
+ * FCERR (Illegal function call). String variables/arrays → FCERR. */
+
+extern int gwdata_set_error_ext(int code);
+
+static int advgrp_gfx_fcerr(void) {
+    /* FCERR = Illegal function call, code 5 */
+    extern uint16_t g_curlin;
+    gwdata_set_error(5, g_curlin, 0);
+    return ERROR;
+}
+
+/* element size in bytes for the array's declared type */
+static int advgrp_elem_size(var_type_t t) {
+    return (t == VT_INTEGER) ? 4 : (t == VT_DOUBLE) ? 8 : 4;
+}
+
 int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     if (g_screen_mode == 0) return ERROR;
-    if (!array_name || array_name[0] == 0) {
-        return ERROR;
-    }
+    if (!array_name || array_name[0] == 0) return ERROR;
     
     /* Ensure x1 <= x2, y1 <= y2 */
     if (x1 > x2) { int t = x1; x1 = x2; x2 = t; }
@@ -283,175 +302,122 @@ int advgrp_get(int x1, int y1, int x2, int y2, const char *array_name) {
     
     int width = x2 - x1 + 1;
     int height = y2 - y1 + 1;
-    
     if (width <= 0 || height <= 0) return ERROR;
     
-    /* Calculate array size */
+    /* target must be a numeric ARRAY (string var/array → FCERR).
+     * Unknown name → implicit DIM(10) (GW-BASIC: arrays under 11 elements
+     * need no DIM) — 11 elements * 4B = 44B capacity check still applies */
+    struct variable *v = biptrg_ensure_array(array_name);
+    if (!v || !v->is_array || v->type == VT_STRING) {
+        return advgrp_gfx_fcerr();
+    }
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
+    if (!desc || desc->magic != ARRAY_MAGIC || !desc->data) {
+        return advgrp_gfx_fcerr();
+    }
+    
+    /* required bytes: 4 header + bitmap (MSB-first, rows continuous) */
     int bits_per_pixel = (g_screen_mode == 2) ? 1 : 2;
-    int total_pixels = width * height;
-    int data_bits = total_pixels * bits_per_pixel;
+    int data_bits = width * height * bits_per_pixel;
     int data_bytes = (data_bits + 7) / 8;
-    int total_bytes = data_bytes + 4;  /* +4 for header */
-    
-    /* Find or create array variable */
-    struct variable *v = gwdata_find_variable(array_name);
-    if (!v) {
-        v = gwdata_alloc_variable(array_name, VT_STRING);
-        if (!v) return ERROR;
+    int need_bytes = 4 + data_bytes;
+    int elem_size = advgrp_elem_size(desc->type);
+    int cap_bytes = desc->size * elem_size;
+    if (need_bytes > cap_bytes) {
+        return advgrp_gfx_fcerr();  /* ASM: array too small → FCERR */
     }
     
-    if (!v->is_array) {
-        /* Allocate string buffer.
-         * NOTE: old string pointer may point into the static string heap —
-         * do NOT gwram_free it (invalid free). Just overwrite the descriptor;
-         * the heap is reclaimed wholesale by CLEAR/NEW via str_heap.used = 0. */
-        v->value.s.ptr = (char *)gwram_alloc(total_bytes + 2);  /* +2 for safety + null */
-        if (!v->value.s.ptr) return ERROR;
-        v->value.s.len = total_bytes + 2;
-        v->type = VT_STRING;
-        v->is_array = false;  /* Using string for binary data */
-    }
+    unsigned char *buf = (unsigned char *)desc->data;
     
-    /* Store header: width, height, data_bytes */
-    char *buf = v->value.s.ptr;
-    buf[0] = (width >> 8) & 0xFF;
-    buf[1] = width & 0xFF;
-    buf[2] = (height >> 8) & 0xFF;
-    buf[3] = height & 0xFF;
+    /* header: x-bits (word) + y-count (word) — ASM stores CL/CH then
+     * MINDEL word at the first 4 bytes of the array data */
+    int xbits = width * bits_per_pixel;
+    buf[0] = (unsigned char)(xbits & 0xFF);
+    buf[1] = (unsigned char)((xbits >> 8) & 0xFF);
+    buf[2] = (unsigned char)(height & 0xFF);
+    buf[3] = (unsigned char)((height >> 8) & 0xFF);
     
-    /* Read pixel data */
-    int pos = 4;
-    int bit = 7;
-    unsigned char byte = 0;
-    int bit2 = 6;
-    unsigned char byte2 = 0;
-
-    for (int y = y1; y <= y2 && pos < total_bytes; y++) {
-        for (int x = x1; x <= x2 && pos < total_bytes; x++) {
-            int pixel = gengrp_point(x, y);
-            if (g_screen_mode == 2) {
-                /* 1 bit per pixel */
-                if (pixel) byte |= (1 << bit);
-                bit--;
-                if (bit < 0) {
-                    if (pos < total_bytes) buf[pos++] = byte;
-                    byte = 0;
-                    bit = 7;
-                }
-            } else {
-                /* 2 bits per pixel - pack continuously across rows */
-                byte2 |= ((pixel & 3) << bit2);
-                bit2 -= 2;
-                if (bit2 < 0) {
-                    if (pos < total_bytes) buf[pos++] = byte2;
-                    byte2 = 0;
-                    bit2 = 6;
-                }
-            }
+    /* bitmap: MSB-first, packed continuously across rows.
+     * ASM GET overwrites (not OR) — clear the bitmap region first so
+     * stale array values don't leak into the packed data. */
+    memset(buf + 4, 0, (size_t)data_bytes);
+    int bitpos = 0;
+    for (int yy = y1; yy <= y2; yy++) {
+        for (int xx = x1; xx <= x2; xx++) {
+            int pixel = gengrp_point(xx, yy) & ((1 << bits_per_pixel) - 1);
+            int byte_idx = 4 + (bitpos >> 3);
+            int shift = 8 - bits_per_pixel - (bitpos & 7);
+            /* for 2bpp, pixel spans may straddle: handle bit-level */
+            buf[byte_idx] |= (unsigned char)(pixel << shift);
+            bitpos += bits_per_pixel;
         }
-    }
-    /* Flush remaining bits at the very end */
-    if (g_screen_mode == 2) {
-        if (bit != 7 && pos < total_bytes) buf[pos++] = byte;
-    } else {
-        if (bit2 != 6 && pos < total_bytes) buf[pos++] = byte2;
     }
     
     return SUCCESS;
 }
 
-/* PUT - Write graphics array to screen */
-/* Syntax: PUT (x,y), array_name[, action] */
-/* action: PSET, PRESET, AND, OR, XOR */
 int advgrp_put(int x, int y, const char *array_name, int action) {
     if (g_screen_mode == 0) return ERROR;
     if (!array_name || array_name[0] == 0) return ERROR;
     
-    /* Default action is XOR */
-    if (action < 0) action = 5;  /* XOR */
+    struct variable *v = biptrg_ensure_array(array_name);
+    if (!v || !v->is_array || v->type == VT_STRING) {
+        return advgrp_gfx_fcerr();
+    }
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
+    if (!desc || desc->magic != ARRAY_MAGIC || !desc->data) {
+        return advgrp_gfx_fcerr();
+    }
     
-    struct variable *v = gwdata_find_variable(array_name);
-    if (!v || v->type != VT_STRING || !v->value.s.ptr) return ERROR;
-    
-    char *buf = v->value.s.ptr;
-    
-    /* Read header */
-    int width = (buf[0] << 8) | buf[1];
-    int height = (buf[2] << 8) | buf[3];
-    
-    if (width <= 0 || height <= 0) return ERROR;
-    
-    /* Calculate proper buffer length from header info */
+    unsigned char *buf = (unsigned char *)desc->data;
+    int xbits = buf[0] | (buf[1] << 8);
+    int height = buf[2] | (buf[3] << 8);
     int bits_per_pixel = (g_screen_mode == 2) ? 1 : 2;
-    int total_pixels = width * height;
-    int data_bits = total_pixels * bits_per_pixel;
-    int data_bytes = (data_bits + 7) / 8;
-    int max_data_len = 4 + data_bytes;
+    int width = bits_per_pixel > 0 ? xbits / bits_per_pixel : 0;
+    if (width <= 0 || height <= 0) return advgrp_gfx_fcerr();
     
-    /* Use the calculated data length instead of strlen (binary data may contain null bytes) */
-    int buf_len = max_data_len;
+    /* Default action is XOR (ASM GFUNTB default) */
+    if (action < 0) action = 5;
     
-    int pos = 4;
-    int bit = 7;
-    unsigned char byte = 0;
-    int bit2 = 6;
-    unsigned char byte2 = 0;
+    int fb_w = gengrp_get_fb_width();
+    int fb_h = gengrp_get_fb_height();
     
+    int bitpos = 0;
     for (int dy = 0; dy < height; dy++) {
         for (int dx = 0; dx < width; dx++) {
-            int pixel = 0;
-            if (g_screen_mode == 2) {
-                /* 1 bit per pixel */
-                if (bit == 7) {
-                    if (pos < buf_len) byte = buf[pos++];
-                    else byte = 0;
-                }
-                pixel = (byte >> bit) & 1;
-                bit--;
-            } else {
-                /* 2 bits per pixel - continuous packing */
-                if (bit2 == 6) {
-                    if (pos < buf_len) byte2 = buf[pos++];
-                    else byte2 = 0;
-                }
-                pixel = (byte2 >> bit2) & 3;
-                bit2 -= 2;
-                if (bit2 < 0) {
-                    bit2 = 6;
-                }
-            }
+            int byte_idx = 4 + (bitpos >> 3);
+            int shift = 8 - bits_per_pixel - (bitpos & 7);
+            int pixel = (buf[byte_idx] >> shift) & ((1 << bits_per_pixel) - 1);
+            bitpos += bits_per_pixel;
             
-            /* Apply action */
             int sx = x + dx;
             int sy = y + dy;
+            if (sx < 0 || sx >= fb_w || sy < 0 || sy >= fb_h) continue;
             
             switch (action) {
                 case 1:  /* PSET */
                     gengrp_direct_pset(sx, sy, pixel);
                     break;
                 case 2:  /* PRESET */
-                    gengrp_preset(sx, sy, -1);
+                    gengrp_direct_pset(sx, sy, (1 << bits_per_pixel) - 1 - pixel);
                     break;
-                case 3:  /* AND */
-                    {
-                        int cur = gengrp_point(sx, sy);
-                        gengrp_direct_pset(sx, sy, cur & pixel);
-                    }
+                case 3: { /* AND */
+                    int cur = gengrp_point(sx, sy);
+                    gengrp_direct_pset(sx, sy, cur & pixel);
                     break;
-                case 4:  /* OR */
-                    {
-                        int cur = gengrp_point(sx, sy);
-                        gengrp_direct_pset(sx, sy, cur | pixel);
-                    }
+                }
+                case 4: { /* OR */
+                    int cur = gengrp_point(sx, sy);
+                    gengrp_direct_pset(sx, sy, cur | pixel);
                     break;
-                case 5:  /* XOR */
-                    {
-                        int cur = gengrp_point(sx, sy);
-                        gengrp_direct_pset(sx, sy, cur ^ pixel);
-                    }
+                }
+                case 5: { /* XOR */
+                    int cur = gengrp_point(sx, sy);
+                    gengrp_direct_pset(sx, sy, cur ^ pixel);
                     break;
+                }
                 default:
-                    gengrp_direct_pset(sx, sy, pixel);  /* Default to PSET */
+                    gengrp_direct_pset(sx, sy, pixel);
                     break;
             }
         }

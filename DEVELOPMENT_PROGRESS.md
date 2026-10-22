@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | M2 图形深化批完成 (CIRCLE/PAINT/GET/PUT 语句接线 + fb 统一根因修复)；下一步 M2 收尾或类型系统审计 |
+| **当前阶段** | CODE_REVIEW v144 CRITICAL-1 修复完成 (图形 GET/PUT 标准数值数组语义)；下一步 v145 review / M2 收尾 |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -23,7 +23,42 @@
 
 ---
 
-## 当前轮: M2 图形深化 — CIRCLE/PAINT/GET/PUT 语句接线 + fb 统一根因
+---
+
+## 当前轮: CODE_REVIEW v144 CRITICAL-1 修复 — 图形 GET/PUT 标准数组语义
+
+### 根因 (v144 实证 3 项全部独立复现)
+
+图形 GET/PUT 旧实现以"字符串变量"为私有存储 — DIM 数值数组的
+value.s.ptr 是数组描述符指针 → GET 覆写描述符 (G(1) 数据丢失 +
+array_data 野指针风险); PUT 硬性要求 VT_STRING 拒绝数值数组;
+字符串标量变量也被静默覆盖。
+
+### 修复 (ASM GPUTG L864 语义)
+
+| # | 内容 | 文件 |
+|---|------|------|
+| 1 | GET/PUT 重写为标准数值数组路径: 头 2 元素 = x-bits(word)+y-count(word), 位图 MSB-first 跨行连续 (mode1: 2bpp / mode2: 1bpp) 写入 desc->data 原始字节 | advgrp.c |
+| 2 | 容量检查: need_bytes > size*elemsize → FCERR(5) (不越界写) | advgrp.c |
+| 3 | 类型检查: 字符串变量/字符串数组 → FCERR; 未 DIM 名字 → 隐式 DIM(10) (biptrg_ensure_array, <11 元素免 DIM 语义) | advgrp.c + biptrg.c |
+| 4 | GET 位图区 memset 后写入 (ASM 覆写语义, 非 OR — 修复旧值残留) | advgrp.c |
+| 5 | PUT PRESET 动作按 bpp 反转 (旧版固定 -1 只对 1bpp 正确) | advgrp.c |
+| 6 | array_desc_t/ARRAY_MAGIC 从 biptrg.c 私有移至 gwbasic.h (跨模块共享, ASM GTARRY 单一访问器语义) | gwbasic.h + biptrg.c |
+| 7 | 旧 test_advgrp.c 4 测试按 ASM 真值重写 (字符串私有断言 → 数值数组断言) | test_advgrp.c |
+| 8 | 新测试 +4 (DIM preserved/roundtrip/string rejected/too small) + test_gfx_getput.bas/.expected + test_gfx_circle.bas 修 DIM | tests/ |
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3230/3230 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **77/77**（+test_gfx_getput; test_gfx_circle 补 DIM） |
+| 孤儿检测 | ✅ **852 = 852**, 0 孤儿 0 幽灵 |
+| .bas 实证 | DIM roundtrip PP/PX/PS=1 (XOR/PSET); 两次 XOR 抵消=0; 字符串变量 GET → Error (内容保留); 小数组 GET → Error (FCERR); 未 DIM 小块 → 隐式数组可用 |
+
+---
+## 上一轮: M2 图形深化 — CIRCLE/PAINT/GET/PUT 语句接线 + fb 统一根因
 
 ### ASM 依据 (ADVGRP.ASM L108-1000)
 

@@ -176,6 +176,10 @@ void test_gwsts_gfx2_paint_region(void);
 void test_gwsts_gfx2_get_put_roundtrip(void);
 void test_gwsts_gfx2_put_pset_action(void);
 void test_gwsts_gfx2_file_get_regression(void);
+void test_gwsts_gfx2_get_dim_array_preserved(void);
+void test_gwsts_gfx2_get_put_dim_roundtrip(void);
+void test_gwsts_gfx2_get_string_rejected(void);
+void test_gwsts_gfx2_get_array_too_small(void);
 void test_gweval_strfuncs_if_compound_str_and(void);
 void test_gweval_strfuncs_if_compound_str_or(void);
 void test_gweval_strfuncs_if_else_both(void);
@@ -1087,6 +1091,10 @@ failed += run_test("test_gwsts_gfx2_paint_region", test_gwsts_gfx2_paint_region)
 failed += run_test("test_gwsts_gfx2_get_put_roundtrip", test_gwsts_gfx2_get_put_roundtrip);
 failed += run_test("test_gwsts_gfx2_put_pset_action", test_gwsts_gfx2_put_pset_action);
 failed += run_test("test_gwsts_gfx2_file_get_regression", test_gwsts_gfx2_file_get_regression);
+failed += run_test("test_gwsts_gfx2_get_dim_array_preserved", test_gwsts_gfx2_get_dim_array_preserved);
+failed += run_test("test_gwsts_gfx2_get_put_dim_roundtrip", test_gwsts_gfx2_get_put_dim_roundtrip);
+failed += run_test("test_gwsts_gfx2_get_string_rejected", test_gwsts_gfx2_get_string_rejected);
+failed += run_test("test_gwsts_gfx2_get_array_too_small", test_gwsts_gfx2_get_array_too_small);
 
 failed += run_test("gweval_strfuncs_if_compound_str_and", test_gweval_strfuncs_if_compound_str_and);
 failed += run_test("gweval_strfuncs_if_compound_str_or", test_gweval_strfuncs_if_compound_str_or);

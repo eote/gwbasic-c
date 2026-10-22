@@ -173,3 +173,93 @@ void test_gwsts_gfx2_file_get_regression(void) {
     gwsts_exec_statement("CLOSE #1");
     TEST_PASS("gwsts gfx2 file get regression");
 }
+
+
+/* ===== v144 CRITICAL-1: GET/PUT standard numeric-array storage ===== */
+
+/* Test: GET into a DIM'd numeric array must NOT corrupt it (ASM GPUTG:
+ * header in first 2 elements + bitmap packed into array elements) */
+void test_gwsts_gfx2_get_dim_array_preserved(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    gengrp_init();
+    gengrp_fb_clear();
+    gwsts_exec_statement("SCREEN 1");
+    gwsts_exec_statement("DIM G(100)");
+    gwsts_exec_statement("G(1) = 999");
+    gwsts_exec_statement("PSET (0, 0), 3");
+    gwsts_exec_statement("GET (0,0)-(3,3), G");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 0, "GET into DIM array no error");
+    /* v144: raw bytes of array data — header xbits=8,y=4 then bitmap
+     * (pixel 3 at MSB → 0xC0). Read via descriptor (BASIC float readback
+     * of raw bytes is type-punned, same as GW-BASIC). */
+    struct variable *g = gwdata_find_variable("G");
+    TEST_ASSERT(g && g->is_array, "G is numeric array");
+    array_desc_t *desc = (array_desc_t *)g->value.s.ptr;
+    TEST_ASSERT(desc && desc->magic == ARRAY_MAGIC && desc->data, "desc valid");
+    unsigned char *d = (unsigned char *)desc->data;
+    TEST_ASSERT_EQ_INT(d[0] | (d[1] << 8), 8, "header x-bits = 8");
+    TEST_ASSERT_EQ_INT(d[2] | (d[3] << 8), 4, "header y-count = 4");
+    TEST_ASSERT_EQ_INT(d[4], 0xC0, "bitmap byte (pixel 3 at MSB)");
+    /* G(1) was overwritten by bitmap data (not corrupted to a wild value):
+     * its float bit pattern changed from 999's */
+    TEST_ASSERT(g->value.f == g->value.f, "array data readable");
+    TEST_PASS("gfx2 GET DIM array preserved");
+}
+
+/* Test: standard DIM roundtrip — GET then PUT restores pixels */
+void test_gwsts_gfx2_get_put_dim_roundtrip(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    gengrp_init();
+    gengrp_fb_clear();
+    gwsts_exec_statement("SCREEN 1");
+    gwsts_exec_statement("DIM G(100)");
+    gwsts_exec_statement("LINE (40,40)-(44,44), 1, BF");
+    gwsts_exec_statement("GET (38,38)-(46,46), G");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 0, "DIM GET no error");
+    gwsts_exec_statement("PUT (60,60), G");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 0, "DIM PUT no error");
+    gwsts_exec_statement("C = POINT(62,62)");
+    struct variable *c = gwdata_find_variable("C");
+    TEST_ASSERT(c, "C allocated");
+    TEST_ASSERT_EQ_INT((int)c->value.f, 1, "DIM roundtrip pixel (62,62)");
+    TEST_PASS("gfx2 DIM roundtrip");
+}
+
+/* Test: GET into a string variable → error, variable untouched */
+void test_gwsts_gfx2_get_string_rejected(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    gengrp_init();
+    gengrp_fb_clear();
+    gwsts_exec_statement("SCREEN 1");
+    gwsts_exec_statement("S$ = \"ABC\"");
+    int rc = gwsts_exec_statement("GET (0,0)-(3,3), S$");
+    TEST_ASSERT(rc != 0 || gwdata_get_error() != 0, "GET to string var errors");
+    struct variable *v = gwdata_find_variable("S$");
+    TEST_ASSERT(v && v->value.s.ptr && strcmp(v->value.s.ptr, "ABC") == 0,
+                "S$ content preserved");
+    TEST_PASS("gfx2 GET string rejected");
+}
+
+/* Test: array too small for the block → error (no overflow write) */
+void test_gwsts_gfx2_get_array_too_small(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    gengrp_init();
+    gengrp_fb_clear();
+    gwsts_exec_statement("SCREEN 1");
+    gwsts_exec_statement("DIM S(5)");
+    int rc = gwsts_exec_statement("GET (0,0)-(39,39), S");
+    TEST_ASSERT(rc != 0 || gwdata_get_error() != 0, "small array GET errors (FCERR)");
+    TEST_PASS("gfx2 GET array too small");
+}

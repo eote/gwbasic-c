@@ -399,8 +399,22 @@ void biprtu_print_using_str(const char *fmt, const char *str);
 
 /* BIPTRG module functions */
 void biptrg_init(void);
+/* Array descriptor (shared: biptrg DIM machinery + advgrp graphics GET/PUT;
+ * ASM GTARRY is the single cross-module array-data accessor) */
+typedef struct {
+    uint32_t magic;       /* Magic number to identify valid array descriptors */
+    var_type_t type;
+    int size;
+    int dimensions;
+    int *dim_sizes;  /* For multi-dimensional arrays */
+    void *data;      /* Array data */
+} array_desc_t;
+
+#define ARRAY_MAGIC 0x41525241  /* "ARRA" */
+
 int biptrg_dim_array(const char *name, int size, var_type_t type);
 int biptrg_dim_array_multi(const char *name, const int *dim_sizes, int dimensions, var_type_t type);
+struct variable *biptrg_ensure_array(const char *name);  /* implicit DIM(10) for unknown names (v141) */
 int biptrg_set_array_element(const char *name, int index, float val);
 int biptrg_set_array_element_multi(const char *name, const int *indices, float val);
 float biptrg_get_array_element(const char *name, int index);
