@@ -1,39 +1,47 @@
-# GW-BASIC C Port - Code Review v144
+# GW-BASIC C Port - Code Review v145
 
-**日期**: 2026-10-22
-**审查范围**: commit `c63ecf0`（feat: M2 图形深化 — CIRCLE/PAINT/GET/PUT 语句接线 + 弧线点计数 + fb 统一根因 + 图形 GET/PUT 分派）→ 工作区
-**测试状态**: 单元测试 **3223/3223 通过**（0 失败，0 警告）✅ | .bas 集成 **16 个受影响/关键回归用例直接运行**（输出与 expected 逐行一致，含新增 test_gfx_circle）✅ | 其余 60 个用例本批代码路径无交集（单测全量覆盖）⏸
+**日期**: 2026-10-23
+**审查范围**: commits `9cb0fa4`（v144 CRITICAL-1 修复：图形 GET/PUT 标准数值数组语义）+ `0ee5da5`（FOR 首次迭代检查 + STEP 0 哨兵）→ 工作区
+**测试状态**: 单元测试 **3238/3238 通过**（0 失败，0 警告）✅ | .bas 集成 **16 个受影响/回归用例直接运行**（输出与 expected 逐行一致）✅ | 其余 60 个用例本批代码路径无交集（单测全量覆盖）⏸
 **工作区状态**: clean
-**总体评分**: C — CIRCLE/PAINT/fb 统一/分派实现良好（16 个 .bas 直接验证一致），但发现 **1 个 CRITICAL**（图形 GET/PUT 对标准 DIM 数值数组破坏数组描述符/数据）
+**总体评分**: A- — v144 CRITICAL-1 修复确认（4 项 probe 全绿）+ FOR 常规语义修复正确；发现 **1 MEDIUM**（FOR 0 次 + NEXT 为最后一行边界）及观察项
 
 ---
 
 ## 一、概述
 
-本次审查 M2 图形深化提交 `c63ecf0`（11 文件，+647/-52）：
+本次审查两个修复提交：
 
-| 变更 | 说明 |
+| 提交 | 内容 |
 |------|------|
-| CIRCLE 语句 | `CIRCLE (x,y),r[,color[,start[,end[,aspect]]]]`（ASM ADVGRP CIRCLE L460；弧度、负角画半径线、aspect 缩放） |
-| PAINT 语句 | `PAINT (x,y)[,fill[,border]]`（ASM PAINT L121；fill/border 默认 -1） |
-| 图形 GET/PUT | `GET (x1,y1)-(x2,y2),arr` / `PUT (x,y),arr[,action]`（action：PSET/PRESET/AND/OR/XOR，默认 XOR；文件形态 `GET #n` / `PUT #n` 保持分派） |
-| fb 统一根因 | `gengrp_set_screen_mode` 同步 `g_fb_width/height`（0:80×25 / 1:320×200 / 2:640×200）；新增 `gengrp_fb_clear()`（测试隔离） |
-| advgrp 实现 | CIRCLE/PAINT/GET/PUT 主体（+159） |
-| 新测试 | `test_gwsts_gfx2.c`（6 测试）+ `test_gfx_circle.bas/expected` 集成 |
+| `9cb0fa4` | **v144 CRITICAL-1 修复**：图形 GET/PUT 改为标准数值数组语义（ASM GPUTG；头 2 元素 x-bits/y-count、位图 MSB-first 连续、容量不足/字符串 → FCERR、隐式 DIM、GET 覆写语义）；`array_desc_t` 移入 gwbasic.h、`biptrg_ensure_array` 导出 |
+| `0ee5da5` | **FOR 首次迭代检查**（ASM FOR→NEXTS：初值超限 → 0 次循环、变量保持初值、扫描匹配 NEXT 跳转）+ **STEP 0 哨兵**（NT0STP：sign=2 → ANSI 无限循环语义） |
+
+### v144 CRITICAL-1 修复确认（全部验证通过）
+
+| 验证项（probe，已清理） | 结果 |
+|--------------------------|------|
+| DIM 数组 GET/PUT roundtrip + XOR 擦除 | ✅ `DIM G(100)`：`C= 1 D= 1`；二次 PUT `XOR= 0` |
+| 数组容量不足 | ✅ `DIM G(2)` + 9×9 GET → `Error at line 40`（FCERR） |
+| 隐式 DIM（未声明数组） | ✅ `GET (38,38)-(46,46), H` → PUT → `C= 1` |
+| 字符串变量参数 | ✅ `GET ..., S$` → `Error at line 30`（FCERR，S$ 未被破坏） |
+
+### v145 FOR 修复验证
+
+| 验证项（probe） | 结果 |
+|------------------|------|
+| 0 次循环（初值超限，正常 NEXT） | ✅ `FOR I=1 TO 0` → 体不执行，`AFTER I= 1`（初值保持） |
+| 正常循环 / 负步长 | ✅ `I=1..3`；`J=3,2,1`；`DONE` |
+| **0 次循环 + NEXT 为最后一行** | ❌ **MEDIUM-1 实证**：`BODY` 被错误执行一次 + `Error at line 30` |
+| 紧凑 `FORX=1 TO 2` | ⚠️ 不支持（既有语句分派要求 `"FOR "`，非本批引入） |
 
 ### 验证结果（独立执行，当前 checkout）
 
 | 验证项 | 结果 |
 |--------|------|
-| 增量重建 + 单元测试 | ✅ **3223/3223 PASS** |
+| 干净重建 + 单元测试 | ✅ **3238/3238 PASS** |
 | 编译警告 | ✅ **0 条** |
-| .bas 受影响/关键回归（直接运行 + expected） | ✅ **16/16 一致**：gfx_circle（9/9）、arrays（11/11）、multi_array、string_arrays、graphics（11/11）、gfx_v141（7/7）、put_get（5/5）、file_seq（5/5）、file_rand（5/5）、line_input（3/3）、delete、delete_exec、renum、if_else（6/6）、string_funcs（10/10）、on_goto（3/3） |
-| probe：CIRCLE 全圆/弧 | ✅ 单测 + gfx_circle 一致（E/W/N/S、IN/OUT、PP、ARCN/ARCS） |
-| probe：PAINT 区域 | ✅ 单测（圆内/边缘/外部）＋ 默认 fill `P=1` |
-| probe：GET/PUT 私有路径 | ✅ 未 DIM 数组 roundtrip + XOR 默认擦除 + PSET 动作（单测） |
-| probe：**DIM 数值数组 GET/PUT** | ❌ **CRITICAL-1 实证**（见下） |
-| probe：GET 到字符串变量 | ❌ `S$=` 被破坏（CRITICAL-1 同根） |
-| probe：CIRCLE 缺 radius / SCREEN 0 下 PSET | ⚠️ 静默（观察项） |
+| .bas 受影响/回归（直接运行 + expected） | ✅ **16/16 一致**：gfx_getput（4/4，新增）、gfx_circle（9/9）、for_edges（13/13，新增）、graphics（11/11）、gfx_v141（7/7）、arrays（11/11）、multi_array、string_arrays、put_get（5/5）、line_input（3/3）、delete、delete_exec、renum、if_else、string_funcs、on_goto |
 
 ---
 
@@ -41,48 +49,30 @@
 
 ### 🟥 CRITICAL
 
+无（v144 CRITICAL-1 已修复确认）。
+
+### 🟧 HIGH
+
+无。
+
+### 🟨 MEDIUM
+
 | # | 描述 | 文件 |
 |---|------|------|
-| 1 | **图形 GET/PUT 对标准 `DIM` 数值数组破坏数组描述符与数据**：GET 向数组变量 `value.s.ptr`（=数组描述符指针）写入 header+位图，覆写 `dim_count/dims/array_data`；PUT 拒绝数值数组（`type != VT_STRING → ERROR`） | `src/advgrp.c`（L275-461）、`src/biptrg.c`（L84/L138） |
+| 1 | **FOR 0 次循环 + NEXT 为程序最后一行时，循环体被错误执行一次（随后 NEXT without FOR）** | `src/next86.c`（`next86_scan_matching_next` / 首次迭代返回路径） |
 
 **详情**:
 
-**实证 1**（数组数据被破坏）：
 ```basic
-10 DIM G(100)
-20 G(1) = 999
-30 SCREEN 1
-40 GET (0,0)-(3,3), G
-50 PRINT "G1="; G(1)
+10 FOR I=1 TO 0
+20 PRINT "BODY"
+30 NEXT I
 ```
-实测：`G1= 0`（原值 999 被破坏）→ GET 把 header+像素写进了**数组描述符**（`biptrg.c:84/138` 将 `value.s.ptr` 设为 `desc` 指针），覆写 `dim_count/dims[]/array_data` → 数组数据访问失效，`array_data` 指针可被污染（野指针风险 UB）。
+实测：`BODY` / `Error at line 30`（GW-BASIC 期望：体不执行、程序正常结束）。
 
-**实证 2**（标准 PUT 失败）：
-```basic
-10 DIM G(100): SCREEN 1: LINE (40,40)-(44,44),1,BF
-40 GET (38,38)-(46,46), G
-60 PUT (60,60), G
-```
-实测：`Error at line 60`（`advgrp_put` 要求 `VT_STRING`，数值数组被拒绝）→ GW-BASIC 标准 `DIM` + `GET`/`PUT` 用法失效。
+**根因**：首次迭代判定 `first_done` 为真 → 弹栈并调用 `next86_scan_matching_next(g_curlin)`；匹配 NEXT 是最后一行时 `after == NULL` → 返回 **0**；gwmain 将 `rc == 0` 视为"成功继续" → 执行 FOR 的下一行（循环体）→ BODY；随后 `NEXT I` 因 FOR 已弹栈 → NEXT without FOR 错误。
 
-**实证 3**（字符串变量被破坏）：
-```basic
-10 S$ = "ABC": SCREEN 1
-30 GET (0,0)-(3,3), S$
-40 PRINT "S$="; S$
-```
-实测：`S$=`（原 "ABC" 被覆盖）→ 应报类型错误（GET 只接受数值数组）。
-
-**根因**：实现以"字符串变量"作为 GET/PUT 的私有存储格式；未实现 ASM 的**数值数组存储语义**（头 2 元素 width/height + 位图按整数元素打包，MSB-first）。`DIM` 数组的 `value.s.ptr` 指向数组描述符（非像素缓冲），直接作为写入缓冲 → 描述符覆写；PUT 对 `VT_STRING` 的硬性检查拒绝合法数组。
-
-**测试盲区**：6 个新单测的 GET/PUT 用例全部使用**未 DIM** 的 `G`（走"创建字符串变量"私有路径）；`test_gfx_circle.bas` 只测 CIRCLE/PAINT → 标准 DIM 路径从未被覆盖。
-
-**修复建议**：
-1. GET/PUT 改为**数值数组元素**存取（通过 biptrg 数组 API）：头 2 元素 `width/height`，随后按 ASM 位图打包（模式 1：2 bits/像素、模式 2：1 bit/像素，MSB-first，跨行连续）
-2. 容量检查：数组元素不足 → FCERR/Illegal function call（不得越界写）
-3. 字符串变量 → 类型错误（SNERR/FCERR），不得覆盖
-4. 补测试：`DIM` 数组 roundtrip（GET→PUT 验像素）、数组不足、字符串变量拒绝、隐式数组（0..10）行为
-5. 若保留私有字符串格式作为扩展，需显式类型检查并禁止数值数组进入该路径
+**修复建议**：无后续行时返回一个"跳到程序末尾"的明确信号（例如返回 `-2`/END 语义，或返回一个不存在行号的 sentinel 并让 gwmain 特判），不得用 0 表示跳过；补单测（NEXT 最后一行 0 次循环）与 .bas 用例。
 
 ### 🟧 HIGH
 
@@ -96,85 +86,85 @@
 
 无（阻塞）。观察项（不计问题）：
 
-1. **CIRCLE 缺 radius**（`CIRCLE (50,50)`）→ 静默 radius=0（应语法错误）
-2. **SCREEN 0 下 PSET** 静默成功（应 Illegal function call；GET 在 mode 0 已正确 return ERROR）
-3. **PAINT 默认 fill** 实测 `P=1`（FORCLR；待 ASM 对照确认默认 border 语义）
-4. 行内冒号多语句（`... : PRINT`）为全局既有执行模型限制（非本批引入）
-5. GET/PUT 数组名后尾随垃圾被忽略
+1. **PUT 缺容量校验**：按数组 header 的 width/height 读取时不核对 `desc->size`；若 header 被用户改写 → 越界读（ASAN 可捕获）。建议 PUT 也按 header 计算 need_bytes 并与容量比对 → FCERR。
+2. 紧凑 `FORI=...` 不支持（语句分派要求 `"FOR "`，既有兼容性缺口；`next86_scan_matching_next` 的 `"FOR "` 判定与语言支持一致）。
+3. GET/PUT 元素大小归一 4 字节（ASM 依数组元素大小；INTEGER 数组在 ASM 为 2 字节 → 跨格式兼容需确认）。
+4. STEP 0 按 ANSI 进入无限循环（NT0STP 语义，符合规范；用户程序会挂起）。
+5. GET/PUT header 为 x-bits/y-count（LE）内部自洽；与 `BSAVE/LOAD` 数组文件格式的跨工具兼容未验证。
+6. v144 观察项（CIRCLE 缺 radius、SCREEN 0 下 PSET、PAINT 默认 border、行内冒号）仍开放。
 
 ---
 
 ## 三、架构评估
 
-### 图形深化质量（c63ecf0）
+### 修复质量
 
-| 决策 | 评价 |
-|------|------|
-| CIRCLE 解析（共享 coord_pair + 逐级可选参数）+ advgrp 弧线实现 | ✅ 正确（单测 + gfx_circle 9/9） |
-| PAINT 解析 + 区域填充/边界 | ✅ 正确（单测） |
-| GET/PUT 语句分派（`(` 图形 / `#` 文件）+ 文件路径回归 | ✅ 正确（test_put_get/file_seq/file_rand/line_input 全过） |
-| PUT action（PSET/PRESET/AND/OR/XOR，默认 XOR） | ✅ 正确（XOR 擦除单测实证） |
-| fb 统一（`gengrp_set_screen_mode` 同步尺寸） | ✅ 正确根因修复（图形边界检查依赖 fb 尺寸） |
-| `gengrp_fb_clear`（测试隔离） | ✅ 合理 |
-| **GET/PUT 存储模型（字符串变量私有格式）** | ❌ **CRITICAL-1** — 与 ASM 数值数组语义不符，破坏 DIM 数组 |
-| 6 新单测 | ✅ 隔离良好；❌ GET/PUT 只覆盖未 DIM 私有路径（盲区） |
+| 提交 / 决策 | 评价 |
+|-------------|------|
+| GET/PUT 改用数值数组元素（header + MSB-first 位图，通过 desc->data） | ✅ 正确 — DIM roundtrip/XOR/容量/隐式/字符串 4 项 probe 全绿 |
+| 容量检查（need_bytes > size*elem_size → FCERR） | ✅ 正确（DIM G(2) 实证） |
+| GET 覆写语义（memset 位图区） | ✅ 符合 ASM「GET overwrites」 |
+| `biptrg_ensure_array` 导出 + `array_desc_t` 共享 | ✅ 消除跨模块重复定义，布局一致 |
+| PRESET 动作按位取反 `(1<<bpp)-1-pixel` | ✅ 合理（ASM complement） |
+| FOR 首次迭代（0 次体、初值保持、扫描匹配 NEXT） | ✅ 常规场景正确（probe + for_edges 13/13）|
+| STEP 0 哨兵（sign=2，ANSI 无限） | ✅ 符合 NT0STP |
+| **NEXT 最后一行返回 0** | ⚠️ **MEDIUM-1** — 0 与"继续"歧义 |
+| 测试（test_gwsts_gfx2 +90、test_next86_firstiter 114、gfx_getput/for_edges 集成） | ✅ 质量高；缺 NEXT 最后一行边界用例 |
 
 ### 测试覆盖分析
 
 | 功能 | 覆盖情况 |
 |------|----------|
-| CIRCLE 全圆/弧/端点 | ✅ 单测 + .bas |
-| PAINT 区域/边界 | ✅ 单测 |
-| GET/PUT 私有（未 DIM）roundtrip / XOR / PSET | ✅ 单测 |
-| 文件 GET/PUT 分派回归 | ✅ 单测 + .bas |
-| **DIM 数值数组 GET/PUT（标准语法）** | ❌ **盲区 → CRITICAL-1** |
-| 字符串变量参数拒绝 | ❌ 盲区（实测被破坏） |
-| 数组容量不足 | ❌ 盲区 |
+| GET/PUT DIM/隐式/容量/字符串 | ✅ 单测 + probe + gfx_getput |
+| FOR 0 次（正常 NEXT）/ 正常 / 负步长 | ✅ 单测 + probe + for_edges |
+| **FOR 0 次 + NEXT 最后一行** | ❌ 盲区 → MEDIUM-1 |
+| FOR 嵌套（深度扫描） | ✅ for_edges 含嵌套场景 |
+| 注册一致性 | ✅（单测 3238 全过） |
 
 ---
 
 ## 四、改进建议
 
 ### 短期（阻塞项）
-1. **CRITICAL-1**：按 ASM 数值数组语义重写 GET/PUT 存储（2 元素头 + 位图整数打包 MSB-first）；容量检查；字符串变量类型错误；补 DIM roundtrip/不足/拒绝测试
-2. 观察项 1/2：CIRCLE 缺 radius、SCREEN 0 图形语句 → 语法/FCERR
+1. **MEDIUM-1**：`next86_scan_matching_next` 无后续行时返回明确的程序末尾信号（非 0）；补 NEXT 最后一行 0 次循环单测 + .bas
+2. 观察项 1：PUT 增加按 header 的容量校验（FCERR）
 
 ### 中期（M2 规划）
-3. .bas 集成补 `DIM` 数组 GET/PUT 场景（含大块跨行打包）
-4. PAINT 默认 fill/border 与 ASM 对照
+3. GET/PUT 与 BSAVE/LOAD 数组格式的兼容性验证（如后续实现）
+4. v144 图形观察项（CIRCLE radius、SCREEN 0 图形语句）随批次处理
 5. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 套件回归）
 
 ### 长期
-6. ASAN 构建（GET/PUT 描述符覆写类问题可被捕获）
+6. ASAN 构建（PUT 越界读/描述符类问题）
 7. 定期 .bas 集成回归
 
 ---
 
 ## 五、总结
 
-**总体评价**: CIRCLE/PAINT/GET/PUT 语句接线与 fb 统一根因质量良好 — CIRCLE 全圆/弧、PAINT 区域、GET/PUT 文件分派、action 默认 XOR 全部正确（16 个 .bas 直接验证一致，含新增 test_gfx_circle）；单测 3223/3223、0 警告。**但图形 GET/PUT 的存储模型存在 CRITICAL 缺陷**：对 GW-BASIC 标准 `DIM` 数值数组，GET 覆写数组描述符（`G(1)` 被破坏、`array_data` 野指针风险），PUT 直接拒绝（`Error`）；字符串变量参数也被破坏。测试仅覆盖未 DIM 的私有路径。
-**关键发现**: **1 CRITICAL**（GET/PUT 存储模型/数组描述符破坏）、0 HIGH、0 MEDIUM、5 观察项。
-**建议**: 按 ASM 数值数组语义重写 GET/PUT（含容量检查与类型错误），补 DIM 路径测试；修复后进行 v145 review。
+**总体评价**: 两个修复提交质量高 — v144 CRITICAL-1（GET/PUT 标准数值数组）4 项 probe 全部修复确认（DIM roundtrip/XOR、容量 FCERR、隐式 DIM、字符串 FCERR），FOR 首次迭代常规语义正确（0 次体/初值保持/负步长）、STEP 0 哨兵符合 ANSI；单测 3238/3238、16 个 .bas 直接验证一致、0 警告。**但发现 1 MEDIUM**：FOR 0 次 + NEXT 为程序最后一行时，扫描返回 0 被当作"继续"→ 体错误执行一次 + NEXT without FOR。
+**关键发现**: 0 CRITICAL / 0 HIGH / **1 MEDIUM**（FOR 边界）、6 观察项。
+**建议**: 修复 NEXT 最后一行边界（返回明确末尾信号）+ PUT 容量校验；修复后进行 v146 review。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v143 | v144 | 变化 |
+| 指标 | v144 | v145 | 变化 |
 |------|------|------|------|
-| 单元测试通过（test_runner） | 3199 | **3223** | ✅ +24（+6 测试函数） |
-| 定义数（唯一函数） | 840 | **846** | +6 |
-| 注册数（run_test 调用） | 840 | **846** | +6 |
+| 单元测试通过（test_runner） | 3223 | **3238** | ✅ +15（+测试函数） |
+| 定义数（唯一函数） | 846 | **851** | +5 |
+| 注册数（run_test 调用） | 846 | **851** | +5 |
 | 孤儿数 | 0 | **0** | 保持 |
 | 生产/测试警告 | 0 | **0** | 保持 |
-| .bas 集成 | 75/75 基线 | **16/16 受影响/关键回归直接验证一致**（其余 60 无交集） | 新增 test_gfx_circle |
-| CIRCLE / PAINT | ⏳ 未实现 | ✅ 实现（单测 + 9/9 .bas） | 完成 |
-| fb 统一（SCREEN 尺寸同步） | 缺陷根因 | ✅ 修复 | 完成 |
-| **图形 GET/PUT（DIM 数组）** | — | ❌ **CRITICAL-1** | 新发现 |
-| M2 进度 | 2/3 + 图形修复轮 | **2/3 + 图形深化批** | 推进 |
+| .bas 集成 | 16/16 受影响 | **16/16 受影响/回归一致**（新增 gfx_getput/for_edges） | 保持 |
+| 图形 GET/PUT（DIM 数组） | ❌ CRITICAL-1 | ✅ **修复**（4 probe 全绿） | 关闭 |
+| FOR 首次迭代（常规） | ❌ 缺失 | ✅ **修复**（0 次/初值/负步长） | 完成 |
+| **FOR 0 次 + NEXT 最后一行** | — | ❌ **MEDIUM-1** | 新发现 |
+| M2 进度 | 2/3 + 图形深化批 | **2/3 + 修复轮** | 推进 |
 
 **注释**:
-- 独立验证：增量重建 → 单测 3223 → 16 个 .bas 直接运行 + expected 对比 → 6 项 probe（已清理）
-- 按用户要求全程未使用脚本（含内联循环/批量脚本）；.bas 验证采用逐条直接运行
-- 其余 60 个 .bas 与本批代码路径（advgrp/gengrp/CIRCLE/PAINT/GET/PUT 分派）无交集，底层逻辑由 3223 单测全量覆盖
-- **M2 状态**: 图形深化批完成但 GET/PUT 存储模型需重做；修复后进行 v145
+- 独立验证：干净重建 → 单测 3238 → 16 个 .bas 直接运行 + expected 对比 → 8 项 probe（已清理）
+- 全程未使用脚本（逐条直接运行命令 + 内置工具）
+- 其余 60 个 .bas 与本批代码路径（advgrp/biptrg/next86）无交集，底层由 3238 单测全量覆盖
+- **M2 状态**: 图形 GET/PUT 与 FOR 语义修复；MEDIUM-1 修复后进行 v146
