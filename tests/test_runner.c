@@ -335,6 +335,10 @@ void test_next86_next_no_for(void);
 void test_next86_clear_for_stack(void);
 void test_next86_get_for_depth(void);
 void test_next86_inside_for(void);
+void test_next86_for_firstiter_skip_positive(void);
+void test_next86_for_firstiter_skip_negative(void);
+void test_next86_for_firstiter_boundary_runs(void);
+void test_next86_for_step0_infinite_sentinel(void);
 void test_next86_for_max_depth(void);
 void test_next86_variable_types(void);
 void test_next86_step_negative(void);
@@ -1256,6 +1260,10 @@ failed += run_test("gweval_strfuncs_if_else_both", test_gweval_strfuncs_if_else_
     failed += run_test("next86_for_max_depth", test_next86_for_max_depth);
     failed += run_test("next86_variable_types", test_next86_variable_types);
     failed += run_test("next86_step_negative", test_next86_step_negative);
+failed += run_test("test_next86_for_firstiter_skip_positive", test_next86_for_firstiter_skip_positive);
+failed += run_test("test_next86_for_firstiter_skip_negative", test_next86_for_firstiter_skip_negative);
+failed += run_test("test_next86_for_firstiter_boundary_runs", test_next86_for_firstiter_boundary_runs);
+failed += run_test("test_next86_for_step0_infinite_sentinel", test_next86_for_step0_infinite_sentinel);
 
     /* KANJ86 tests */
     failed += run_test("kanj86_init", test_kanj86_init);

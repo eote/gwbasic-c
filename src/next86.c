@@ -199,6 +199,41 @@ int next86_float_next(struct for_entry *entry) {
     }
 }
 
+/* v145: scan forward from from_line for the NEXT that closes the FOR just
+ * pushed at from_line (ASM NXTSCN). FOR +1 / NEXT -1 by line keyword;
+ * returns the line number AFTER the matching NEXT, or 0 if not found. */
+static int next86_scan_matching_next(int from_line) {
+    int depth = 1;   /* we are looking for the NEXT of this FOR */
+    struct program_line *curr = gwlist_get_first_line();
+    while (curr && curr->number <= from_line) {
+        curr = curr->next;   /* skip the FOR line itself and everything before */
+    }
+    while (curr) {
+        const char *t = curr->text;
+        while (t && *t == ' ') t++;
+        if (t) {
+            if ((t[0] == 'F' || t[0] == 'f') &&
+                (t[1] == 'O' || t[1] == 'o') &&
+                (t[2] == 'R' || t[2] == 'r') &&
+                (t[3] == ' ' || t[3] == '\t')) {
+                depth++;   /* nested FOR */
+            } else if ((t[0] == 'N' || t[0] == 'n') &&
+                       (t[1] == 'E' || t[1] == 'e') &&
+                       (t[2] == 'X' || t[2] == 'x') &&
+                       (t[3] == 'T' || t[3] == 't')) {
+                depth--;
+                if (depth == 0) {
+                    /* matching NEXT found — resume after its line */
+                    struct program_line *after = curr->next;
+                    return after ? after->number : 0;
+                }
+            }
+        }
+        curr = curr->next;
+    }
+    return 0;
+}
+
 /* FOR statement handler */
 int next86_for(const char **text) {
     /* Parse FOR statement: FOR var = start TO limit [STEP step] */
@@ -273,7 +308,15 @@ int next86_for(const char **text) {
     
     /* Determine variable type */
     BYTE var_type = 0;  /* Default float */
-    BYTE step_sign = (step >= 0) ? 1 : 0;
+    /* ASM NT0STP (GWMAIN L1600): STEP 0 → sign forced to 2 — the NEXT
+     * termination test (sign(current-final) == sign(step)) can never be
+     * met, giving the ANSI-required infinite loop. */
+    BYTE step_sign;
+    if (step == 0.0f) {
+        step_sign = 2;
+    } else {
+        step_sign = (step > 0) ? 1 : 0;
+    }
     
     /* Allocate variable in GW-BASIC variable table */
     struct variable *v = gwdata_alloc_variable(var_name, VT_SINGLE);
@@ -300,6 +343,27 @@ int next86_for(const char **text) {
     
     /* Initialize loop variable */
     v->value.f = start;
+    
+    /* v145: first-iteration check (ASM GWMAIN FOR L1617: JMP NEXTS with
+     * NXTFLG=0 → IFORIN compares the INITIAL value against the limit;
+     * LOOPDN pops the entry and resumes after the matching NEXT — the
+     * body runs 0 times and the variable keeps its initial value). */
+    bool first_done;
+    if (step_sign == 2) {
+        first_done = false;   /* STEP 0 → infinite loop, never skip */
+    } else if (step_sign) {
+        first_done = (start > limit);
+    } else {
+        first_done = (start < limit);
+    }
+    if (first_done) {
+        /* Pop the entry we just pushed and signal a jump past the loop.
+         * Return value = line number AFTER the matching NEXT (depth-aware
+         * scan, like ASM NXTSCN); gwmain treats rc > 0 as a jump target. */
+        g_for_sp--;
+        int next_line = next86_scan_matching_next(g_curlin);
+        return (next_line > 0) ? next_line : 0;
+    }
     
     return 0;
 }

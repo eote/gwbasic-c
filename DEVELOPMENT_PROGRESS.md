@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v144 CRITICAL-1 修复完成 (图形 GET/PUT 标准数值数组语义)；下一步 v145 review / M2 收尾 |
+| **当前阶段** | FOR 语句审计完成 — 首次迭代检查缺失修复 (ASM FOR→NEXTS 复用语义) + STEP 0 哨兵；下一步 v146 review / M2 收尾 |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -25,7 +25,52 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v144 CRITICAL-1 修复 — 图形 GET/PUT 标准数组语义
+---
+
+## 当前轮: FOR 语句审计 — 首次迭代检查 + STEP 0 哨兵
+
+### 审计发现 (行为级 probe fortest1.bas 实证)
+
+- **首次迭代检查缺失**: `FOR M = 3 TO 1` 循环体错误执行一次
+  (ASM GWMAIN FOR L1617: JMP NEXTS with NXTFLG=0 — FOR 语句立即用
+  **初值**做终止比较 (IFORIN, 不加 step), 失败则 LOOPDN 跳到匹配
+  NEXT 之后, 体 0 次, 变量保持初值)
+- **STEP 0 语义**: ASM NT0STP — step 符号强制 2, 终止测试永假 =
+  ANSI 要求的无限循环; 我们 step_sign=(0>=0)=1 → 语义错误
+
+### 修复 (next86.c)
+
+| # | 内容 |
+|---|------|
+| 1 | next86_for: STEP 0 → step_sign=2 哨兵 (NEXT 终止测试永假) |
+| 2 | next86_for: push 后首次迭代检查 — done = (step>0 && start>limit) ‖ (step<0 && start<limit); step==0 永不 done |
+| 3 | done → 弹出 entry + next86_scan_matching_next(g_curlin) (深度感知: 初始 depth=1, FOR++/NEXT--, 跳过 from_line 前所有行) 返回 NEXT 后行号; gwmain rc>0 跳转 |
+| 4 | 测试 test_next86_firstiter.c (+4): skip_positive (rc=40 + I 保持 3) / skip_negative / boundary_runs (3 TO 3 执行) / step0_sentinel |
+| 5 | test_for_edges.bas/.expected (+expected 13 行: 含嵌套 P done 场景 — 内层 Q 体也不跑, 深度扫描正确) |
+
+### FOR 语义验证矩阵 (全部 ASM 对照通过)
+
+| 场景 | 期望 (GW-BASIC) | 实测 |
+|------|------|------|
+| 1 TO 3 | 1,2,3; AFTER=4 (超限保留) | ✅ |
+| 5 TO 1 STEP -2 | 5,3,1; AFTER=-1 | ✅ |
+| 3 TO 3 | 执行 1 次; =4 | ✅ |
+| 3 TO 1 (正 step) | 体 0 次; 保持 3 | ✅ (修复) |
+| 1 TO 3 STEP -1 | 体 0 次; 保持 1 | ✅ (修复) |
+| 1 TO 0 嵌套 | 外层体 0 次 (内层也不跑); P=1 | ✅ (深度扫描) |
+| STEP 0 | 进入循环, NEXT 永不终止 (GOTO 逃离验证: ESCAPED=8) | ✅ |
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3238/3238 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **78/78**（+test_for_edges） |
+| 孤儿检测 | ✅ **856 = 856**, 0 孤儿 0 幽灵 |
+
+---
+## 上一轮: CODE_REVIEW v144 CRITICAL-1 修复 — 图形 GET/PUT 标准数组语义
 
 ### 根因 (v144 实证 3 项全部独立复现)
 

@@ -60,6 +60,7 @@ TEST_SRCS = \
 	../tests/test_call86.c \
 	../tests/test_itsa86.c \
 	../tests/test_next86.c \
+	test_next86_firstiter.c \
 	../tests/test_kanj86.c \
 	../tests/test_maclng.c \
 	../tests/test_giocas.c \
