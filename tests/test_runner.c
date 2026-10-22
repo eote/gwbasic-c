@@ -339,6 +339,8 @@ void test_next86_for_firstiter_skip_positive(void);
 void test_next86_for_firstiter_skip_negative(void);
 void test_next86_for_firstiter_boundary_runs(void);
 void test_next86_for_step0_infinite_sentinel(void);
+void test_next86_for_skip_next_last_line(void);
+void test_next86_for_skip_gwsts_end_signal(void);
 void test_next86_for_max_depth(void);
 void test_next86_variable_types(void);
 void test_next86_step_negative(void);
@@ -1264,6 +1266,8 @@ failed += run_test("test_next86_for_firstiter_skip_positive", test_next86_for_fi
 failed += run_test("test_next86_for_firstiter_skip_negative", test_next86_for_firstiter_skip_negative);
 failed += run_test("test_next86_for_firstiter_boundary_runs", test_next86_for_firstiter_boundary_runs);
 failed += run_test("test_next86_for_step0_infinite_sentinel", test_next86_for_step0_infinite_sentinel);
+failed += run_test("test_next86_for_skip_next_last_line", test_next86_for_skip_next_last_line);
+failed += run_test("test_next86_for_skip_gwsts_end_signal", test_next86_for_skip_gwsts_end_signal);
 
     /* KANJ86 tests */
     failed += run_test("kanj86_init", test_kanj86_init);

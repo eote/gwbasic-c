@@ -362,7 +362,15 @@ int next86_for(const char **text) {
          * scan, like ASM NXTSCN); gwmain treats rc > 0 as a jump target. */
         g_for_sp--;
         int next_line = next86_scan_matching_next(g_curlin);
-        return (next_line > 0) ? next_line : 0;
+        if (next_line > 0) {
+            return next_line;   /* resume after the matching NEXT */
+        }
+        /* v145 MEDIUM-1: no line after the matching NEXT (NEXT is the last
+         * program line) → program ends right here (ASM: NEWSTT walks past
+         * the NEXT and finds no next statement). Return the END sentinel
+         * (-2) — returning 0 would mean "continue with the next line",
+         * wrongly executing the loop body. */
+        return -2;
     }
     
     return 0;

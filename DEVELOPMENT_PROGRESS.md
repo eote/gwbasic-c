@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | FOR 语句审计完成 — 首次迭代检查缺失修复 (ASM FOR→NEXTS 复用语义) + STEP 0 哨兵；下一步 v146 review / M2 收尾 |
+| **当前阶段** | CODE_REVIEW v145 MEDIUM-1 修复完成 (FOR 0 次 + NEXT 最后行 → END 信号)；下一步 v146 review / M2 收尾 |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -27,7 +27,40 @@
 
 ---
 
-## 当前轮: FOR 语句审计 — 首次迭代检查 + STEP 0 哨兵
+---
+
+## 当前轮: CODE_REVIEW v145 MEDIUM-1 修复 — FOR 0 次 + NEXT 最后一行
+
+### 根因 (v145 实证独立复现: BODY + Error at line 30)
+
+FOR 0 次跳转路径: scan 匹配 NEXT 后无后续行 → 返回 0 → gwmain 把
+rc==0 当"顺序继续" → 执行 FOR 的下一行 (循环体) → 随后 NEXT 因
+FOR 已弹栈 → NEXT without FOR。
+
+### 修复 (next86.c)
+
+scan 无后续行 (next_line == 0) 时返回 **-2 (END 语义哨兵)** —
+复用 gwmain 现有 END 处理 (break, 优雅结束); ASM 语义一致:
+NEWSTT 走过 NEXT 后无下一语句 → 程序结束。
+
+### 测试
+
+- test_next86_firstiter.c +2: skip_next_last_line (rc==-2 + I 保持 1)
+  / skip_gwsts_end_signal (gwsts 分派层透传 -2)
+- test_for_lastnext.bas/.expected (空输出 = 体不执行 + 正常结束, 套件 79)
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3242/3242 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **79/79**（+test_for_lastnext） |
+| 孤儿检测 | ✅ **858 = 858**, 0 孤儿 0 幽灵 |
+| .bas 实证 | NEXT 最后行: 无输出正常结束; NEXT 中间行: 体不执行 + REACHED 继续 |
+
+---
+## 上一轮: FOR 语句审计 — 首次迭代检查 + STEP 0 哨兵
 
 ### 审计发现 (行为级 probe fortest1.bas 实证)
 

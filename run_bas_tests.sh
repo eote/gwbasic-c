@@ -89,6 +89,7 @@ IMPLEMENTED_TESTS=(
     "test_gfx_circle.bas"
     "test_gfx_getput.bas"
     "test_for_edges.bas"
+    "test_for_lastnext.bas"
     "test_onerr_off.bas"
 )
 

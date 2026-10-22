@@ -112,3 +112,49 @@ void test_next86_for_step0_infinite_sentinel(void) {
     TEST_ASSERT_EQ_INT(rc, 0, "STEP 0 enters loop (infinite sentinel)");
     TEST_PASS("next86 step0 sentinel");
 }
+
+
+/* Test: v145 MEDIUM-1 — FOR 0 iterations with NEXT as the LAST line:
+ * scan finds no line after NEXT → program end signal (-2, like END);
+ * body must not run (previously returned 0 → "continue" → BODY executed) */
+void test_next86_for_skip_next_last_line(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    next86_clear_for_stack();
+    gwlist_clear();
+    gwlist_add_line(10, "FOR I=1 TO 0");
+    gwlist_add_line(20, "PRINT \"BODY\"");
+    gwlist_add_line(30, "NEXT I");
+    extern WORD g_curlin;
+    g_curlin = 10;
+    /* FOR statement returns -2 (program end, like END) since there is no
+     * line after the matching NEXT */
+    const char *text = "I=1 TO 0";
+    extern int next86_for(const char **text);
+    int rc = next86_for(&text);
+    TEST_ASSERT_EQ_INT(rc, -2, "NEXT last line → end-of-program signal (-2)");
+    struct variable *v = gwdata_find_variable("I");
+    TEST_ASSERT(v, "I allocated");
+    TEST_ASSERT_EQ_INT((int)v->value.f, 1, "I keeps initial 1");
+    TEST_PASS("next86 skip when NEXT is last line");
+}
+
+/* gwsts-level: FOR skip via statement dispatch returns -2 to gwmain */
+void test_next86_for_skip_gwsts_end_signal(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    gwdata_clear_error();
+    next86_clear_for_stack();
+    gwlist_clear();
+    gwlist_add_line(10, "FOR I=1 TO 0");
+    gwlist_add_line(20, "PRINT \"BODY\"");
+    gwlist_add_line(30, "NEXT I");
+    extern WORD g_curlin;
+    g_curlin = 10;
+    int rc = gwsts_exec_statement("FOR I=1 TO 0");
+    TEST_ASSERT_EQ_INT(rc, -2, "gwsts FOR skip → -2 (END semantics)");
+    TEST_PASS("next86 skip gwsts end signal");
+}
