@@ -1722,13 +1722,26 @@ delete_done:
                 #undef GWSIFS_MAX_ATOMS
 
                 /* 4. THEN / ELSE dispatch (v138 MEDIUM-2) */
+                /* helper: pure-numeric THEN/ELSE target = line number jump
+                 * (GW-BASIC: IF..THEN <line> is a GOTO) */
+                #define GWSIFS_IS_LINENUM(s_) (s_ != NULL && *s_ != '\0' && \
+                    strspn(s_, "0123456789") == strlen(s_))
                 if (then_taken) {
-                    result = gwsts_exec_statement(then_stmt);
+                    if (GWSIFS_IS_LINENUM(then_stmt)) {
+                        result = atoi(then_stmt);   /* jump target (>0) */
+                    } else {
+                        result = gwsts_exec_statement(then_stmt);
+                    }
                 } else if (else_stmt) {
-                    result = gwsts_exec_statement(else_stmt);
+                    if (GWSIFS_IS_LINENUM(else_stmt)) {
+                        result = atoi(else_stmt);   /* jump target (>0) */
+                    } else {
+                        result = gwsts_exec_statement(else_stmt);
+                    }
                 } else {
                     result = SUCCESS;
                 }
+                #undef GWSIFS_IS_LINENUM
                 if (else_stmt) gwram_free(else_stmt);
                 gwram_free(cond_expr);
                 gwram_free(then_stmt);

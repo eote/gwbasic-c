@@ -113,6 +113,8 @@ static int extract_line_number(const char *line, const char **rest) {
 }
 
 /* Main interpreter loop */
+static int run_program_lines(void);
+
 static void run_interpreter(void) {
     char input[256];
     
@@ -160,53 +162,14 @@ static void run_interpreter(void) {
         
         /* Check for RUN command */
         if (strcasecmp(trimmed, "RUN") == 0) {
-            /* Execute all program lines in order (ASM NEWST1/GONE chain).
-             * CRITICAL-1 fix: a statement may DELETE lines (including the
-             * current one or the next one) — never dereference a possibly-
-             * freed node. Relocation:
-             * - Branch 1 (current line survives): curr->next is a LIVE pointer
-             *   (gwlist_delete_line already updated the chain) — use it, never
-             *   the pre-execution snapshot.
-             * - Branch 2 (current line deleted): find the next surviving line
-             *   by walking the list with pointer-identity comparison (never
-             *   read fields of freed nodes).
-             * - Branch 3 (saved_next deleted too): number scan (DELETE never
-             *   renumbers, so number order is stable). */
-            struct program_line *curr = gwlist_get_first_line();
-            while (curr) {
-                if (curr->text) {
-                    int line_num = curr->number;
-                    struct program_line *saved_next = curr->next;
-                    long link_version = gwlist_get_link_version();
-                    int rc = gwsts_exec_statement(curr->text);
-                    if (rc != 0) {
-                        printf("Error at line %d\n", line_num);
-                        break;
-                    }
-                    /* LOW-2 (v127): liveness walk ONLY when the statement
-                     * mutated the chain (link version changed). Snapshot the
-                     * version before executing; O(1) fast path otherwise. */
-                    if (link_version != gwlist_get_link_version()) {
-                        /* Chain mutated — liveness by POINTER IDENTITY (not
-                         * number lookup; RENUM renumbers the current line while
-                         * it stays alive): both alive → physical next line (ASM
-                         * SAVTXT); else first surviving line > line_num. */
-                        if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
-                            curr = saved_next;
-                        } else {
-                            curr = gwlist_get_first_line();
-                            while (curr && curr->number <= line_num) curr = curr->next;
-                        }
-                        link_version = gwlist_get_link_version();
-                    } else {
-                        /* Chain unchanged — curr and saved_next are both valid
-                         * live pointers (nothing was deleted). */
-                        curr = saved_next;
-                    }
-                } else {
-                    curr = curr->next;
-                }
-            }
+            /* v147 CRITICAL-1: use the single program executor (same as
+             * file path) — full control-flow support (FOR/NEXT, GOTO,
+             * GOSUB, ON..GOTO, IF..THEN, END, ON ERROR, DELETE liveness).
+             * ASM: RUN and file load share the NEWSTT/GONE chain.
+             * Reset DATA pointer per RUN (GW-BASIC RUN semantics: READ
+             * starts from the first DATA statement each run). */
+            bimisc_data_init();
+            run_program_lines();
             continue;
         }
         
@@ -238,6 +201,123 @@ static void run_interpreter(void) {
     }
     
     printf("\nGoodbye!\n");
+}
+
+/* ===== v147 CRITICAL-1: single program executor (both entry points) =====
+ * Executes all program lines in order with full control-flow support:
+ * g_curlin/current_line, END(-2), jump targets (rc > 0: FOR continue /
+ * GOTO / GOSUB / RETURN / ON..GOTO / IF..THEN line targets), ON ERROR
+ * (handler entry + handler-FATAL), and DELETE-liveness relocation
+ * (v126/v127 semantics: pointer identity, link-version fast path).
+ * ASM: the single NEWSTT/GONE chain — RUN and file load share it.
+ * Returns SUCCESS or ERROR (does not free g_state). */
+static int run_program_lines(void) {
+    struct program_line *curr = gwlist_get_first_line();
+    int exec_rc = SUCCESS;
+    
+    while (curr) {
+        if (curr->text) {
+            DEBUG_PRINT("Executing line %d: '%s'", curr->number, curr->text);
+            
+            /* Set current line for FOR/GOTO handling */
+            extern WORD g_curlin;
+            g_curlin = curr->number;
+            g_state->current_line = curr->number;
+            
+            /* CRITICAL-1 fix: snapshot identity before executing — a
+             * statement may DELETE the current line (freeing curr).
+             * LOW-2 (v127): also snapshot the link version. */
+            int line_num = curr->number;
+            struct program_line *saved_next = curr->next;
+            long link_version = gwlist_get_link_version();
+            
+            int was_in_handler = gwdata_is_in_error_handler();
+            int rc = gwsts_exec_statement(curr->text);
+            DEBUG_PRINT("Statement returned %d", rc);
+            
+            /* Check if an error occurred during expression evaluation (e.g., division by zero) */
+            if (gwdata_get_error() != 0) {
+                /* GW-BASIC: an error raised while ALREADY inside the handler
+                 * is FATAL — never re-enter (prevents infinite OM loops).
+                 * was_in_handler snapshot distinguishes this from the ERROR
+                 * statement, which legitimately enters the handler itself. */
+                if (was_in_handler && gwdata_is_in_error_handler()) {
+                    printf("Error at line %d\n", line_num);
+                    return ERROR;
+                }
+                /* Error occurred - check if ON ERROR GOTO is active */
+                if (gwdata_is_on_error_active()) {
+                    int error_code = gwdata_get_error();
+                    int handler_line = gwdata_get_on_error_line();
+                    if (handler_line > 0) {
+                        /* Store error code in ERR variable for the handler */
+                        struct variable *err_var = gwdata_alloc_variable("ERR", VT_INTEGER);
+                        if (err_var) {
+                            err_var->value.i = error_code;
+                        }
+                        /* Clear internal error state so main loop doesn't keep
+                         * re-entering handler. ERR variable persists until next
+                         * error (GW-BASIC behavior). */
+                        gwdata_clear_error();
+                        gwdata_enter_error_handler();
+                        curr = gwlist_find_line((WORD)handler_line);
+                        continue;
+                    }
+                }
+                /* No ON ERROR handler or handler not found */
+                printf("Error at line %d\n", line_num);
+                return ERROR;
+            }
+            
+            if (rc < 0) {
+                /* Check if it's END statement (-2 from gwsts_exec_statement) */
+                if (rc == -2) {
+                    /* END - stop execution gracefully */
+                    return SUCCESS;
+                }
+                /* Error occurred (from statement execution).
+                 * Liveness by pointer identity (RENUM-safe). */
+                if (gwlist_is_alive(curr)) {
+                    if (gwdata_handle_error(line_num)) {
+                        curr = gwlist_find_line(gwdata_get_on_error_line());
+                        continue;
+                    }
+                } else {
+                    /* curr was deleted — no ON ERROR line context */
+                    return ERROR;
+                }
+                /* No ON ERROR handler or handler not found */
+                return ERROR;
+            } else if (rc > 0) {
+                /* FOR/GOTO/GOSUB/RETURN/ON ERROR continuation - rc is the
+                 * line number to jump to */
+                curr = gwlist_find_line((WORD)rc);
+                continue;
+            }
+            /* rc == 0 is success, continue to next line.
+             * LOW-2 (v127): liveness walk ONLY when the statement mutated
+             * the chain. Snapshot version before executing (above). */
+            if (link_version != gwlist_get_link_version()) {
+                /* Chain mutated — liveness by POINTER IDENTITY (not number
+                 * lookup; RENUM renumbers the current line while it stays
+                 * alive): both alive → physical next line (ASM SAVTXT);
+                 * else first surviving line > line_num. */
+                if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
+                    curr = saved_next;
+                } else {
+                    curr = gwlist_get_first_line();
+                    while (curr && curr->number <= line_num) curr = curr->next;
+                }
+            } else {
+                /* Chain unchanged — both valid live pointers. */
+                curr = saved_next;
+            }
+        } else {
+            curr = curr->next;
+        }
+    }
+    
+    return exec_rc;
 }
 
 /* Main entry point */
@@ -273,127 +353,8 @@ int main(int argc, char *argv[]) {
         /* Initialize DATA pointer for READ/DATA support */
         bimisc_data_init();
         
-        /* Execute all program lines in order - with jump handling for FOR/GOTO/GOSUB/RETURN */
-        struct program_line *curr = gwlist_get_first_line();
-        int exec_rc = SUCCESS;
-        
-        while (curr) {
-            if (curr->text) {
-                DEBUG_PRINT("Executing line %d: '%s'", curr->number, curr->text);
-                
-                /* Set current line for FOR/GOTO handling */
-                extern WORD g_curlin;
-                g_curlin = curr->number;
-                g_state->current_line = curr->number;
-                
-                /* CRITICAL-1 fix: snapshot identity before executing — a
-                 * statement may DELETE the current line (freeing curr).
-                 * LOW-2 (v127): also snapshot the link version. */
-                int line_num = curr->number;
-                struct program_line *saved_next = curr->next;
-                long link_version = gwlist_get_link_version();
-                
-                int was_in_handler = gwdata_is_in_error_handler();
-                int rc = gwsts_exec_statement(curr->text);
-                DEBUG_PRINT("Statement returned %d", rc);
-                
-                /* Check if an error occurred during expression evaluation (e.g., division by zero) */
-                                if (gwdata_get_error() != 0) {
-                                    /* GW-BASIC: an error raised while ALREADY
-                                     * inside the handler is FATAL — never
-                                     * re-enter (prevents infinite OM loops).
-                                     * was_in_handler snapshot distinguishes
-                                     * this from the ERROR statement, which
-                                     * legitimately enters the handler itself. */
-                                    if (was_in_handler && gwdata_is_in_error_handler()) {
-                                        printf("Error at line %d\n", line_num);
-                                        exec_rc = ERROR;
-                                        break;
-                                    }
-                                    /* Error occurred - check if ON ERROR GOTO is active */
-                                    if (gwdata_is_on_error_active()) {
-                                        int error_code = gwdata_get_error();
-                                        int handler_line = gwdata_get_on_error_line();
-                                        if (handler_line > 0) {
-                                            /* Store error code in ERR variable for the handler */
-                                            struct variable *err_var = gwdata_alloc_variable("ERR", VT_INTEGER);
-                                            if (err_var) {
-                                                err_var->value.i = error_code;
-                                            }
-                                            /* Clear internal error state so main loop doesn't keep re-entering handler.
-                                             * ERR variable persists until next error (GW-BASIC behavior). */
-                                            gwdata_clear_error();
-                                            gwdata_enter_error_handler();
-                                            curr = gwlist_find_line((WORD)handler_line);
-                                            continue;
-                                        }
-                                    }
-                                    /* No ON ERROR handler or handler not found */
-                                    printf("Error at line %d\n", line_num);
-                                    exec_rc = ERROR;
-                                    break;
-                                }
-                
-                                if (rc < 0) {
-                                    /* Check if it's END statement (-2 from gwsts_exec_statement) */
-                                    if (rc == -2) {
-                                        /* END - stop execution gracefully */
-                                        break;
-                                    }
-                                    /* Error occurred (from statement execution).
-                                     * Liveness by pointer identity (RENUM-safe). */
-                                    if (gwlist_is_alive(curr)) {
-                                        if (gwdata_handle_error(line_num)) {
-                                            curr = gwlist_find_line(gwdata_get_on_error_line());
-                                            continue;
-                                        }
-                                    } else {
-                                        /* curr was deleted — no ON ERROR line context */
-                                        exec_rc = ERROR;
-                                        break;
-                                    }
-                                    /* No ON ERROR handler or handler not found */
-                                    exec_rc = ERROR;
-                                    break;
-                                } else if (rc > 0) {
-                                    /* FOR/GOTO/GOSUB/RETURN/ON ERROR continuation - rc is the line number to jump to */
-                                    curr = gwlist_find_line((WORD)rc);
-                                    continue;
-                                }
-                                /* rc == 0 is success, continue to next line.
-                                 * CRITICAL-1 fix (same as RUN path):
-                                 * - Branch 1 (current line survives): curr->next
-                                 *   is a LIVE pointer (delete_line already
-                                 *   updated the chain) — use it.
-                                 * - Branch 2/3 (current line freed): walk the
-                                 *   live list for first surviving line >
-                                 *   line_num (pointer-identity walk, never read
-                                 *   freed node fields). */
-                                /* LOW-2 (v127): liveness walk ONLY when the
-                                 * statement mutated the chain. Same semantics
-                                 * as the RUN path. */
-                                if (link_version != gwlist_get_link_version()) {
-                                    /* Chain mutated — liveness by POINTER
-                                     * IDENTITY (not number lookup; RENUM
-                                     * renumbers the current line while it stays
-                                     * alive): both alive → physical next line
-                                     * (ASM SAVTXT); else first surviving line >
-                                     * line_num. */
-                                    if (gwlist_is_alive(curr) && gwlist_is_alive(saved_next)) {
-                                        curr = saved_next;
-                                    } else {
-                                        curr = gwlist_get_first_line();
-                                        while (curr && curr->number <= line_num) curr = curr->next;
-                                    }
-                                    link_version = gwlist_get_link_version();
-                                } else {
-                                    /* Chain unchanged — both valid live pointers. */
-                                    curr = saved_next;
-                                }
-            } else {
-                curr = curr->next;
-            }
-        }
+        /* v147 CRITICAL-1: single executor (identical to interactive RUN) */
+        int exec_rc = run_program_lines();
         
         /* Cleanup */
         free(g_state);

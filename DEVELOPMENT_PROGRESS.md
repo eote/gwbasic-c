@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v145 MEDIUM-1 修复完成 (FOR 0 次 + NEXT 最后行 → END 信号)；下一步 v146 review / M2 收尾 |
+| **当前阶段** | CODE_REVIEW v147 CRITICAL-1 修复完成 — 统一执行器 run_program_lines() (交互 RUN 与文件路径共用, 全控制流) + IF..THEN 行号跳转；下一步 v148 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -29,7 +29,40 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v145 MEDIUM-1 修复 — FOR 0 次 + NEXT 最后一行
+---
+
+## 当前轮: CODE_REVIEW v147 CRITICAL-1 修复 — 统一执行器 + IF..THEN 行号
+
+### 根因 (reviewer 实证 5 项全部独立复现)
+
+交互 RUN 命令分支 (gwmain L166-211) 是未升级的第三份执行循环:
+无 g_curlin/current_line、rc!=0 一律当错误 (END -2 与 rc>0 跳转
+全部失效)、无 ON ERROR、无 DELETE liveness → FOR 只跑 1 次、
+GOTO/END/IF..THEN 报 Error、DELETE 存在 UAF 读。
+测试盲区: 单测手动设 g_curlin 掩盖调用方契约; .bas 只走文件路径;
+交互 RUN 零自动化覆盖。
+
+### 修复 (gwmain.c + gwsts.c)
+
+| # | 内容 |
+|---|------|
+| 1 | **抽取统一执行器 run_program_lines()** (以文件路径为蓝本): g_curlin/current_line、END(-2)、rc>0 跳转、ON ERROR/handler-FATAL、DELETE-liveness 重定位 (v126/v127 语义) — RUN 命令与 main 文件执行共用, 删除旧简化循环 |
+| 2 | RUN 命令补 bimisc_data_init() (GW-BASIC RUN 语义: DATA 指针每次 RUN 重置) |
+| 3 | **IF..THEN <行号> 跳转** (GW-BASIC: THEN/ELSE 后纯数字 = GOTO; 语句形式不变) — 文件与交互路径同样受益 (此前两路径都缺失, v138 只实现语句形式) |
+| 4 | 测试: test_gwsts_ifgoto.c (+6: THEN 行号真/假、ELSE 行号、无 ELSE 落空、THEN/ELSE 语句形式保持、混合) + test_if_lineno.bas/.expected + 交互 RUN 端到端 8 场景 |
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3248/3248 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **80/80**（+test_if_lineno） |
+| 孤儿检测 | ✅ **864 = 864**, 0 孤儿 0 幽灵 |
+| **交互 RUN 端到端 (stdin 管道, 8 场景)** | ✅ FOR 1..10 全输出 / END 优雅结束 / GOTO TARGET / IF..THEN 30 → T1 / GOSUB+RETURN SUB→MAIN / ON ERROR HANDLER ERR=11 / FOR-skip REACHED / DELETE liveness A,C — 无一 Error 误报 |
+
+---
+## 上一轮: CODE_REVIEW v145 MEDIUM-1 修复 — FOR 0 次 + NEXT 最后一行
 
 ### 根因 (v145 实证独立复现: BODY + Error at line 30)
 

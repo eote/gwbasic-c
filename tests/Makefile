@@ -92,6 +92,7 @@ TEST_SRCS = \
   test_gweval_strfuncs.c \
   test_gwsts_graphics.c \
 	test_gwsts_gfx2.c \
+	test_gwsts_ifgoto.c \
 	../tests/test_gwmain_uaf.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
