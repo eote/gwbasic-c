@@ -1,47 +1,33 @@
-# GW-BASIC C Port - Code Review v145
+# GW-BASIC C Port - Code Review v147
 
 **日期**: 2026-10-23
-**审查范围**: commits `9cb0fa4`（v144 CRITICAL-1 修复：图形 GET/PUT 标准数值数组语义）+ `0ee5da5`（FOR 首次迭代检查 + STEP 0 哨兵）→ 工作区
-**测试状态**: 单元测试 **3238/3238 通过**（0 失败，0 警告）✅ | .bas 集成 **16 个受影响/回归用例直接运行**（输出与 expected 逐行一致）✅ | 其余 60 个用例本批代码路径无交集（单测全量覆盖）⏸
+**审查范围**: 用户报告的交互 RUN 缺陷（`FOR/NEXT` 只执行一次）+ `f1c95e9`（v145 MEDIUM-1，v146 已复核）→ 工作区
+**测试状态**: 单元测试 **3242/3242 通过**（0 失败，0 警告）✅ | .bas 文件路径 **13/13 一致** ✅ | **交互 RUN 路径实测失效（CRITICAL-1）** ❌
 **工作区状态**: clean
-**总体评分**: A- — v144 CRITICAL-1 修复确认（4 项 probe 全绿）+ FOR 常规语义修复正确；发现 **1 MEDIUM**（FOR 0 次 + NEXT 为最后一行边界）及观察项
+**总体评分**: C — 文件执行路径全绿（v145 MEDIUM-1 修复确认），但发现 **CRITICAL-1：交互 RUN 执行路径（第三份独立循环）缺失全部控制流支持**，FOR/NEXT/GOTO/END/IF..THEN 等核心语句在交互模式下失效，且运行时 DELETE 存在 UAF 回归面
 
 ---
 
 ## 一、概述
 
-本次审查两个修复提交：
+本版聚焦用户报告的 bug：交互模式输入程序后 `RUN`，`FOR I=1 TO 10 ... NEXT` 只输出 `1`。
 
-| 提交 | 内容 |
-|------|------|
-| `9cb0fa4` | **v144 CRITICAL-1 修复**：图形 GET/PUT 改为标准数值数组语义（ASM GPUTG；头 2 元素 x-bits/y-count、位图 MSB-first 连续、容量不足/字符串 → FCERR、隐式 DIM、GET 覆写语义）；`array_desc_t` 移入 gwbasic.h、`biptrg_ensure_array` 导出 |
-| `0ee5da5` | **FOR 首次迭代检查**（ASM FOR→NEXTS：初值超限 → 0 次循环、变量保持初值、扫描匹配 NEXT 跳转）+ **STEP 0 哨兵**（NT0STP：sign=2 → ANSI 无限循环语义） |
+**复现**（stdin 管道驱动交互模式，未使用脚本）：
 
-### v144 CRITICAL-1 修复确认（全部验证通过）
+| 场景（交互 RUN） | 实测 | GW-BASIC 期望 |
+|------------------|------|----------------|
+| `10 for i=1 to 10 / 20 print i / 30 next` | **仅 ` 1` 后结束（无错误）** | `1..10` |
+| `10 FOR I=1 TO 3 / 20 PRINT I / 30 NEXT I`（大写） | 仅 ` 1` | `1 2 3` |
+| `10 END / 20 PRINT "AFTER"` | **`Error at line 10`** | 正常结束 |
+| `10 GOTO 30 / 20 PRINT "SKIP" / 30 PRINT "TARGET"` | **`Error at line 10`** | `TARGET` |
+| `10 IF 1=1 THEN 30 / 20 ... / 30 PRINT "TARGET"` | **`Error at line 10`** | `TARGET` |
+| `10 DELETE 20 / 15 PRINT "A" / 20 PRINT "B" / 30 PRINT "C"` | `A` / `C`（未崩溃，但存在悬垂指针读） | `A` / `C`（无 UB） |
 
-| 验证项（probe，已清理） | 结果 |
-|--------------------------|------|
-| DIM 数组 GET/PUT roundtrip + XOR 擦除 | ✅ `DIM G(100)`：`C= 1 D= 1`；二次 PUT `XOR= 0` |
-| 数组容量不足 | ✅ `DIM G(2)` + 9×9 GET → `Error at line 40`（FCERR） |
-| 隐式 DIM（未声明数组） | ✅ `GET (38,38)-(46,46), H` → PUT → `C= 1` |
-| 字符串变量参数 | ✅ `GET ..., S$` → `Error at line 30`（FCERR，S$ 未被破坏） |
+**对照（文件路径，同一代码）**：四种 FOR 组合（大写/小写、`NEXT I`/无变量 `NEXT`）经 `gwbasic.exe file.bas` **全部正确输出 1..10**。→ 缺陷**仅存在于交互 RUN 路径**。
 
-### v145 FOR 修复验证
+### v146 复核结论（保留）
 
-| 验证项（probe） | 结果 |
-|------------------|------|
-| 0 次循环（初值超限，正常 NEXT） | ✅ `FOR I=1 TO 0` → 体不执行，`AFTER I= 1`（初值保持） |
-| 正常循环 / 负步长 | ✅ `I=1..3`；`J=3,2,1`；`DONE` |
-| **0 次循环 + NEXT 为最后一行** | ❌ **MEDIUM-1 实证**：`BODY` 被错误执行一次 + `Error at line 30` |
-| 紧凑 `FORX=1 TO 2` | ⚠️ 不支持（既有语句分派要求 `"FOR "`，非本批引入） |
-
-### 验证结果（独立执行，当前 checkout）
-
-| 验证项 | 结果 |
-|--------|------|
-| 干净重建 + 单元测试 | ✅ **3238/3238 PASS** |
-| 编译警告 | ✅ **0 条** |
-| .bas 受影响/回归（直接运行 + expected） | ✅ **16/16 一致**：gfx_getput（4/4，新增）、gfx_circle（9/9）、for_edges（13/13，新增）、graphics（11/11）、gfx_v141（7/7）、arrays（11/11）、multi_array、string_arrays、put_get（5/5）、line_input（3/3）、delete、delete_exec、renum、if_else、string_funcs、on_goto |
+`f1c95e9`（v145 MEDIUM-1）已正确修复：`next86_for` 无后续行返回 END sentinel(-2)，0 次循环 + NEXT 最后行不再执行体（probe 空输出）；双层级单测 + 空 expected 集成；单测 3242/3242、13 个 .bas 文件用例与 expected 一致。
 
 ---
 
@@ -49,122 +35,132 @@
 
 ### 🟥 CRITICAL
 
-无（v144 CRITICAL-1 已修复确认）。
-
-### 🟧 HIGH
-
-无。
-
-### 🟨 MEDIUM
-
 | # | 描述 | 文件 |
 |---|------|------|
-| 1 | **FOR 0 次循环 + NEXT 为程序最后一行时，循环体被错误执行一次（随后 NEXT without FOR）** | `src/next86.c`（`next86_scan_matching_next` / 首次迭代返回路径） |
+| 1 | **交互 RUN 执行路径是未升级的第三份独立循环**：缺少 `g_curlin` 设置、END(-2)、跳转(rc>0)、ON ERROR、liveness 重定位 — FOR/NEXT/GOTO/GOSUB/RETURN/ON..GOTO/IF..THEN/RESUME 全部失效；运行时 DELETE 存在 UAF 读 | `src/gwmain.c`（RUN 命令分支，L166-211） |
 
 **详情**:
 
-```basic
-10 FOR I=1 TO 0
-20 PRINT "BODY"
-30 NEXT I
+**代码对比**（同一 `gwmain.c` 内两条执行路径）：
+
+```c
+/* 交互 RUN 路径（L166-211）——简化版，从未升级 */
+int rc = gwsts_exec_statement(curr->text);
+if (rc != 0) {                              /* ← 任何非 0 都当错误 */
+    printf("Error at line %d\n", line_num);
+    break;
+}
+curr = saved_next;                          /* ← 无跳转/END/重定位 */
+
+/* .bas 文件路径（L280+，v126/v145 已升级） */
+g_curlin = curr->number;                    /* ← FOR/GOTO/RESUME/ON ERROR 依赖 */
+g_state->current_line = curr->number;
+...
+if (gwdata_get_error() != 0) { ...ON ERROR / handler-FATAL... }
+if (rc == -2) break;                        /* END */
+if (rc < 0) { ...错误... }
+else if (rc > 0) {                          /* 跳转目标 */
+    ... curr = gwlist_find_line(rc) ...     /* GOTO/ON..GOTO/IF..THEN/FOR-NEXT 继续 */
+}
+/* liveness 重定位（v126 DELETE 运行时修复） */
 ```
-实测：`BODY` / `Error at line 30`（GW-BASIC 期望：体不执行、程序正常结束）。
 
-**根因**：首次迭代判定 `first_done` 为真 → 弹栈并调用 `next86_scan_matching_next(g_curlin)`；匹配 NEXT 是最后一行时 `after == NULL` → 返回 **0**；gwmain 将 `rc == 0` 视为"成功继续" → 执行 FOR 的下一行（循环体）→ BODY；随后 `NEXT I` 因 FOR 已弹栈 → NEXT without FOR 错误。
+**根因链（FOR/NEXT 只 1 次）**：
+1. RUN 路径执行 FOR 前**未设置 `g_curlin`**（文件路径设了）；
+2. `next86_for` 依赖 `g_curlin` 扫描匹配 NEXT、计算 `for_next_line` → 在错误行号下计算失效；
+3. NEXT 首次"继续"返回的行号不可用/为 0 → 返回 0；
+4. RUN 路径 `rc == 0 → curr = saved_next` → 循环体下一行已无（或直接结束）→ **只输出 1、无错误**。
 
-**修复建议**：无后续行时返回一个"跳到程序末尾"的明确信号（例如返回 `-2`/END 语义，或返回一个不存在行号的 sentinel 并让 gwmain 特判），不得用 0 表示跳过；补单测（NEXT 最后一行 0 次循环）与 .bas 用例。
-
-### 🟧 HIGH
-
-无。
-
-### 🟨 MEDIUM
-
-无。
-
-### 🟩 LOW
-
-无（阻塞）。观察项（不计问题）：
-
-1. **PUT 缺容量校验**：按数组 header 的 width/height 读取时不核对 `desc->size`；若 header 被用户改写 → 越界读（ASAN 可捕获）。建议 PUT 也按 header 计算 need_bytes 并与容量比对 → FCERR。
-2. 紧凑 `FORI=...` 不支持（语句分派要求 `"FOR "`，既有兼容性缺口；`next86_scan_matching_next` 的 `"FOR "` 判定与语言支持一致）。
-3. GET/PUT 元素大小归一 4 字节（ASM 依数组元素大小；INTEGER 数组在 ASM 为 2 字节 → 跨格式兼容需确认）。
-4. STEP 0 按 ANSI 进入无限循环（NT0STP 语义，符合规范；用户程序会挂起）。
-5. GET/PUT header 为 x-bits/y-count（LE）内部自洽；与 `BSAVE/LOAD` 数组文件格式的跨工具兼容未验证。
-6. v144 观察项（CIRCLE 缺 radius、SCREEN 0 下 PSET、PAINT 默认 border、行内冒号）仍开放。
+**同根连带缺陷**（RUN 路径逐项缺失）：
+- `rc == -2`（END）→ 被当错误 → `10 END` 报 `Error at line 10`
+- `rc > 0`（GOTO/GOSUB/RETURN/ON..GOTO/IF..THEN/WHILE 跳转/FOR 继续）→ 被当错误 → `GOTO`/`IF..THEN` 报 `Error at line 10`
+- ON ERROR 不生效（无 `gwdata_get_error()` 处理）
+- 无 liveness 重定位 → 运行时 DELETE 后 `curr = saved_next` 可能指向已释放节点（实测未崩溃属 UB 侥幸；v126 修复的 UAF 在 RUN 路径未生效）
 
 ---
 
-## 三、架构评估
+## 三、测试盲区分析（为什么逃过测试）
 
-### 修复质量
+**测试矩阵实际只覆盖了执行路径中的 1.5 条**：
 
-| 提交 / 决策 | 评价 |
-|-------------|------|
-| GET/PUT 改用数值数组元素（header + MSB-first 位图，通过 desc->data） | ✅ 正确 — DIM roundtrip/XOR/容量/隐式/字符串 4 项 probe 全绿 |
-| 容量检查（need_bytes > size*elem_size → FCERR） | ✅ 正确（DIM G(2) 实证） |
-| GET 覆写语义（memset 位图区） | ✅ 符合 ASM「GET overwrites」 |
-| `biptrg_ensure_array` 导出 + `array_desc_t` 共享 | ✅ 消除跨模块重复定义，布局一致 |
-| PRESET 动作按位取反 `(1<<bpp)-1-pixel` | ✅ 合理（ASM complement） |
-| FOR 首次迭代（0 次体、初值保持、扫描匹配 NEXT） | ✅ 常规场景正确（probe + for_edges 13/13）|
-| STEP 0 哨兵（sign=2，ANSI 无限） | ✅ 符合 NT0STP |
-| **NEXT 最后一行返回 0** | ⚠️ **MEDIUM-1** — 0 与"继续"歧义 |
-| 测试（test_gwsts_gfx2 +90、test_next86_firstiter 114、gfx_getput/for_edges 集成） | ✅ 质量高；缺 NEXT 最后一行边界用例 |
+| 测试层 | 覆盖的执行路径 | 缺口 |
+|--------|----------------|------|
+| 单元测试（3242） | 直接调用 `next86_for/next`、`gwsts_exec_statement` | 测试内**手动设置 `g_curlin`**（如 `test_next86_firstiter.c: g_curlin = 10`）→ **掩盖了"调用方未设置 g_curlin"**；不经过 main 的 RUN 分支 |
+| .bas 集成（run_bas_tests.sh，77 个） | `gwbasic.exe file.bas` → **文件加载路径**（完整控制流） | 不覆盖交互 RUN；所有控制流测试（for_edges/for_lastnext/goto/on_goto/if_else/renum/delete 等）都在文件路径 |
+| 交互 RUN 路径（L166-211） | **零自动化覆盖** | 无 stdin 驱动 RUN 的测试；历次 review 的 probe 也全部使用 `gwbasic.exe xxx.bas`（文件路径） |
 
-### 测试覆盖分析
+**结论**：这不是某个用例缺失，而是**执行路径级测试盲区** — 两条执行循环分叉后，只有文件路径被持续测试与修复（v126 重定位、v145 END sentinel 等均只改文件路径 + 单测），RUN 路径停留在旧实现。单测的 `g_curlin` 预置进一步掩盖了调用方契约。
 
-| 功能 | 覆盖情况 |
-|------|----------|
-| GET/PUT DIM/隐式/容量/字符串 | ✅ 单测 + probe + gfx_getput |
-| FOR 0 次（正常 NEXT）/ 正常 / 负步长 | ✅ 单测 + probe + for_edges |
-| **FOR 0 次 + NEXT 最后一行** | ❌ 盲区 → MEDIUM-1 |
-| FOR 嵌套（深度扫描） | ✅ for_edges 含嵌套场景 |
-| 注册一致性 | ✅（单测 3238 全过） |
+**Review 流程改进**：历次 review 的验证方式（文件路径 + 单测）本身不覆盖用户主交互路径；后续必须包含交互 RUN end-to-end。
 
 ---
 
-## 四、改进建议
+## 四、架构评估
+
+### 执行循环分叉
+
+| 决策 | 评价 |
+|------|------|
+| 存在两份执行循环（RUN 命令 / 文件加载） | ❌ **根本问题** — 重复实现导致修复不同步（v126/v145 只修文件路径） |
+| 文件路径完整（g_curlin/END/跳转/ON ERROR/liveness/DEBUG） | ✅ 正确 |
+| RUN 路径简化（rc!=0 即错误、无 g_curlin） | ❌ **CRITICAL-1** |
+| 单测直接调用 + 手动 g_curlin | ⚠️ 掩盖调用方契约 |
+
+### 测试覆盖
+
+| 功能 | 文件路径 | 交互 RUN |
+|------|----------|----------|
+| FOR/NEXT（大小写/无变量/0 次/最后行） | ✅ | ❌ 只 1 次 |
+| GOTO / ON..GOTO / IF..THEN 跳转 | ✅ | ❌ Error |
+| GOSUB/RETURN | ✅ | ❌ Error（rc>0） |
+| END | ✅ | ❌ Error（-2） |
+| ON ERROR / RESUME | ✅ | ❌ 未处理 |
+| 运行时 DELETE（liveness/UAF） | ✅ | ❌ 悬垂读 UB |
+
+---
+
+## 五、改进建议
 
 ### 短期（阻塞项）
-1. **MEDIUM-1**：`next86_scan_matching_next` 无后续行时返回明确的程序末尾信号（非 0）；补 NEXT 最后一行 0 次循环单测 + .bas
-2. 观察项 1：PUT 增加按 header 的容量校验（FCERR）
+1. **消除执行循环分叉（首选）**：抽取单一 `run_program_lines()`（以文件路径 L280+ 为蓝本，含 g_curlin/current_line、END(-2)、rc>0 跳转、ON ERROR/handler-FATAL、liveness 重定位、DEBUG）；`RUN` 命令与 `main` 文件执行**共用**该函数，删除 RUN 分支的简化循环。**这一处改动可同时修复 FOR/NEXT/GOTO/GOSUB/ON..GOTO/IF..THEN/END/ON ERROR/DELETE-UAF 全部分支**。
+2. 若暂不重构（不推荐）：逐项将 RUN 路径升级到与文件路径同构（g_curlin、-2、>0、ON ERROR、liveness），并加注释说明两份逻辑必须同步。
+3. **补交互 RUN 自动化测试**（关键）：
+   - 端到端：stdin 驱动（管道/测试 harness）覆盖 `FOR 1..3`、`GOTO`、`GOSUB/RETURN`、`ON..GOTO`、`IF..THEN`、`END`、`RESUME`、`ON ERROR`、运行时 `DELETE`、大小写与无变量 `NEXT`；
+   - 重构后：单测直接调用统一执行器（构造行列表），另加 main 级 smoke（RUN FOR 1..10 → 10 行输出）。
+4. 单测约定：`next86_for/next` 调用前必须有效 `g_curlin`（在入口加 assert/文档），并新增"未设置 g_curlin"回归用例以防调用方契约漂移。
 
-### 中期（M2 规划）
-3. GET/PUT 与 BSAVE/LOAD 数组格式的兼容性验证（如后续实现）
-4. v144 图形观察项（CIRCLE radius、SCREEN 0 图形语句）随批次处理
-5. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 套件回归）
+### 中期
+5. CI 门禁：交互 RUN smoke（FOR 1..10 输出 10 行）必须纳入；两条入口共用执行器后，文件/交互行为一致性由同一测试集保证。
+6. v145 观察项（PUT 容量校验、CIRCLE radius、SCREEN 0 图形语句等）随批次处理。
 
 ### 长期
-6. ASAN 构建（PUT 越界读/描述符类问题）
-7. 定期 .bas 集成回归
+7. ASAN 构建（RUN 路径 DELETE UAF 可被捕获）
+8. 定期文件 + 交互双路径回归
 
 ---
 
-## 五、总结
+## 六、总结
 
-**总体评价**: 两个修复提交质量高 — v144 CRITICAL-1（GET/PUT 标准数值数组）4 项 probe 全部修复确认（DIM roundtrip/XOR、容量 FCERR、隐式 DIM、字符串 FCERR），FOR 首次迭代常规语义正确（0 次体/初值保持/负步长）、STEP 0 哨兵符合 ANSI；单测 3238/3238、16 个 .bas 直接验证一致、0 警告。**但发现 1 MEDIUM**：FOR 0 次 + NEXT 为程序最后一行时，扫描返回 0 被当作"继续"→ 体错误执行一次 + NEXT without FOR。
-**关键发现**: 0 CRITICAL / 0 HIGH / **1 MEDIUM**（FOR 边界）、6 观察项。
-**建议**: 修复 NEXT 最后一行边界（返回明确末尾信号）+ PUT 容量校验；修复后进行 v146 review。
+**总体评价**: 文件执行路径保持全绿（v145 MEDIUM-1 修复确认、3242 单测、13 个 .bas 一致），但**用户日常使用的交互 RUN 路径是第三份未升级的执行循环**：未设置 `g_curlin`、把 END(-2) 与跳转(rc>0) 当错误、无 ON ERROR、无 DELETE liveness → FOR/NEXT 只执行一次、GOTO/END/IF..THEN 直接报错、运行时 DELETE 存在 UAF 读。**测试未发现的根因是执行路径级盲区**：单测手动设置 `g_curlin` 并直接调用语句函数，集成测试只跑文件加载路径，交互 RUN 零覆盖。
+**关键发现**: **1 CRITICAL**（交互 RUN 控制流全面失效 + UAF 回归面）、0 HIGH、0 MEDIUM。测试盲区：执行路径分叉未同步 + 交互入口零测试。
+**建议**: 统一为单一执行器（首选，一次修复全部分支）+ 交互 RUN 端到端测试 + CI 双路径 smoke；修复后进行 v148 review。
 
 ---
 
-## 六、指标追踪
+## 七、指标追踪
 
-| 指标 | v144 | v145 | 变化 |
+| 指标 | v146 | v147 | 变化 |
 |------|------|------|------|
-| 单元测试通过（test_runner） | 3223 | **3238** | ✅ +15（+测试函数） |
-| 定义数（唯一函数） | 846 | **851** | +5 |
-| 注册数（run_test 调用） | 846 | **851** | +5 |
+| 单元测试通过（test_runner） | 3242 | **3242** | 保持（未新增测试） |
+| 定义数 / 注册数 | 853 / 853 | **853 / 853** | 保持 |
 | 孤儿数 | 0 | **0** | 保持 |
 | 生产/测试警告 | 0 | **0** | 保持 |
-| .bas 集成 | 16/16 受影响 | **16/16 受影响/回归一致**（新增 gfx_getput/for_edges） | 保持 |
-| 图形 GET/PUT（DIM 数组） | ❌ CRITICAL-1 | ✅ **修复**（4 probe 全绿） | 关闭 |
-| FOR 首次迭代（常规） | ❌ 缺失 | ✅ **修复**（0 次/初值/负步长） | 完成 |
-| **FOR 0 次 + NEXT 最后一行** | — | ❌ **MEDIUM-1** | 新发现 |
-| M2 进度 | 2/3 + 图形深化批 | **2/3 + 修复轮** | 推进 |
+| .bas 文件路径 | 13/13 一致 | **13/13 一致** | 保持 |
+| **交互 RUN 路径** | 未覆盖 | ❌ **CRITICAL（FOR/GOTO/END/IF..THEN 失效；DELETE UB）** | 新发现 |
+| v145 MEDIUM-1（FOR 最后行） | ✅ 修复确认 | ✅ 保持（文件路径） | 保持 |
+| 测试架构 | 文件路径 + 单测 | **暴露执行路径级盲区（交互零覆盖）** | 需补强 |
 
 **注释**:
-- 独立验证：干净重建 → 单测 3238 → 16 个 .bas 直接运行 + expected 对比 → 8 项 probe（已清理）
-- 全程未使用脚本（逐条直接运行命令 + 内置工具）
-- 其余 60 个 .bas 与本批代码路径（advgrp/biptrg/next86）无交集，底层由 3238 单测全量覆盖
-- **M2 状态**: 图形 GET/PUT 与 FOR 语义修复；MEDIUM-1 修复后进行 v146
+- 复现方式：stdin 管道驱动交互模式（单条命令，未使用脚本）；文件路径对照确认缺陷仅限交互 RUN
+- 历次 review/probe 均使用文件路径（`gwbasic.exe xxx.bas`）与直接函数单测 → 未覆盖用户主交互路径
+- **修复优先级高**：交互 RUN 是主要使用方式；统一执行器可一次性消除全部分支差异并关闭 UAF 回归面
