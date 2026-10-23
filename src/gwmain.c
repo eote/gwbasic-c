@@ -167,8 +167,10 @@ static void run_interpreter(void) {
              * GOSUB, ON..GOTO, IF..THEN, END, ON ERROR, DELETE liveness).
              * ASM: RUN and file load share the NEWSTT/GONE chain.
              * Reset DATA pointer per RUN (GW-BASIC RUN semantics: READ
-             * starts from the first DATA statement each run). */
-            bimisc_data_init();
+             * starts from the first DATA statement each run).
+             * v148 MEDIUM-1: full environment reset — variables, string
+             * heap, FOR/GOSUB stacks, ON ERROR state, open files. */
+            gwsts_reset_runtime_environment();
             run_program_lines();
             continue;
         }

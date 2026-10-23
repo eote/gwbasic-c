@@ -154,6 +154,27 @@ static int gwsts_handle_gfx_put(const char *trimmed) {
     return advgrp_put(px, py, arrname, action);
 }
 
+/* ===== v148 MEDIUM-1: RUN environment reset =====
+ * GW-BASIC RUN semantics: clear all variables, close files, reset FOR/
+ * GOSUB stacks and ON ERROR state; only the program text survives
+ * (gwlist untouched). Screen/graphics state is not cleared. */
+void gwsts_reset_runtime_environment(void) {
+    /* variables + string heap (gwdata_init resets the variable table and
+     * the string heap wholesale) */
+    gwdata_init();
+    /* close all open files (RUN closes files) */
+    giodsk_close_all();
+    /* FOR / GOSUB stacks */
+    next86_clear_for_stack();
+    next86_clear_gosub_stack();
+    /* ON ERROR state + handler flag + pending error */
+    gwdata_set_on_error_goto(0, 0);
+    gwdata_exit_error_handler();
+    gwdata_clear_error();
+    /* DATA pointer back to the first DATA statement */
+    bimisc_data_init();
+}
+
 /* FIELD statement: FIELD #filenum, width AS var$, width AS var$, ... */
 int gwsts_handle_field(const char *trimmed) {
     /* Make a mutable copy since we need to modify the string */

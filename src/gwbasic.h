@@ -645,6 +645,9 @@ int next86_return(const char **text);
 int next86_get_for_depth(void);
 int next86_inside_for(void);
 void next86_clear_for_stack(void);
+void next86_clear_gosub_stack(void);   /* v148: RUN clears GOSUB stack */
+int next86_get_gosub_depth(void);      /* v148: test/smoke accessor */
+void gwsts_reset_runtime_environment(void);  /* v148: RUN environment reset */
 
 /* GIOLPT module functions - Line Printer */
 void giolpt_init(void);

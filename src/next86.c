@@ -402,6 +402,15 @@ struct gosub_entry {
 static struct gosub_entry g_gosub_stack[MAX_GOSUB_DEPTH];
 static int g_gosub_sp = 0;
 
+/* v148 MEDIUM-1: GOSUB stack reset (GW-BASIC RUN clears the GOSUB stack) */
+void next86_clear_gosub_stack(void) {
+    g_gosub_sp = 0;
+}
+
+int next86_get_gosub_depth(void) {
+    return g_gosub_sp;
+}
+
 /* GOTO statement handler */
 int next86_goto(const char **text) {
     /* Parse GOTO statement: GOTO line_number */

@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v147 CRITICAL-1 修复完成 — 统一执行器 run_program_lines() (交互 RUN 与文件路径共用, 全控制流) + IF..THEN 行号跳转；下一步 v148 review |
+| **当前阶段** | CODE_REVIEW v148 MEDIUM-1 修复完成 — RUN 环境复位 gwsts_reset_runtime_environment (变量/堆/FOR·GOSUB 栈/ON ERROR/文件/DATA)；下一步 v149 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -31,7 +31,37 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v147 CRITICAL-1 修复 — 统一执行器 + IF..THEN 行号
+---
+
+## 当前轮: CODE_REVIEW v148 MEDIUM-1 修复 — RUN 环境复位
+
+### 根因 (reviewer 实证独立复现: A=1 → A=2 + ON ERROR 残留生效)
+
+RUN 仅复位 DATA 指针 — 变量表/string heap/FOR 栈/GOSUB 栈/
+ON ERROR 状态/ERR 变量/打开文件全部跨 RUN 残留 (GW-BASIC 语义:
+RUN 清所有变量并关闭文件)。
+
+### 修复
+
+| # | 内容 | 文件 |
+|---|------|------|
+| 1 | gwsts_reset_runtime_environment(): gwdata_init (变量+string heap)、giodsk_close_all (文件)、next86_clear_for_stack/clear_gosub_stack、ON ERROR 关闭 (set_on_error_goto(0,0)) + exit_error_handler + clear_error、bimisc_data_init (DATA)。程序行 (gwlist) 与屏幕/图形状态不清 (GW-BASIC RUN 语义) | gwsts.c |
+| 2 | next86 新 API: next86_clear_gosub_stack() / next86_get_gosub_depth() (GOSUB 栈原本无公开复位) | next86.c + gwbasic.h |
+| 3 | RUN 命令: bimisc_data_init() → gwsts_reset_runtime_environment() (文件入口不调 — 新进程环境本干净) | gwmain.c |
+| 4 | 测试 test_gwmain_resetenv.c (+3): 变量+字符串清空且环境可用 / FOR+GOSUB 栈清空 / ON ERROR+ERR 清空 | tests/ |
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3260/3260 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **80/80** |
+| 孤儿检测 | ✅ **867 = 867**, 0 孤儿 0 幽灵 |
+| 交互 RUN 实证 | 两次 RUN `A=1 → A=1` (复位); ON ERROR 第一次生效 H=11, 第二次 RUN 新程序除零 → Error at line 20 (状态清); FOR 栈残留 → OK2 |
+
+---
+## 上一轮: CODE_REVIEW v147 CRITICAL-1 修复 — 统一执行器 + IF..THEN 行号
 
 ### 根因 (reviewer 实证 5 项全部独立复现)
 
