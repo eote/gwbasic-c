@@ -1,49 +1,42 @@
-# GW-BASIC C Port - Code Review v148
+# GW-BASIC C Port - Code Review v149
 
-**日期**: 2026-10-24
-**审查范围**: commit `95dc312`（fix: CODE_REVIEW v147 CRITICAL-1 — 统一执行器 `run_program_lines`，交互 RUN 与文件路径共用；IF..THEN 行号跳转）→ 工作区
-**测试状态**: 单元测试 **3248/3248 通过**（0 失败，0 警告）✅ | .bas **80/80 全量直接运行**（文件路径，输出与 expected 一致）✅ | **交互 RUN 复测全绿**（FOR/GOTO/END/IF..THEN/ON..GOTO/DELETE）✅
+**日期**: 2026-10-25
+**审查范围**: commit `d87f8d9`（fix: CODE_REVIEW v148 MEDIUM-1 — RUN 环境复位 `gwsts_reset_runtime_environment`）→ 工作区
+**测试状态**: 单元测试 **3260/3260 通过**（0 失败，0 警告）✅ | 交互 RUN 复位 probe ✅ | 文件 I/O 回归 **4/4 一致** ✅ | 文件路径代码未变（v148 全量 80/80 基线保持）✅
 **工作区状态**: clean
-**总体评分**: B+ — v147 CRITICAL-1 修复确认（执行器统一，交互 RUN 全控制流恢复）+ IF..THEN 行号跳转；新发现 **1 MEDIUM**（RUN 未复位运行时环境：变量跨 RUN 保留）
+**总体评分**: B+ — v148 MEDIUM-1 修复确认（变量/栈/ON ERROR/文件/DATA 复位全部验证）+ 新发现 **1 MEDIUM（既有）**：经典 `OPEN "O", #1, "file"` 语法未实现（静默创建名为 `O` 的文件，后续 `PRINT #1` 失败）
 
 ---
 
 ## 一、概述
 
-本次审查 v147 CRITICAL-1 修复提交 `95dc312`（9 文件，+288/-172）。
+本次审查 v148 MEDIUM-1 修复提交 `d87f8d9`（8 文件，+154/-4）。
 
-### v147 CRITICAL-1 修复确认（交互 RUN 全控制流恢复）
+### v148 MEDIUM-1 修复确认（全部验证通过）
 
-| 交互 RUN 场景（stdin 管道复测） | 修复前（v147） | 实测（v148） |
-|----------------------------------|----------------|--------------|
-| `10 for i=1 to 10 / 20 print i / 30 next` | 仅 ` 1` | ✅ **`1..10`** |
-| `10 goto 30 / 20 print "SKIP" / 30 print "TARGET"` | `Error at line 10` | ✅ `TARGET` |
-| `10 END / 20 print "AFTER"` | `Error at line 10` | ✅ 无错误、正常结束 |
-| `10 IF 1=1 THEN 30 ...`（行号跳转） | `Error at line 10` | ✅ `TARGET`（新增支持） |
-| `10 I=2 / 20 ON I GOTO 100,200 ...` | `Error at line 20` | ✅ `B2` |
-| `10 DELETE 20 / 15 print "A" / 20 print "B" / 30 print "C"` | `A`/`C`（悬垂读 UB） | ✅ `A`/`C`（liveness 生效） |
-
-**实现**：`run_program_lines()` 单一执行器（g_curlin/current_line、END(-2)、rc<0 错误/ON ERROR/handler-FATAL、rc>0 跳转、DELETE liveness + link_version fast path）；交互 RUN 与文件路径共用；RUN 前 `bimisc_data_init()`（DATA 指针复位）；文件路径删除 127 行重复循环。
-
-### IF..THEN 行号跳转（附带新功能）
-
-- `gwsts.c` +17：`IF <cond> THEN <行号>` 返回跳转行号（rc>0）
-- 新单测 `test_gwsts_ifgoto.c`（76 行）+ 集成 `test_if_lineno.bas/expected`（T1/ESTMT/SKIP4/DONE）✅
+| 复位项 | 实现 | 独立验证 |
+|--------|------|----------|
+| 变量 + 字符串堆 | `gwdata_init()`（释放变量/数组、`str_heap.used=0`、重置运行状态；**不触碰** gwlist/屏幕/文件） | ✅ 交互两次 RUN：`A= 1` / `A= 1`（v148 为 `A=2`） |
+| FOR / GOSUB 栈 | `next86_clear_for_stack()` + 新增 `next86_clear_gosub_stack()` | ✅ 单测：污染 FOR（inside_for=true）/GOSUB（depth>0）→ reset 后均清零 |
+| ON ERROR 状态 / ERR | `gwdata_set_on_error_goto(0,0)` + `gwdata_exit_error_handler()` + `gwdata_clear_error()` | ✅ 单测：active→inactive、ERR 变量清除；交互两次 RUN 正常（无 handler 残留） |
+| 打开文件 | `giodsk_close_all()` | ✅ 交互两次 RUN（`OPEN ... FOR OUTPUT AS #1` 首次未 CLOSE）→ 无 "File already open"，两次运行无错误 |
+| DATA 指针 | `bimisc_data_init()` | ✅ 代码复核（沿用既有） |
+| 复位后可用性 | — | ✅ 单测：reset 后 `B = 7` 正常；程序文本（gwlist）保留 |
 
 ### 验证结果（独立执行）
 
 | 验证项 | 结果 |
 |--------|------|
-| 干净重建 + 单元测试 | ✅ **3248/3248 PASS**（3242 → 3248，+6*） |
+| 干净重建 + 单元测试 | ✅ **3260/3260 PASS**（3248 → 3260，+12*） |
 | 编译警告 | ✅ **0 条** |
-| **.bas 全量（80 个，分批直接运行）** | ✅ **80/80 输出与 expected 一致**（批 1-6；含 terminating 用例 gwram/onerr_off 的预期终止错误；无预期外 Error） |
-| 交互 RUN：FOR/NEXT（小写 + 无变量） | ✅ `1..10` |
-| 交互 RUN：GOTO / IF..THEN / ON..GOTO | ✅ `TARGET` / `TARGET` / `B2` |
-| 交互 RUN：END | ✅ 无错误 |
-| 交互 RUN：运行时 DELETE | ✅ `A`/`C`（与文件路径一致） |
-| 交互 RUN：**连续两次 RUN 变量状态** | ❌ `A= 1` → **`A= 2`** — **MEDIUM-1 实证** |
+| 交互 RUN：两次 RUN 变量复位 | ✅ `A= 1` / `A= 1` |
+| 交互 RUN：ON ERROR 复位 | ✅ 两次运行正常（无残留 handler） |
+| 交互 RUN：文件句柄复位 | ✅ 两次 RUN 成功（首次未 CLOSE） |
+| FOR/GOSUB 栈复位 | ✅ 单测（accessor 断言） |
+| 文件 I/O 回归 | ✅ print_file（PASS）、file_seq（5/5）、file_rand（5/5）、put_get（5/5） |
+| 文件路径代码变更面 | ✅ 无（本提交仅 RUN 分支 + 新增复位函数/accessor + 测试）→ v148 的 80/80 全量基线保持 |
 
-*注：+6 = IF..THEN 跳转相关新测试函数（单测总数 3248）。
+*注：+12 = 新增 `test_gwmain_resetenv.c` 3 个测试函数（变量/栈/ON ERROR）。
 
 ---
 
@@ -51,7 +44,7 @@
 
 ### 🟥 CRITICAL
 
-无（v147 CRITICAL-1 已修复确认）。
+无（v148 MEDIUM-1 已修复确认）。
 
 ### 🟧 HIGH
 
@@ -61,23 +54,22 @@
 
 | # | 描述 | 文件 |
 |---|------|------|
-| 1 | **`RUN` 未复位运行时环境**：GW-BASIC 语义为「RUN 清除所有变量并关闭文件」，当前仅复位 DATA 指针 → 变量/FOR 栈/GOSUB 栈/ON ERROR 状态/ERR/文件句柄跨 RUN 残留 | `src/gwmain.c`（RUN 分支 + `run_program_lines`） |
+| 1 | **经典 `OPEN "O", #1, "file"` 语法未实现（既有缺口）**：被静默解析为"打开文件名 `O`"（实测在目录创建名为 `O` 的文件），后续 `PRINT #1` → `Error at line 20`；GW-BASIC 兼容语法 | `src/gwsts.c`（OPEN 分支）/ `src/giodsk.c` |
 
 **详情**:
 
-**实证**：
+**实证**（交互 RUN）：
+```basic
+10 OPEN "O", #1, "T_CLASSIC.TXT"
+20 PRINT "OPENED"
 ```
-10 A=A+1
-20 PRINT "A=";A
-RUN     → A= 1
-RUN     → A= 2      ← GW-BASIC 期望 A= 1（RUN 清变量）
-```
+输出 `OPENED`（OPEN 未报错）——但目录中出现 **名为 `O` 的文件**，`T_CLASSIC.TXT` 未创建；后续 `PRINT #1, "DATA"` 在行 20 报错（#1 未分配）。→ 整行被解析为 `OPEN "O"`（文件名 "O"），其余 `, #1, "T_CLASSIC.TXT"` 被静默忽略。
 
-**根因**：`95dc312` 在 RUN 前仅调用 `bimisc_data_init()`（复位 READ/DATA 指针）；未重置变量表/字符串堆/FOR 栈(`g_for_sp`)/GOSUB 栈/ON ERROR 状态(`on_error_active`/`in_error_handler`)/`ERR`/`ERL`/文件句柄。v147 旧 RUN 路径同样未复位（历史缺口），执行器统一后该语义缺口成为可观察问题。
+**影响**：
+- GW-BASIC 旧式 mode-first OPEN（`OPEN mode, #filenum, filespec`）是经典兼容语法，当前静默错误解析 → 程序行为错误 + 文件系统产生垃圾文件 `O`；
+- 现有测试（test_print_file/file_seq/file_rand）全部使用 `OPEN ... FOR OUTPUT AS #1` 新式语法 → **该语法路径零覆盖**（测试盲区）。
 
-**影响**：交互模式下连续 RUN 结果受上次运行污染（变量残留、未完成 FOR 栈残留、错误处理状态残留）；文件加载启动路径不受影响（新进程环境本身干净）。
-
-**修复建议**：抽取 `reset_runtime_environment()`（变量表/string heap/FOR 栈/GOSUB 栈/ON ERROR 状态/ERR/ERL/DATA 指针/打开文件句柄）→ RUN 命令执行前调用；文件入口不调用。注意保留程序行（gwlist 不受影响）与屏幕/图形状态（GW-BASIC RUN 不清屏）。补交互测试：两次 RUN 变量复位、FOR 栈残留清理、ON ERROR 状态复位。
+**修复建议**：按 ASM（OPEN 解析）支持 mode-first 形式，或至少对 `"O"/"I"/"R"` + `, #` 组合识别后报 SNERR 而非静默打开名为 `O` 的文件；补两种 OPEN 语法的测试（含 mode-first 的 OUTPUT/INPUT/RANDOM）。若确认 ASM 不支持旧式语法，应显式 SNERR 并删除误创建文件路径。
 
 ### 🟧 HIGH
 
@@ -91,81 +83,78 @@ RUN     → A= 2      ← GW-BASIC 期望 A= 1（RUN 清变量）
 
 无（阻塞）。观察项：
 
-1. **交互 RUN 仍无自动化测试**：执行器已统一（逻辑同源，风险大幅降低），但「RUN 命令 → run_program_lines」入口接线无测试保护；建议 main 级 smoke（stdin `RUN` + `FOR 1..3` → 3 行输出）。
-2. RUN 后 FOR/GOSUB 栈、ON ERROR、文件句柄复位缺失（与 MEDIUM-1 同源，一并处理）。
-3. `run_program_lines` 的 `exec_rc` 恒为 SUCCESS（错误路径直接 return ERROR）— 无功能影响，可简化。
-4. .bas 全量验证采用分批命令链直接运行（未使用脚本）；终态与自动化套件一致性建议在套件脚本恢复运行时复核。
+1. **RUN 环境复位缺单测覆盖文件/DATA**：变量/栈/ON ERROR 有单测，文件关闭与 DATA 指针仅交互/代码复核；建议补 `giodsk` 打开计数或文件重开用例。
+2. 交互 RUN 入口仍无自动化测试（v148 观察项；执行器同源）。
+3. `run_program_lines` 的 `exec_rc` 恒为 SUCCESS（可简化）；v145 图形观察项仍在。
 
 ---
 
 ## 三、架构评估
 
-### 修复质量（95dc312）
+### 修复质量（d87f8d9）
 
 | 决策 | 评价 |
 |------|------|
-| 抽取单一 `run_program_lines()`，两入口共用 | ✅ 正确 — 根治执行路径分叉（v147 根因） |
-| 删除文件路径 127 行重复循环 | ✅ 正确 — 单一事实源 |
-| RUN 前 `bimisc_data_init()`（DATA 复位） | ✅ 正确但**不完整**（MEDIUM-1） |
-| 交互 RUN 复测：FOR/GOTO/END/IF..THEN/ON..GOTO/DELETE | ✅ 全部恢复（6 项 probe） |
-| IF..THEN 行号跳转（rc>0） | ✅ 正确（单测 + 集成 + 交互 probe） |
-| 全量 .bas（80）回归 | ✅ 80/80 一致 |
-| **RUN 环境复位（变量/栈/ON ERROR/文件）** | ❌ **MEDIUM-1** — 仅 DATA 指针复位 |
-| 测试（IF..THEN goto 单测 + 集成） | ✅ 质量好；交互 RUN 入口仍无自动化（观察项 1） |
+| `gwsts_reset_runtime_environment()` 单一入口（8 类状态） | ✅ 正确 — RUN 前调用，职责清晰 |
+| `gwdata_init()` 复用（变量/堆/运行状态）+ 边界（不触 gwlist/屏幕） | ✅ 正确 — 复核源码确认 |
+| `giodsk_close_all()` 文件关闭 | ✅ 正确（两次 RUN 实测） |
+| FOR/GOSUB 栈 clear + depth accessor | ✅ 正确（单测实证） |
+| ON ERROR/ERR 复位 | ✅ 正确（单测 + 交互） |
+| 新增 3 单测（变量/栈/ON ERROR + 复位后可用性） | ✅ 质量好；缺文件/DATA 单测（观察项 1） |
+| 文件路径零改动 | ✅ 低风险（v148 80/80 基线保持；4 个文件 I/O 回归一致） |
 
 ### 测试覆盖分析
 
-| 功能 | 文件路径 | 交互 RUN |
-|------|----------|----------|
-| FOR/NEXT / GOTO / GOSUB / ON..GOTO / IF..THEN / END / ON ERROR / DELETE | ✅ 80/80 | ✅ 手动 probe 全绿（无自动化） |
-| **RUN 连续执行的环境复位** | —（文件路径不适用） | ❌ MEDIUM-1 |
-| IF..THEN 行号跳转 | ✅ test_if_lineno | ✅ probe |
-| 单元测试 | ✅ 3248/3248 | — |
+| 功能 | 覆盖情况 |
+|------|----------|
+| RUN 变量/string heap 复位 | ✅ 单测 + 交互 |
+| FOR/GOSUB 栈复位 | ✅ 单测（accessor） |
+| ON ERROR/ERR 复位 | ✅ 单测 + 交互 |
+| 文件句柄复位 | ⚠️ 交互 probe（缺单测） |
+| **经典 OPEN mode-first 语法** | ❌ **盲区 → MEDIUM-1** |
+| 文件路径 I/O | ✅ test_print_file/file_seq/file_rand/put_get |
 
 ---
 
 ## 四、改进建议
 
-### 短期（阻塞项）
-1. **MEDIUM-1**：实现 `reset_runtime_environment()` 并于 RUN 前调用（变量/string heap/FOR 栈/GOSUB 栈/ON ERROR/ERR/ERL/DATA/文件句柄）；补交互回归（两次 RUN 变量复位、FOR 栈、ON ERROR）
-2. 观察项 1：增加 main 级交互 RUN smoke 测试（至少 FOR 1..3、GOTO、END、IF..THEN 行号）
+### 短期
+1. **MEDIUM-1**：实现/明确拒绝经典 `OPEN "O", #1, "file"`（按 ASM 确认），避免静默创建 `O` 文件；补两语法测试
+2. 观察项 1：补文件/DATA 复位单测；观察项 2：main 级交互 RUN smoke
 
 ### 中期
-3. 统一执行器后，可让单测直接构造行列表验证控制流（覆盖文件/交互共同逻辑）
-4. v145 观察项（PUT 容量校验、CIRCLE radius、SCREEN 0 图形语句）随批次处理
-5. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 文件/交互双路径 smoke）
+3. v145 图形观察项（PUT 容量校验、CIRCLE radius、SCREEN 0 图形语句）
+4. CI 门禁（孤儿 + 零警告 + fresh clone 构建 + 文件/交互双路径 smoke）
 
 ### 长期
-6. ASAN 构建
-7. 定期文件 + 交互双路径回归
+5. ASAN 构建
+6. 定期文件 + 交互双路径回归
 
 ---
 
 ## 五、总结
 
-**总体评价**: v147 CRITICAL-1 正确修复 — 执行器统一为 `run_program_lines()`，交互 RUN 的 FOR/NEXT、GOTO、END、IF..THEN（含新增行号跳转）、ON..GOTO、运行时 DELETE 全部恢复；文件路径 80/80 全量验证一致、单测 3248/3248、0 警告；根除「两份循环不同步」的结构性缺陷。**但发现 1 MEDIUM**：RUN 未复位运行时环境（实测两次 RUN 变量保留 `A=1 → A=2`），与 GW-BASIC「RUN 清变量/关文件」语义不符。
-**关键发现**: 0 CRITICAL / 0 HIGH / **1 MEDIUM**（RUN 环境复位）、4 观察项。
-**建议**: 补 `reset_runtime_environment()`（RUN 前调用）+ 交互 RUN smoke 测试；修复后进行 v149 review。
+**总体评价**: v148 MEDIUM-1 正确修复 — `gwsts_reset_runtime_environment()` 覆盖变量/string heap、FOR/GOSUB 栈、ON ERROR/ERR、文件、DATA；交互实测两次 RUN 变量复位（`A=1/A=1`）、文件句柄复位、ON ERROR 复位全部通过；新增 3 个单测；单测 3260/3260、0 警告；文件路径零改动、I/O 回归一致。**但发现 1 个既有 MEDIUM**：经典 `OPEN "O", #1, "file"` 语法被静默解析为打开文件名 `O`（实测创建垃圾文件 `O`，后续 `PRINT #1` 失败），新式 `FOR OUTPUT` 语法测试全覆盖而旧式零覆盖。
+**关键发现**: 0 CRITICAL / 0 HIGH / **1 MEDIUM（既有兼容语法缺口）**、3 观察项。
+**建议**: 按 ASM 处理 mode-first OPEN（实现或 SNERR）+ 补测试；修复后进行 v150 review。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v147 | v148 | 变化 |
+| 指标 | v148 | v149 | 变化 |
 |------|------|------|------|
-| 单元测试通过（test_runner） | 3242 | **3248** | ✅ +6（IF..THEN goto 测试） |
-| 定义数（唯一函数） | 853 | **856** | +3 |
-| 注册数（run_test 调用） | 853 | **856** | +3 |
+| 单元测试通过（test_runner） | 3248 | **3260** | ✅ +12（+3 测试函数） |
+| 定义数 / 注册数 | 856 / 856 | **859 / 859** | +3 |
 | 孤儿数 | 0 | **0** | 保持 |
 | 生产/测试警告 | 0 | **0** | 保持 |
-| .bas 集成 | 13/13（文件路径） | **80/80 全量直接运行一致** | ✅ 全量 |
-| 交互 RUN 路径 | ❌ CRITICAL（FOR/GOTO/END 失效 + UAF） | ✅ **全控制流恢复**（6 项 probe） | 关闭 |
-| IF..THEN 行号跳转 | ⏳ 未支持 | ✅ 实现（单测 + 集成 + probe） | 新增 |
-| **RUN 环境复位（变量/栈/ON ERROR/文件）** | — | ❌ **MEDIUM-1** | 新发现 |
-| M2 进度 | 2/3 + 修复轮 | **2/3 + 执行器统一** | 推进 |
+| 文件路径 .bas | 80/80 | **80/80 基线保持**（代码零变更）+ 4/4 I/O 回归 | 保持 |
+| RUN 环境复位（变量/栈/ON ERROR/文件/DATA） | ❌ MEDIUM-1 | ✅ **修复**（全部验证） | 关闭 |
+| **经典 OPEN mode-first 语法** | — | ❌ **MEDIUM-1（既有）** | 新发现 |
+| M2 进度 | 2/3 + 执行器统一 | **2/3 + RUN 语义修复** | 推进 |
 
 **注释**:
-- 独立验证：干净重建 → 单测 3248 → **80 个 .bas 分 6 批直接运行**（expected 对比）→ 交互 RUN 6 项管道 probe → RUN 语义 probe
-- 全程未使用脚本（分批命令链 + 内置工具）
-- TERMERROR 用例（test_gwram: `Error at line 800`；test_onerr_off: `Error at line 120` + exit -1）符合设计预期
-- **M2 状态**: 交互/文件执行器统一；RUN 环境复位为剩余语义缺口
+- 独立验证：干净重建 → 单测 3260 → 交互 RUN 3 项（变量/ON ERROR/文件）+ 单测（栈）→ 文件 I/O 4 项回归
+- 全程未使用脚本（管道/命令链 + 内置工具）
+- probe 产物（`O`、`T_RUN_ENV.TXT`）已清理；`OPEN "O"` 误创建文件行为已作为 MEDIUM-1 证据记录
+- **M2 状态**: RUN 语义完整；剩余既有兼容语法缺口（mode-first OPEN）待处理
