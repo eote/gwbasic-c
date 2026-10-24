@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v148 MEDIUM-1 修复完成 — RUN 环境复位 gwsts_reset_runtime_environment (变量/堆/FOR·GOSUB 栈/ON ERROR/文件/DATA)；下一步 v149 review |
+| **当前阶段** | CODE_REVIEW v149 MEDIUM-1 修复完成 — 经典 mode-first OPEN 语法 (OPEN "O"/"I"/"A"/"R", #n, file[,reclen], ASM GIO86 双形式)；下一步 v150 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -33,7 +33,37 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v148 MEDIUM-1 修复 — RUN 环境复位
+---
+
+## 当前轮: CODE_REVIEW v149 MEDIUM-1 修复 — 经典 mode-first OPEN
+
+### 根因 (reviewer 实证独立复现: 静默创建文件 O)
+
+gwsts OPEN 分支只实现新式 `OPEN filespec FOR mode AS #n` —
+`OPEN "O", #1, "file"` 被解析为打开文件名 "O" (其余参数静默忽略)
+→ PRINT #1 失败 + 文件系统垃圾文件。ASM GIO86.ASM L59-101 明确
+支持双形式。
+
+### 修复 (gwsts.c OPEN 分支, ASM L64-101 语义)
+
+| # | 内容 |
+|---|------|
+| 1 | 首个引号表达式后跟逗号 → mode-first 分支: mode 首字符 O/I/A/R (大小写不敏感, ASM AND -1-" ") → 非 O/I/A/R → ERROR (ASM ERBFM0 "Bad file mode") → `,` `#fnum` `,` 引号 filespec `[,reclen]` (reclen → RANDOM, ASM PORLEN) |
+| 2 | 新式路径行为不变 (filespec 复用同一表达式存储) |
+| 3 | 测试: test_gwsts_openmodes.c (+6: O/I/A/R/坏 mode 无文件创建/小写 o) + test_open_classic.bas/.expected (O 写 → I 读 → A 追加 → I 读回 → KILL) |
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3287/3287 PASS** |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **81/81**（+test_open_classic） |
+| 孤儿检测 | ✅ **873 = 873**, 0 孤儿 0 幽灵 |
+| 端到端 | `OPEN "O",#1,"T_CLASSIC.TXT"` → T_CLASSIC.TXT 内容 DATA-OK, 无垃圾文件 O; `OPEN "X"` → 错误且不创建文件 |
+
+---
+## 上一轮: CODE_REVIEW v148 MEDIUM-1 修复 — RUN 环境复位
 
 ### 根因 (reviewer 实证独立复现: A=1 → A=2 + ON ERROR 残留生效)
 

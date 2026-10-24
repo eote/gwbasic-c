@@ -1984,19 +1984,99 @@ delete_done:
             char *filename_end = strchr(rest, '\"');
             if (filename_end) {
                 size_t fn_len = filename_end - rest;
-                char *filename = (char *)gwram_alloc(fn_len + 1);
-                if (filename) {
-                    memcpy(filename, rest, fn_len);
-                    filename[fn_len] = '\0';
+                char *first_expr = (char *)gwram_alloc(fn_len + 1);
+                if (first_expr) {
+                    memcpy(first_expr, rest, fn_len);
+                    first_expr[fn_len] = '\0';
                     
                     rest = filename_end + 1;
                     while (*rest && isspace((unsigned char)*rest)) rest++;
                     
-                    /* Parse mode */
-                    int mode = 0;  /* 0=INPUT, 1=OUTPUT, 2=APPEND, 3=RANDOM -> maps to FM_* */
+                    /* v149 MEDIUM-1: ASM GIO86.ASM L59-101 — two forms:
+                     *   OPEN filespec FOR mode AS #fnum [LEN=...]   (new-style)
+                     *   OPEN mode,fnum,filespec[,reclen]            (classic, mode-first)
+                     * The first expression followed by a comma is the MODE
+                     * character ("O"/"I"/"A"/"R", case-insensitive per ASM
+                     * AND -1-" "); anything else is the FILESPEC. */
+                    int mode = 0;  /* FM_* */
                     int filenum = 1;
                     int reclen = 128;
                     bool has_for = false;
+                    
+                    if (*rest == ',') {
+                        /* ---- classic mode-first: OPEN mode,fnum,filespec[,reclen] ---- */
+                        char mc = first_expr[0];
+                        if (mc >= 'a' && mc <= 'z') mc = (char)(mc - 'a' + 'A');
+                        if (strlen(first_expr) != 1 ||
+                            (mc != 'O' && mc != 'I' && mc != 'A' && mc != 'R')) {
+                            /* ASM ERBFM0: "Bad file mode" */
+                            gwram_free(first_expr);
+                            return ERROR;
+                        }
+                        switch (mc) {
+                            case 'O': mode = FM_OUTPUT; break;
+                            case 'I': mode = FM_INPUT;  break;
+                            case 'A': mode = FM_APPEND; break;
+                            default:  mode = FM_RANDOM; break;
+                        }
+                        rest++;  /* skip comma */
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                        /* optional '#' before file number (ASM POFNUM) */
+                        if (*rest == '#') { rest++; while (*rest && isspace((unsigned char)*rest)) rest++; }
+                        filenum = 0;
+                        while (*rest && isdigit((unsigned char)*rest)) {
+                            filenum = filenum * 10 + (*rest - '0');
+                            rest++;
+                        }
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                        if (*rest != ',') {
+                            gwram_free(first_expr);
+                            return ERROR;  /* SNERR — syntax error */
+                        }
+                        rest++;  /* skip comma */
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                        /* filespec: quoted string */
+                        if (*rest != '\"') {
+                            gwram_free(first_expr);
+                            return ERROR;  /* SNERR */
+                        }
+                        rest++;
+                        char *fs_end = strchr(rest, '\"');
+                        if (!fs_end) {
+                            gwram_free(first_expr);
+                            return ERROR;  /* SNERR */
+                        }
+                        size_t fs_len = fs_end - rest;
+                        char *filespec = (char *)gwram_alloc(fs_len + 1);
+                        if (!filespec) {
+                            gwram_free(first_expr);
+                            return ERROR;
+                        }
+                        memcpy(filespec, rest, fs_len);
+                        filespec[fs_len] = '\0';
+                        rest = fs_end + 1;
+                        while (*rest && isspace((unsigned char)*rest)) rest++;
+                        /* optional ,reclen (ASM PORLEN) */
+                        if (*rest == ',') {
+                            rest++;
+                            while (*rest && isspace((unsigned char)*rest)) rest++;
+                            reclen = 0;
+                            while (*rest && isdigit((unsigned char)*rest)) {
+                                reclen = reclen * 10 + (*rest - '0');
+                                rest++;
+                            }
+                            mode = FM_RANDOM;
+                        }
+                        result = dskcom_open(filespec, filenum, mode, reclen);
+                        gwram_free(filespec);
+                        gwram_free(first_expr);
+                        /* fall through to the tail of the OPEN branch */
+                        goto gwsts_open_done;
+                    }
+                    
+                    /* ---- new-style: filespec first ---- */
+                    {
+                    char *filename = first_expr;  /* reuse */
                     
                     if (starts_with(rest, "FOR ")) {
                         rest += 4;
@@ -2069,7 +2149,8 @@ delete_done:
                     }
                     
                     result = dskcom_open(filename, filenum, mode, reclen);
-                    gwram_free(filename);
+                    }  /* end new-style block */
+                    gwram_free(first_expr);
                 }
             }
         }
@@ -2214,6 +2295,7 @@ delete_done:
         }
     }
     
+gwsts_open_done:;
     gwram_free(trimmed);
     return result;
 }
