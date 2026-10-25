@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v149 MEDIUM-1 修复完成 — 经典 mode-first OPEN 语法 (OPEN "O"/"I"/"A"/"R", #n, file[,reclen], ASM GIO86 双形式)；下一步 v150 review |
+| **当前阶段** | CODE_REVIEW v150 复核确认轮 0 问题 (6 观察项: filespec 变量/reclen 组合待 ASM 对照、R 深度测试、交互 smoke 等)；下一步 M2 继续或 v151 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -35,7 +35,24 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v149 MEDIUM-1 修复 — 经典 mode-first OPEN
+---
+
+## 当前轮: CODE_REVIEW v150 复核确认轮 — 0 问题 (6 观察项)
+
+v149 MEDIUM-1 (经典 mode-first OPEN) 修复确认: 双形式共存、坏模式
+拒绝不建文件、小写归一、资源无泄漏; 3287/3287 单测、81/81 .bas、
+0 警告、865=865。0 CRITICAL / 0 HIGH / 0 MEDIUM / 0 LOW。
+
+观察项登记 (后续批次):
+1. ~~tests/A|I|O|R|X 残留~~ — 已清理 (dev probe 垃圾, 单测 cwd 落点)
+2. filespec 变量 (OPEN "O",#1,F$) — 待 ASM GIO86 NAMSCN 对照后实现或 SNERR
+3. mode O + reclen 组合语义 — ASM PORLEN 对照
+4. R 模式 reclen 深度验证 (FIELD/GET/PUT)
+5. 交互 RUN 入口自动化 smoke (v148 观察项延续)
+6. v145 图形观察项 (PUT 容量校验、CIRCLE radius、SCREEN 0 图形语句)
+
+---
+## 上一轮: CODE_REVIEW v149 MEDIUM-1 修复 — 经典 mode-first OPEN
 
 ### 根因 (reviewer 实证独立复现: 静默创建文件 O)
 
