@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v151 复核确认轮 0 问题 (基线保持 3287/81, 观察项 1 关闭, 2-6 开放)；下一步: 观察项 2/3 ASM 对照 + R 深度测试 + M2 下一批 → v152 |
+| **当前阶段** | M2 下一批完成 — v151 观察项 2/3 修复 (filespec 表达式 + reclen RANDOM-only 语义, ASM GIO86 对照); 下一步 v152 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -39,7 +39,41 @@
 
 ---
 
-## 当前轮: CODE_REVIEW v151 复核确认轮 — 0 问题 (基线确认)
+---
+
+## 当前轮: M2 下一批 — v151 观察项 2/3 修复 (ASM GIO86 对照)
+
+### ASM 依据 (GIO86.ASM L59-101, L1462+ NAMSCN, L160+ PORLEN)
+
+- **NAMSCN: CALL FRMEVL** — filespec 是任意字符串表达式 (观察项 2
+  依据), 非仅引号字面量
+- **PRLENC: 仅 FILMOD==MD_RND 才解析 reclen** — O/I/A 带 reclen parm
+  = 语法错误 (观察项 3 依据, 旧实现"强制 RANDOM"是错的)
+- **VARECS: reclen <= 0 → FCERR**
+
+### 修复 (gwsts.c: OPEN 抽取为 gwsts_exec_open + 表达式 filespec +
+reclen 语义)
+
+| # | 内容 |
+|---|------|
+| 1 | OPEN 分支抽取为独立函数 gwsts_exec_open (双形式共享 phase1 表达式解析; 修复链结构) |
+| 2 | filespec 支持引号字面量 **或任意表达式** (F$ / A$+".TXT"; 引号/括号感知顶层逗号扫描; new-style 以顶层 " FOR "/" AS" 为表达式边界) — classic 与 new-style 两形式 |
+| 3 | reclen 仅 RANDOM: O/I/A + ",reclen" 或 LEN= → SNERR (不再强制 RANDOM); reclen <= 0 → FCERR |
+| 4 | 所有权契约修复: gweval_eval_string 简单变量返回**变量表内部指针** (非副本) — gwram_free 它 = 堆损坏 (0xC0000374 实证); fs_owned/ns_owned 区分字面量 (free) 与求值结果 (不 free, 与 PRINT/assign 既有契约一致) |
+| 5 | 测试: test_gwsts_openmodes.c +6 (classic/new-style/concat 变量 filespec、modeO+reclen SNERR、OUTPUT+LEN= SNERR、reclen0 FCERR) + test_open_varspec.bas/.expected (三种 filespec 形式读写回 KILL 全流程) |
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3308/3308 PASS** (3287→3308, +21) |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **82/82**（+test_open_varspec; 首轮 1 瞬时状态失败, 复跑一致无问题） |
+| 孤儿检测 | ✅ **879 = 879**, 0 孤儿 0 幽灵 |
+| 端到端 6 场景 | ✅ classic_var C1 / newstyle_var N1 / concat K1 (写→读回→KILL); modeO+reclen → SNERR 不建文件; OUTPUT+LEN= → SNERR; reclen 0 → FCERR |
+
+---
+## 上一轮: CODE_REVIEW v151 复核确认轮 — 0 问题 (基线确认)
 
 自 v150 无代码变更 (仅 v150 报告入库 d7cefb6 + 残留清理)。reviewer
 独立验证: 3287/3287 单测、81/81 基线 + 4 抽样一致、0 警告。

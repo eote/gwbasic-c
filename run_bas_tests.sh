@@ -92,6 +92,7 @@ IMPLEMENTED_TESTS=(
     "test_for_lastnext.bas"
     "test_if_lineno.bas"
     "test_open_classic.bas"
+    "test_open_varspec.bas"
     "test_onerr_off.bas"
 )
 

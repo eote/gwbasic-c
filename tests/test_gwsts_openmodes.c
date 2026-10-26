@@ -139,3 +139,123 @@ void test_gwsts_openmodes_lowercase(void) {
     cleanup_files();
     TEST_PASS("openmodes lowercase");
 }
+
+/* ===== v152: observation 2/3 — expression filespec + reclen semantics ===== */
+
+/* classic mode-first with VARIABLE filespec (ASM NAMSCN uses FRMEVL) */
+void test_gwsts_openmodes_var_filespec_classic(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("F$ = \"t_v149o.txt\""), 0, "set F$");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("OPEN \"O\", #1, F$"), 0, "classic var filespec opens");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("PRINT #1, \"VAR-OK\""), 0, "PRINT #1 works");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("CLOSE"), 0, "CLOSE");
+    FILE *fp = fopen("t_v149o.txt", "r");
+    TEST_ASSERT(fp != NULL, "var-name file created");
+    if (fp) {
+        char buf[64] = {0};
+        fgets(buf, sizeof(buf), fp);
+        fclose(fp);
+        TEST_ASSERT(strstr(buf, "VAR-OK") != NULL, "content written via var filespec");
+    }
+    cleanup_files();
+    TEST_PASS("openmodes var filespec classic");
+}
+
+/* new-style with variable filespec */
+void test_gwsts_openmodes_var_filespec_newstyle(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("N$ = \"t_v149i.txt\""), 0, "set N$");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("OPEN N$ FOR OUTPUT AS #1"), 0, "new-style var filespec opens");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("PRINT #1, \"NS-OK\""), 0, "PRINT #1 works");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("CLOSE"), 0, "CLOSE");
+    FILE *fp = fopen("t_v149i.txt", "r");
+    TEST_ASSERT(fp != NULL, "var file created");
+    if (fp) {
+        char buf[64] = {0};
+        fgets(buf, sizeof(buf), fp);
+        fclose(fp);
+        TEST_ASSERT(strstr(buf, "NS-OK") != NULL, "content written");
+    }
+    cleanup_files();
+    TEST_PASS("openmodes var filespec newstyle");
+}
+
+/* concatenation filespec */
+void test_gwsts_openmodes_concat_filespec(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("A$ = \"t_v149a\""), 0, "set A$");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("OPEN \"O\", #1, A$+\".txt\""), 0, "concat filespec opens");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("CLOSE"), 0, "CLOSE");
+    FILE *fp = fopen("t_v149a.txt", "r");
+    TEST_ASSERT(fp != NULL, "concat file created");
+    if (fp) fclose(fp);
+    cleanup_files();
+    TEST_PASS("openmodes concat filespec");
+}
+
+/* classic mode O + reclen → SNERR (ASM PRLENC: reclen only for RANDOM),
+ * and NO file must be created */
+void test_gwsts_openmodes_modeO_reclen_snerr(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    int rc = gwsts_exec_statement("OPEN \"O\", #1, \"t_v149b.dta\", 128");
+    TEST_ASSERT(rc != 0, "mode O + reclen errors (SNERR)");
+    gwsts_exec_statement("CLOSE");
+    FILE *fp = fopen("t_v149b.dta", "r");
+    TEST_ASSERT(fp == NULL, "no file created");
+    if (fp) fclose(fp);
+    cleanup_files();
+    TEST_PASS("openmodes modeO reclen snerr");
+}
+
+/* new-style OUTPUT + LEN= → SNERR (ASM PNRLEN: LEN only for RANDOM) */
+void test_gwsts_openmodes_output_len_snerr(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    int rc = gwsts_exec_statement("OPEN \"t_v149b.dta\" FOR OUTPUT AS #1 LEN=128");
+    TEST_ASSERT(rc != 0, "OUTPUT + LEN= errors (SNERR)");
+    gwsts_exec_statement("CLOSE");
+    FILE *fp = fopen("t_v149b.dta", "r");
+    TEST_ASSERT(fp == NULL, "no file created");
+    if (fp) fclose(fp);
+    cleanup_files();
+    TEST_PASS("openmodes output len snerr");
+}
+
+/* reclen = 0 → FCERR (ASM VARECS: OR CX,CX; JZ FCERR1) */
+void test_gwsts_openmodes_reclen_zero(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    int rc = gwsts_exec_statement("OPEN \"R\", #1, \"t_v149r.dta\", 0");
+    TEST_ASSERT(rc != 0, "reclen 0 errors (FCERR)");
+    gwsts_exec_statement("CLOSE");
+    cleanup_files();
+    TEST_PASS("openmodes reclen zero");
+}

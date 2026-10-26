@@ -391,6 +391,289 @@ static bool gwsts_ieq_n(const char *s, const char *kw, size_t n) {
     return true;
 }
 
+/* ===== v152: OPEN statement (extracted from gwsts_exec_statement) =====
+ * ASM GIO86.ASM L59-101 — two forms, both parsed with FRMEVL
+ * expressions (NAMSCN calls FRMEVL for the filespec):
+ *   OPEN filespec FOR mode AS #fnum [LEN=...]
+ *   OPEN mode,fnum,filespec[,reclen]     (classic, mode-first)
+ * reclen is only parsed for RANDOM mode (ASM PRLENC/PNRLEN); a reclen
+ * parm on O/I/A is a syntax error (SNERR). reclen <= 0 → FCERR (VARECS). */
+int gwsts_exec_open(const char *trimmed) {
+    int result = ERROR;
+    char *first_expr = NULL;
+    char *filespec = NULL;
+    char *rest = (char *)trimmed + 5;
+    while (*rest && isspace((unsigned char)*rest)) rest++;
+    
+    /* --- Phase 1: first expression (quoted literal OR expression up
+     *     to a top-level comma — quote/paren aware) --- */
+    {
+        const char *sp = rest;
+        bool in_q = false;
+        int depth = 0;
+        const char *e = sp;
+        bool quoted = (*sp == '"');
+        if (quoted) {
+            e = strchr(sp + 1, '"');
+            if (!e) return ERROR;  /* unterminated literal */
+            e++;  /* past closing quote */
+        } else {
+            while (*e) {
+                char cc = *e;
+                if (cc == '"') { in_q = !in_q; e++; continue; }
+                if (in_q) { e++; continue; }
+                if (cc == '(') { depth++; e++; continue; }
+                if (cc == ')') { if (depth > 0) depth--; e++; continue; }
+                if (depth == 0 && cc == ',') break;
+                /* new-style keywords end the expression (ASM FRMEVL
+                 * stops at FOR/AS tokens): top-level " FOR " / " AS" */
+                if (depth == 0 && e[0] == ' ' &&
+                    (starts_with(e, " FOR ") ||
+                     (starts_with(e, " AS") &&
+                      (isspace((unsigned char)e[3]) || e[3] == '#')))) {
+                    break;
+                }
+                e++;
+            }
+        }
+        const char *et = e;
+        if (quoted) {
+            /* literal content between quotes */
+            const char *ls = sp + 1, *le = e - 1;
+            first_expr = (char *)gwram_alloc((size_t)(le - ls) + 1);
+            if (!first_expr) return ERROR;
+            memcpy(first_expr, ls, (size_t)(le - ls));
+            first_expr[le - ls] = '\0';
+        } else {
+            while (et > sp && isspace((unsigned char)et[-1])) et--;
+            if (et == sp) return ERROR;  /* empty expression */
+            first_expr = (char *)gwram_alloc((size_t)(et - sp) + 1);
+            if (!first_expr) return ERROR;
+            memcpy(first_expr, sp, (size_t)(et - sp));
+            first_expr[et - sp] = '\0';
+        }
+        rest = (char *)e;
+    }
+    while (*rest && isspace((unsigned char)*rest)) rest++;
+    
+    int mode = 0;      /* FM_* */
+    int filenum = 1;
+    int reclen = 128;
+    bool has_for = false;
+    
+    if (*rest == ',') {
+        /* ---- classic mode-first: OPEN mode,fnum,filespec[,reclen] ---- */
+        char mc = first_expr[0];
+        if (mc >= 'a' && mc <= 'z') mc = (char)(mc - 'a' + 'A');
+        if (strlen(first_expr) != 1 ||
+            (mc != 'O' && mc != 'I' && mc != 'A' && mc != 'R')) {
+            gwram_free(first_expr);
+            return ERROR;  /* ASM ERBFM0 "Bad file mode" */
+        }
+        switch (mc) {
+            case 'O': mode = FM_OUTPUT; break;
+            case 'I': mode = FM_INPUT;  break;
+            case 'A': mode = FM_APPEND; break;
+            default:  mode = FM_RANDOM; break;
+        }
+        rest++;  /* skip comma */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        /* optional '#' before file number (ASM POFNUM) */
+        if (*rest == '#') { rest++; while (*rest && isspace((unsigned char)*rest)) rest++; }
+        filenum = 0;
+        while (*rest && isdigit((unsigned char)*rest)) {
+            filenum = filenum * 10 + (*rest - '0');
+            rest++;
+        }
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        if (*rest != ',') { gwram_free(first_expr); return ERROR; }  /* SNERR */
+        rest++;  /* skip comma */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        /* filespec: quoted literal OR expression to top-level comma/end
+         * (v152 obs-2: ASM NAMSCN uses FRMEVL — variables work) */
+        bool fs_owned = false;
+        if (*rest == '"') {
+            rest++;
+            const char *fs_end = strchr(rest, '"');
+            if (!fs_end) { gwram_free(first_expr); return ERROR; }
+            size_t fs_len = (size_t)(fs_end - rest);
+            filespec = (char *)gwram_alloc(fs_len + 1);
+            if (!filespec) { gwram_free(first_expr); return ERROR; }
+            memcpy(filespec, rest, fs_len);
+            filespec[fs_len] = '\0';
+            rest = (char *)fs_end + 1;
+            fs_owned = true;
+        } else {
+            const char *sp = rest;
+            bool in_q = false;
+            const char *e = sp;
+            while (*e) {
+                if (*e == '"') { in_q = !in_q; e++; continue; }
+                if (!in_q && *e == ',') break;
+                e++;
+            }
+            const char *et = e;
+            while (et > sp && isspace((unsigned char)et[-1])) et--;
+            if (et == sp) { gwram_free(first_expr); return ERROR; }
+            size_t fs_len = (size_t)(et - sp);
+            char *fs_expr = (char *)gwram_alloc(fs_len + 1);
+            if (!fs_expr) { gwram_free(first_expr); return ERROR; }
+            memcpy(fs_expr, sp, fs_len);
+            fs_expr[fs_len] = '\0';
+            gwdata_clear_error();
+            filespec = gweval_eval_string(fs_expr);
+            gwram_free(fs_expr);
+            if (!filespec || gwdata_get_error() != 0) {
+                gwram_free(first_expr);
+                return ERROR;
+            }
+            rest = (char *)e;
+        }
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        
+        /* optional ,reclen — RANDOM only (v152 obs-3: ASM PRLENC) */
+        if (*rest == ',') {
+            if (mode != FM_RANDOM) {
+                if (fs_owned) gwram_free(filespec);
+                gwram_free(first_expr);
+                return ERROR;  /* SNERR */
+            }
+            rest++;
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+            gwdata_clear_error();
+            float rv = gweval_eval_numeric(rest);
+            if (gwdata_get_error() != 0) {
+                if (fs_owned) gwram_free(filespec);
+                gwram_free(first_expr);
+                return ERROR;
+            }
+            reclen = (int)rv;
+            if (reclen <= 0) {  /* FCERR — ASM VARECS: 0 illegal */
+                if (fs_owned) gwram_free(filespec);
+                gwram_free(first_expr);
+                return ERROR;
+            }
+        }
+        result = dskcom_open(filespec, filenum, mode, reclen);
+        if (fs_owned) gwram_free(filespec);
+        gwram_free(first_expr);
+        return result;
+    }
+    
+    /* ---- new-style: filespec expr + [FOR mode] AS #fnum [LEN=...] ---- */
+    {
+        /* filespec: first_expr holds a quoted literal (plain text) OR
+         * an expression (F$ / A$+".TXT") — for the expression form,
+         * re-scan the original text from `rest` backward? No: phase 1
+         * already consumed it. For the expression case, first_expr is
+         * the RAW EXPRESSION TEXT — evaluate it here. */
+        if (!first_expr) return ERROR;
+        bool ns_owned = false;
+        /* Determine if first_expr was a literal: we can't tell here, so
+         * re-parse — if the ORIGINAL text at the captured position was
+         * quoted we took the content; otherwise first_expr is raw expr
+         * text that must be evaluated. Track via a flag set in phase 1
+         * instead: use presence of surrounding context — simplest: keep
+         * a module-level decision by re-checking trimmed[5]=='"'. */
+        if (trimmed[5] == '"' ) {
+            const char *p = trimmed + 5;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p != '"') {
+                /* expression form — evaluate */
+                gwdata_clear_error();
+                filespec = gweval_eval_string(first_expr);
+                if (!filespec || gwdata_get_error() != 0) {
+                    gwram_free(first_expr);
+                    return ERROR;
+                }
+            } else {
+                filespec = first_expr;  /* literal content */
+                first_expr = NULL;
+                ns_owned = true;
+            }
+        } else {
+            /* trimmed[5] was whitespace — find the first non-space */
+            const char *p = trimmed + 5;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p != '"') {
+                gwdata_clear_error();
+                filespec = gweval_eval_string(first_expr);
+                if (!filespec || gwdata_get_error() != 0) {
+                    gwram_free(first_expr);
+                    return ERROR;
+                }
+            } else {
+                filespec = first_expr;
+                first_expr = NULL;
+            }
+        }
+        
+        if (starts_with(rest, "FOR ")) {
+            rest += 4;
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+            if (starts_with(rest, "INPUT")) {
+                mode = FM_INPUT; rest += 5; has_for = true;
+            } else if (starts_with(rest, "OUTPUT")) {
+                mode = FM_OUTPUT; rest += 6; has_for = true;
+            } else if (starts_with(rest, "APPEND")) {
+                mode = FM_APPEND; rest += 6; has_for = true;
+            } else if (starts_with(rest, "RANDOM")) {
+                mode = FM_RANDOM; rest += 6; has_for = true;
+            }
+        }
+        if (has_for) {
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+        } else {
+            mode = FM_RANDOM;  /* no FOR → default RANDOM (ASM NOTNSO) */
+        }
+        
+        /* AS #filenum */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        if (starts_with(rest, "AS")) {
+            rest += 2;
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+            if (*rest == '#') rest++;
+            filenum = 0;
+            while (*rest && isdigit((unsigned char)*rest)) {
+                filenum = filenum * 10 + (*rest - '0');
+                rest++;
+            }
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+        }
+        
+        /* LEN= reclen — RANDOM only (v152 obs-3: ASM PNRLEN) */
+        while (*rest && isspace((unsigned char)*rest)) rest++;
+        if (starts_with(rest, "LEN=") || starts_with(rest, "LEN =")) {
+            if (mode != FM_RANDOM) {
+                if (ns_owned) gwram_free(filespec);
+                gwram_free(first_expr);
+                return ERROR;  /* SNERR */
+            }
+            rest += (rest[3] == '=') ? 4 : 5;
+            while (*rest && isspace((unsigned char)*rest)) rest++;
+            gwdata_clear_error();
+            float rv = gweval_eval_numeric(rest);
+            if (gwdata_get_error() != 0) {
+                if (ns_owned) gwram_free(filespec);
+                gwram_free(first_expr);
+                return ERROR;
+            }
+            reclen = (int)rv;
+            if (reclen <= 0) {
+                if (ns_owned) gwram_free(filespec);
+                gwram_free(first_expr);
+                return ERROR;  /* FCERR */
+            }
+        }
+        
+        result = dskcom_open(filespec, filenum, mode, reclen);
+        if (ns_owned) gwram_free(filespec);
+        gwram_free(first_expr);
+    }
+    return result;
+}
+
 int gwsts_exec_statement(const char *text) {
     if (!text) return ERROR;
     
@@ -1972,188 +2255,10 @@ delete_done:
         }
         
     }
-    /* OPEN statement */
+    /* OPEN statement — v152: extracted to gwsts_exec_open (ASM GIO86
+     * dual forms; expression filespec; RANDOM-only reclen) */
     else if (starts_with(trimmed, "OPEN ")) {
-        /* Parse: OPEN "filename" FOR INPUT/OUTPUT/APPEND/RANDOM AS #filenum [LEN=reclen] */
-        char *rest = trimmed + 5;
-        while (*rest && isspace((unsigned char)*rest)) rest++;
-        
-        /* Extract filename (quoted string) */
-        if (*rest == '\"') {
-            rest++;
-            char *filename_end = strchr(rest, '\"');
-            if (filename_end) {
-                size_t fn_len = filename_end - rest;
-                char *first_expr = (char *)gwram_alloc(fn_len + 1);
-                if (first_expr) {
-                    memcpy(first_expr, rest, fn_len);
-                    first_expr[fn_len] = '\0';
-                    
-                    rest = filename_end + 1;
-                    while (*rest && isspace((unsigned char)*rest)) rest++;
-                    
-                    /* v149 MEDIUM-1: ASM GIO86.ASM L59-101 — two forms:
-                     *   OPEN filespec FOR mode AS #fnum [LEN=...]   (new-style)
-                     *   OPEN mode,fnum,filespec[,reclen]            (classic, mode-first)
-                     * The first expression followed by a comma is the MODE
-                     * character ("O"/"I"/"A"/"R", case-insensitive per ASM
-                     * AND -1-" "); anything else is the FILESPEC. */
-                    int mode = 0;  /* FM_* */
-                    int filenum = 1;
-                    int reclen = 128;
-                    bool has_for = false;
-                    
-                    if (*rest == ',') {
-                        /* ---- classic mode-first: OPEN mode,fnum,filespec[,reclen] ---- */
-                        char mc = first_expr[0];
-                        if (mc >= 'a' && mc <= 'z') mc = (char)(mc - 'a' + 'A');
-                        if (strlen(first_expr) != 1 ||
-                            (mc != 'O' && mc != 'I' && mc != 'A' && mc != 'R')) {
-                            /* ASM ERBFM0: "Bad file mode" */
-                            gwram_free(first_expr);
-                            return ERROR;
-                        }
-                        switch (mc) {
-                            case 'O': mode = FM_OUTPUT; break;
-                            case 'I': mode = FM_INPUT;  break;
-                            case 'A': mode = FM_APPEND; break;
-                            default:  mode = FM_RANDOM; break;
-                        }
-                        rest++;  /* skip comma */
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                        /* optional '#' before file number (ASM POFNUM) */
-                        if (*rest == '#') { rest++; while (*rest && isspace((unsigned char)*rest)) rest++; }
-                        filenum = 0;
-                        while (*rest && isdigit((unsigned char)*rest)) {
-                            filenum = filenum * 10 + (*rest - '0');
-                            rest++;
-                        }
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                        if (*rest != ',') {
-                            gwram_free(first_expr);
-                            return ERROR;  /* SNERR — syntax error */
-                        }
-                        rest++;  /* skip comma */
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                        /* filespec: quoted string */
-                        if (*rest != '\"') {
-                            gwram_free(first_expr);
-                            return ERROR;  /* SNERR */
-                        }
-                        rest++;
-                        char *fs_end = strchr(rest, '\"');
-                        if (!fs_end) {
-                            gwram_free(first_expr);
-                            return ERROR;  /* SNERR */
-                        }
-                        size_t fs_len = fs_end - rest;
-                        char *filespec = (char *)gwram_alloc(fs_len + 1);
-                        if (!filespec) {
-                            gwram_free(first_expr);
-                            return ERROR;
-                        }
-                        memcpy(filespec, rest, fs_len);
-                        filespec[fs_len] = '\0';
-                        rest = fs_end + 1;
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                        /* optional ,reclen (ASM PORLEN) */
-                        if (*rest == ',') {
-                            rest++;
-                            while (*rest && isspace((unsigned char)*rest)) rest++;
-                            reclen = 0;
-                            while (*rest && isdigit((unsigned char)*rest)) {
-                                reclen = reclen * 10 + (*rest - '0');
-                                rest++;
-                            }
-                            mode = FM_RANDOM;
-                        }
-                        result = dskcom_open(filespec, filenum, mode, reclen);
-                        gwram_free(filespec);
-                        gwram_free(first_expr);
-                        /* fall through to the tail of the OPEN branch */
-                        goto gwsts_open_done;
-                    }
-                    
-                    /* ---- new-style: filespec first ---- */
-                    {
-                    char *filename = first_expr;  /* reuse */
-                    
-                    if (starts_with(rest, "FOR ")) {
-                        rest += 4;
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                        if (starts_with(rest, "INPUT")) {
-                            mode = FM_INPUT;
-                            rest += 5;
-                            has_for = true;
-                        } else if (starts_with(rest, "OUTPUT")) {
-                            mode = FM_OUTPUT;
-                            rest += 6;
-                            has_for = true;
-                        } else if (starts_with(rest, "APPEND")) {
-                            mode = FM_APPEND;
-                            rest += 6;
-                            has_for = true;
-                        } else if (starts_with(rest, "RANDOM")) {
-                            mode = FM_RANDOM;
-                            rest += 6;
-                            has_for = true;
-                        }
-                    }
-                    
-                    if (has_for) {
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                    } else {
-                        /* No FOR clause - default to RANDOM for "AS #" syntax */
-                        mode = FM_RANDOM;
-                    }
-                    
-                    /* Parse "AS #filenum" - handle both "AS #" and "AS#" */
-                    while (*rest && isspace((unsigned char)*rest)) rest++;
-                    if (starts_with(rest, "AS")) {
-                        rest += 2;
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                        if (*rest == '#') rest++;
-                        /* Parse filenum manually (avoid gweval_eval_numeric parsing rest of line) */
-                        filenum = 0;
-                        while (*rest && isdigit((unsigned char)*rest)) {
-                            filenum = filenum * 10 + (*rest - '0');
-                            rest++;
-                        }
-                        /* Skip trailing whitespace */
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                    }
-                    
-                    while (*rest && isspace((unsigned char)*rest)) rest++;
-                    if (starts_with(rest, "LEN=")) {
-                        rest += 4;
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                        /* Parse record length directly (not via expression evaluator to avoid LEN function conflict) */
-                        reclen = 0;
-                        while (*rest && isdigit((unsigned char)*rest)) {
-                            reclen = reclen * 10 + (*rest - '0');
-                            rest++;
-                        }
-                        /* LEN clause implies RANDOM mode */
-                        mode = FM_RANDOM;
-                    } else if (starts_with(rest, "LEN =")) {
-                        rest += 5;
-                        while (*rest && isspace((unsigned char)*rest)) rest++;
-                        /* Parse record length directly (not via expression evaluator to avoid LEN function conflict) */
-                        reclen = 0;
-                        while (*rest && isdigit((unsigned char)*rest)) {
-                            reclen = reclen * 10 + (*rest - '0');
-                            rest++;
-                        }
-                        /* LEN clause implies RANDOM mode */
-                        mode = FM_RANDOM;
-                    }
-                    
-                    result = dskcom_open(filename, filenum, mode, reclen);
-                    }  /* end new-style block */
-                    gwram_free(first_expr);
-                }
-            }
-        }
+        result = gwsts_exec_open(trimmed);
     }
     /* CLOSE statement */
     else if (starts_with(trimmed, "CLOSE")) {
@@ -2295,7 +2400,6 @@ delete_done:
         }
     }
     
-gwsts_open_done:;
     gwram_free(trimmed);
     return result;
 }
