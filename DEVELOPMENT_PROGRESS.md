@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | CODE_REVIEW v153 复核确认轮 0 问题 (基线保持; 观察项 1 已关闭, 2-6 开放待 ASM 对照/M2 下一批); 下一步观察项 3/4 + M2 下一批 → v154 |
+| **当前阶段** | v155 观察项批次完成 — obs-3 (reclen>32767 FCERR / filenum 范围 ASM 对照) + obs-4 (交互 RUN smoke) + obs-5 (SCREEN 0 图形语句 FCERR) + obs-6 (exec_rc 简化); 下一步 v156 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -45,6 +45,40 @@
 
 ---
 
+---
+
+## 当前轮: v155 观察项批次 — obs-3/4/5/6 处理 (ASM 对照 + 修复)
+
+### ASM 对照结论 (观察项 3)
+
+- **POFNUM/GETNZB (GIO86 L665-694)**: filenum 经 GETBYT (byte 0..255);
+  **0 → DERBFN (Bad file number)**; >255 → FCERR。dskcom_open 已有
+  filenum<1||>255 → ERROR ✓ (无需改)
+- **INTID2 (GWMAIN L1930)**: 结果 16 位 int, 负 (高位 1, 即
+  reclen>=32768) → **FCERR**; VARECS: 0 → FCERR
+  → 修复: reclen<=0 || reclen>32767 → ERROR (classic + LEN= 两处)
+
+### 修复 (观察项 5/6)
+
+| # | 内容 |
+|---|------|
+| 1 | obs-5: SCREEN 0 (文本模式) 下图形语句 → ERROR (ASM FCERR): PSET/PRESET/LINE/CIRCLE/PAINT 分支 mode gate + gwsts_handle_gfx_get/put 顶部 gate (文件形式 PUT #1/GET #1 不受影响) |
+| 2 | obs-6: run_program_lines 的 exec_rc 恒为 SUCCESS (循环内全部 return) → 删除变量, 尾部 return SUCCESS |
+| 3 | obs-4: 交互 RUN smoke 实证 (stdin: 10 FOR/20 PRINT/30 NEXT + RUN → IT=1/2/3 + Ok; 需行间 sleep — scnedt 读取时序, 与 RUN 语义无关) |
+| 4 | 测试: openmodes +5 (reclen 32768→FCERR、filenum 0/256→ERROR、filenum 255 边界 OK、reclen 32767 边界 OK) + gfx2 +7 (SCREEN 0 下 PSET/PRESET/LINE/CIRCLE/PAINT/GET/PUT → ERROR, 文件形式不受影响) + 集成 test_gfx_screen0.bas/.expected (SCREEN 1 画图正常 + SCREEN 0 PSET 被 ON ERROR 捕获) |
+
+### 验证结果（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3331/3331 PASS** (3308→3331, +23) |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证（不经脚本，用户指令） | ✅ **83/83**（+test_gfx_screen0） |
+| 孤儿检测 | ✅ **891 = 891**, 0 孤儿 0 幽灵 |
+| 端到端 6 probe | ✅ SCREEN 0 PSET/CIRCLE → Error; reclen 40000 → Error; filenum 0 → Error; SCREEN 1 PSET → OK; reclen 32767 → OK |
+| 交互 RUN smoke | ✅ FOR 1..3 → IT=1/2/3 |
+
+---
 ## 当前轮: CODE_REVIEW v153 复核确认轮 — 0 问题 (基线确认)
 
 - v153 报告: 0 CRITICAL/HIGH/MEDIUM/LOW; 自 v152 无代码变更

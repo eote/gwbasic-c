@@ -93,6 +93,8 @@ static bool gwsts_parse_coord_pair(const char **pp, int *x, int *y) {
 
 /* GET (x1,y1)-(x2,y2),array — save screen block into numeric array */
 static int gwsts_handle_gfx_get(const char *trimmed) {
+    /* v156 obs-5: graphics statement in text mode → error (ASM FCERR) */
+    if (gengrp_get_screen_mode() == 0) return ERROR;
     const char *p = trimmed + 3;
     while (*p && isspace((unsigned char)*p)) p++;
     int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
@@ -121,6 +123,8 @@ static int gwsts_handle_gfx_get(const char *trimmed) {
 
 /* PUT (x,y),array[,action] — action: PSET/PRESET/AND/OR/XOR (default XOR) */
 static int gwsts_handle_gfx_put(const char *trimmed) {
+    /* v156 obs-5: graphics statement in text mode → error (ASM FCERR) */
+    if (gengrp_get_screen_mode() == 0) return ERROR;
     const char *p = trimmed + 3;
     while (*p && isspace((unsigned char)*p)) p++;
     int px = 0, py = 0;
@@ -549,7 +553,9 @@ int gwsts_exec_open(const char *trimmed) {
                 return ERROR;
             }
             reclen = (int)rv;
-            if (reclen <= 0) {  /* FCERR — ASM VARECS: 0 illegal */
+            /* ASM VARECS/PORLEN: 0 illegal (FCERR); INTID2 rejects
+             * values whose high bit is set → >32767 → FCERR */
+            if (reclen <= 0 || reclen > 32767) {
                 if (fs_owned) gwram_free(filespec);
                 gwram_free(first_expr);
                 return ERROR;
@@ -660,7 +666,7 @@ int gwsts_exec_open(const char *trimmed) {
                 return ERROR;
             }
             reclen = (int)rv;
-            if (reclen <= 0) {
+            if (reclen <= 0 || reclen > 32767) {  /* ASM INTID2 FCERR */
                 if (ns_owned) gwram_free(filespec);
                 gwram_free(first_expr);
                 return ERROR;  /* FCERR */
@@ -929,6 +935,9 @@ int gwsts_exec_statement(const char *text) {
      * expressions (ASM SCAND); default color FORCLR/BAKCLR; out-of-bounds
      * silently skipped (ASM JAE PSTNOT) */
     else if (starts_with(trimmed, "PSET") || starts_with(trimmed, "PRESET")) {
+        /* v156 obs-5: graphics statement in text mode → error
+         * (ASM: SCREEN 0 has no graphics — Illegal function call) */
+        if (gengrp_get_screen_mode() != 0) {
         bool is_preset = starts_with(trimmed, "PRESET");
         const char *p = trimmed + (is_preset ? 6 : 4);
         while (*p && isspace((unsigned char)*p)) p++;
@@ -955,6 +964,8 @@ int gwsts_exec_statement(const char *text) {
             else gengrp_pset(x, y, color);
             result = SUCCESS;
         }
+        }  /* end screen-mode gate */
+        if (gengrp_get_screen_mode() == 0) result = ERROR;
     }
     /* LINE statement: LINE [(x1,y1)]-(x2,y2)[,color[,B[F]]] — expression
      * coordinates; omitted first coord = current graphics cursor.
@@ -964,6 +975,8 @@ int gwsts_exec_statement(const char *text) {
               trimmed[4] == '(')) {
         /* v141 LOW-1: compact "LINE(" allowed — keyword must be followed by
          * space/tab/'('/end (not an identifier char, avoiding LINEABC hits) */
+        /* v156 obs-5: graphics in text mode → error (wrap body in gate) */
+        if (gengrp_get_screen_mode() != 0) {
         const char *p = trimmed + 4;
         while (*p && isspace((unsigned char)*p)) p++;
         int x1 = 0, y1 = 0, x2 = 0, y2 = 0, color = -1;
@@ -1021,12 +1034,16 @@ int gwsts_exec_statement(const char *text) {
             gengrp_line_coords(x1, y1, x2, y2, color, box ? 1 : 0, box_fill ? 1 : 0);
             result = SUCCESS;
         }
+        }  /* end screen-mode gate */
+        if (gengrp_get_screen_mode() == 0) result = ERROR;
     }
     /* CIRCLE statement: CIRCLE (x,y),radius[,color[,start[,end[,aspect]]]]
      * (ASM ADVGRP CIRCLE L460: SCAN1 coords, angles in radians, 0=east CCW;
      * negative angle draws radius line to center; aspect<1 scales Y) */
     else if (starts_with(trimmed, "CIRCLE") &&
              (trimmed[6] == ' ' || trimmed[6] == '\t' || trimmed[6] == '(')) {
+        /* v156 obs-5: graphics in text mode → error (wrap body in gate) */
+        if (gengrp_get_screen_mode() != 0) {
         const char *p = trimmed + 6;
         while (*p && isspace((unsigned char)*p)) p++;
         int cx = 0, cy = 0;
@@ -1130,10 +1147,14 @@ int gwsts_exec_statement(const char *text) {
         } else {
             result = ERROR;
         }
+        }  /* end screen-mode gate */
+        if (gengrp_get_screen_mode() == 0) result = ERROR;
     }
     /* PAINT statement: PAINT (x,y)[,fill[,border]] (ASM ADVGRP PAINT L121) */
     else if (starts_with(trimmed, "PAINT") &&
              (trimmed[5] == ' ' || trimmed[5] == '\t' || trimmed[5] == '(')) {
+        /* v156 obs-5: graphics in text mode → error (wrap body in gate) */
+        if (gengrp_get_screen_mode() != 0) {
             const char *p = trimmed + 5;
         while (*p && isspace((unsigned char)*p)) p++;
         int px = 0, py = 0;
@@ -1180,6 +1201,8 @@ int gwsts_exec_statement(const char *text) {
         } else {
             result = ERROR;
         }
+        }  /* end screen-mode gate */
+        if (gengrp_get_screen_mode() == 0) result = ERROR;
     }
     /* FOR statement: FOR var = start TO limit [STEP step] */
     else if (starts_with(trimmed, "FOR ")) {

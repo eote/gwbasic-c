@@ -215,7 +215,6 @@ static void run_interpreter(void) {
  * Returns SUCCESS or ERROR (does not free g_state). */
 static int run_program_lines(void) {
     struct program_line *curr = gwlist_get_first_line();
-    int exec_rc = SUCCESS;
     
     while (curr) {
         if (curr->text) {
@@ -319,7 +318,7 @@ static int run_program_lines(void) {
         }
     }
     
-    return exec_rc;
+    return SUCCESS;
 }
 
 /* Main entry point */

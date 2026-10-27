@@ -1,0 +1,11 @@
+' test_gfx_screen0.bas — v156 obs-5: graphics statements in text mode
+10 SCREEN 1
+20 PSET (10,10)
+30 PSET (20,20)
+40 SCREEN 0
+50 ON ERROR GOTO 90
+60 PSET (10,10)
+70 PRINT "GATE-FAIL"
+80 END
+90 PRINT "S0-BLOCKED"
+100 PRINT "DONE"

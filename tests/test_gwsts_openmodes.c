@@ -15,6 +15,8 @@ static void cleanup_files(void) {
     remove("t_v149a.txt");
     remove("t_v149r.dta");
     remove("t_v149b.dta");
+    remove("t_v152r.dta");  /* v156 obs-3 tests */
+    remove("t_v152f.txt");
 }
 
 /* OPEN "O",#1,"file" → sequential output, PRINT #1 writes, CLOSE persists */
@@ -258,4 +260,94 @@ void test_gwsts_openmodes_reclen_zero(void) {
     gwsts_exec_statement("CLOSE");
     cleanup_files();
     TEST_PASS("openmodes reclen zero");
+}
+
+/* ===== v156: observation 3 — reclen upper bound + filenum range ===== */
+
+/* reclen > 32767 → FCERR (ASM INTID2: high bit set → FCERR) */
+void test_gwsts_openmodes_reclen_too_big(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    int rc = gwsts_exec_statement("OPEN \"R\", #1, \"t_v152r.dta\", 32768");
+    TEST_ASSERT(rc != 0, "reclen 32768 errors (FCERR)");
+    gwsts_exec_statement("CLOSE");
+    FILE *fp = fopen("t_v152r.dta", "r");
+    TEST_ASSERT(fp == NULL, "no file created");
+    if (fp) fclose(fp);
+    cleanup_files();
+    TEST_PASS("openmodes reclen too big");
+}
+
+/* filenum 0 → Bad file number (ASM POFNUM/GETNZB: OR AL,AL; JZ ERBFN1) */
+void test_gwsts_openmodes_filenum_zero(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    int rc = gwsts_exec_statement("OPEN \"O\", #0, \"t_v152f.txt\"");
+    TEST_ASSERT(rc != 0, "filenum 0 errors (bad file number)");
+    gwsts_exec_statement("CLOSE");
+    FILE *fp = fopen("t_v152f.txt", "r");
+    TEST_ASSERT(fp == NULL, "no file created");
+    if (fp) fclose(fp);
+    cleanup_files();
+    TEST_PASS("openmodes filenum zero");
+}
+
+/* filenum > 255 → error (ASM GETBYT byte range) */
+void test_gwsts_openmodes_filenum_too_big(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    int rc = gwsts_exec_statement("OPEN \"O\", #256, \"t_v152f.txt\"");
+    TEST_ASSERT(rc != 0, "filenum 256 errors");
+    gwsts_exec_statement("CLOSE");
+    FILE *fp = fopen("t_v152f.txt", "r");
+    TEST_ASSERT(fp == NULL, "no file created");
+    if (fp) fclose(fp);
+    cleanup_files();
+    TEST_PASS("openmodes filenum too big");
+}
+
+/* filenum 255 boundary → OK (ASM GETNZB byte max) */
+void test_gwsts_openmodes_filenum_255(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("OPEN \"O\", #255, \"t_v152f.txt\""), 0, "filenum 255 opens");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("CLOSE"), 0, "close");
+    FILE *fp = fopen("t_v152f.txt", "r");
+    TEST_ASSERT(fp != NULL, "file created");
+    if (fp) fclose(fp);
+    cleanup_files();
+    TEST_PASS("openmodes filenum 255");
+}
+
+/* reclen 32767 boundary → OK */
+void test_gwsts_openmodes_reclen_max(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    cleanup_files();
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("OPEN \"R\", #1, \"t_v152r.dta\", 32767"), 0, "reclen 32767 opens");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("CLOSE"), 0, "close");
+    FILE *fp = fopen("t_v152r.dta", "r");
+    TEST_ASSERT(fp != NULL, "file created");
+    if (fp) fclose(fp);
+    cleanup_files();
+    TEST_PASS("openmodes reclen max");
 }

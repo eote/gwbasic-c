@@ -263,3 +263,74 @@ void test_gwsts_gfx2_get_array_too_small(void) {
     TEST_ASSERT(rc != 0 || gwdata_get_error() != 0, "small array GET errors (FCERR)");
     TEST_PASS("gfx2 GET array too small");
 }
+
+/* ===== v156: observation 5 — graphics statements in SCREEN 0 → error ===== */
+
+static void gwsts_o5_setup(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    gioscn_screen(0);  /* text mode — graphics statements must fail */
+}
+
+static void gwsts_o5_teardown(void) {
+    gioscn_screen(1);  /* restore graphics mode for other tests */
+    remove("t_v152g.txt");
+}
+
+void test_gwsts_gfx2_screen0_pset(void) {
+    gwsts_o5_setup();
+    TEST_ASSERT(gwsts_exec_statement("PSET (10,10)") != 0, "PSET in SCREEN 0 errors");
+    gwsts_o5_teardown();
+    TEST_PASS("gfx2 screen0 pset");
+}
+
+void test_gwsts_gfx2_screen0_preset(void) {
+    gwsts_o5_setup();
+    TEST_ASSERT(gwsts_exec_statement("PRESET (10,10)") != 0, "PRESET in SCREEN 0 errors");
+    gwsts_o5_teardown();
+    TEST_PASS("gfx2 screen0 preset");
+}
+
+void test_gwsts_gfx2_screen0_line(void) {
+    gwsts_o5_setup();
+    TEST_ASSERT(gwsts_exec_statement("LINE (0,0)-(10,10)") != 0, "LINE in SCREEN 0 errors");
+    gwsts_o5_teardown();
+    TEST_PASS("gfx2 screen0 line");
+}
+
+void test_gwsts_gfx2_screen0_circle(void) {
+    gwsts_o5_setup();
+    TEST_ASSERT(gwsts_exec_statement("CIRCLE (50,50), 20") != 0, "CIRCLE in SCREEN 0 errors");
+    gwsts_o5_teardown();
+    TEST_PASS("gfx2 screen0 circle");
+}
+
+void test_gwsts_gfx2_screen0_paint(void) {
+    gwsts_o5_setup();
+    TEST_ASSERT(gwsts_exec_statement("PAINT (50,50), 1") != 0, "PAINT in SCREEN 0 errors");
+    gwsts_o5_teardown();
+    TEST_PASS("gfx2 screen0 paint");
+}
+
+/* graphics GET/PUT (no '#' file form) also error in SCREEN 0 */
+void test_gwsts_gfx2_screen0_getput(void) {
+    gwsts_o5_setup();
+    TEST_ASSERT(gwsts_exec_statement("DIM G(100)") == 0, "dim ok");
+    TEST_ASSERT(gwsts_exec_statement("GET (0,0)-(3,3),G") != 0, "GET in SCREEN 0 errors");
+    TEST_ASSERT(gwsts_exec_statement("PUT (10,10),G") != 0, "PUT in SCREEN 0 errors");
+    gwsts_o5_teardown();
+    TEST_PASS("gfx2 screen0 getput");
+}
+
+/* file-form PUT #1 must NOT be gated (file statement, not graphics) */
+void test_gwsts_gfx2_screen0_fileform_ok(void) {
+    gwsts_o5_setup();
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("OPEN \"O\", #1, \"t_v152g.txt\""), 0, "open ok");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("PRINT #1, \"X\""), 0, "print ok");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("CLOSE"), 0, "close ok");
+    gwsts_o5_teardown();
+    TEST_PASS("gfx2 screen0 fileform ok");
+}

@@ -93,6 +93,7 @@ IMPLEMENTED_TESTS=(
     "test_if_lineno.bas"
     "test_open_classic.bas"
     "test_open_varspec.bas"
+    "test_gfx_screen0.bas"
     "test_onerr_off.bas"
 )
 
