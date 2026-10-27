@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | M2 下一批完成 — v151 观察项 2/3 修复 (filespec 表达式 + reclen RANDOM-only 语义, ASM GIO86 对照); 下一步 v152 review |
+| **当前阶段** | CODE_REVIEW v152 复核确认轮 0 问题 (观察项 2/3 关闭确认; 6 观察项: 1 残留清理, 2-6 待后续); 下一步 M2 下一批 → v153 |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -41,6 +41,21 @@
 
 ---
 
+---
+
+## 当前轮: CODE_REVIEW v152 复核确认轮 — 0 问题 (基线确认)
+
+- v152 报告: 0 CRITICAL/HIGH/MEDIUM/LOW; 观察项 2/3 关闭确认
+  (表达式 filespec 三形式 + reclen RANDOM-only SNERR/FCERR 分层 +
+  eval 串借用不 free), reviewer 独立验证 3308/3308 + 0 警告 +
+  82/82 全量 .bas + RECLEN probe
+- 观察项处置: 1 (tests/mini_open.c 调试残留) → 已删除 ✅;
+  2 (表达式 filespec 泄漏, ASM 堆语义一致) / 3 (classic filenum 空#
+  与 reclen 32767 上限, 待 ASM 对照) / 4 (交互 RUN smoke, v148) /
+  5 (v145 图形观察项) / 6 (run_program_lines exec_rc 简化, v148) → 登记
+- 基线保持: 单测 3308/3308, 0 警告, 82/82, 孤儿 872=872
+
+---
 ## 当前轮: M2 下一批 — v151 观察项 2/3 修复 (ASM GIO86 对照)
 
 ### ASM 依据 (GIO86.ASM L59-101, L1462+ NAMSCN, L160+ PORLEN)
