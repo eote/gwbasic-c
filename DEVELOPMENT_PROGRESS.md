@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v155 观察项批次完成 — obs-3 (reclen>32767 FCERR / filenum 范围 ASM 对照) + obs-4 (交互 RUN smoke) + obs-5 (SCREEN 0 图形语句 FCERR) + obs-6 (exec_rc 简化); 下一步 v156 review |
+| **当前阶段** | v156 MEDIUM-1 修复 — SCREEN 0 gate 补 gwdata_set_error(5, line) (ERR/ERL/RESUME NEXT 闭环, 双路径实证); 下一步 v157 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -47,6 +47,37 @@
 
 ---
 
+---
+
+## 当前轮: CODE_REVIEW v156 — MEDIUM-1 修复 (SCREEN 0 gate 错误码/RESUME NEXT)
+
+### 问题 (reviewer 实证)
+
+SCREEN 0 gate 直接 `result = ERROR` (rc<0 通道), 未 set_error →
+ON ERROR handler 进入但 ERR=0、RESUME NEXT 无法恢复 (rc<0 分支的
+gwdata_handle_error 不分配 ERR)。
+
+### 修复
+
+6 处 gate (PSET/PRESET/LINE/CIRCLE/PAINT wrapped-gate 尾 + 
+gwsts_handle_gfx_get/put 顶部) 统一:
+`gwdata_set_error(5, (uint16_t)g_state->current_line, 0)` 后 ERROR。
+executor 的 `gwdata_get_error()!=0` 分支分配 ERR=5 → dispatch
+handler → RESUME NEXT 读 get_error_line() 恢复。
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3334/3334 PASS** (+3: err code/line 单测) |
+| 编译警告 | ✅ **0 条** |
+| .bas 逐个验证 | ✅ **84/84**（+test_gfx_screen0_resume: ERR=5/PSET-FAIL/ERR=5/CIRCLE-FAIL/GATE-DONE — RESUME NEXT 逐语句恢复） |
+| 孤儿检测 | ✅ **893 = 893** |
+| mini 链路 | ✅ set_error(5,30) → dispatch ERRvar=5 → handler |
+| 端到端 | ✅ reviewer 原实证程序: ERR= 5 / PSET-FAIL / GATE-DONE 全恢复 |
+| 遗留登记 | ERL 变量未实现 (打印 0) → 新观察项; obs-4 自动化/POINT gate → 开放 |
+
+---
 ## 当前轮: v155 观察项批次 — obs-3/4/5/6 处理 (ASM 对照 + 修复)
 
 ### ASM 对照结论 (观察项 3)

@@ -334,3 +334,43 @@ void test_gwsts_gfx2_screen0_fileform_ok(void) {
     gwsts_o5_teardown();
     TEST_PASS("gfx2 screen0 fileform ok");
 }
+
+/* ===== v156 MEDIUM-1: SCREEN 0 gate sets ERR/ERL (RESUME NEXT works) ===== */
+
+void test_gwsts_gfx2_screen0_resume_next(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    gioscn_screen(0);
+    /* gate must fail the statement AND set error code 5 so that the
+     * executor's ON ERROR path (run_program_lines) can dispatch with
+     * ERR=5 and let RESUME NEXT resume. */
+    extern WORD g_curlin;
+    g_curlin = 30;
+    g_state->current_line = 30;
+    int rc = gwsts_exec_statement("PSET (1,1)");
+    TEST_ASSERT(rc != 0, "PSET in SCREEN 0 errors");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "error code 5 (Illegal function call)");
+    gioscn_screen(1);
+    gwdata_clear_error();
+    TEST_PASS("gfx2 screen0 resume next err code");
+}
+
+void test_gwsts_gfx2_screen0_err_line(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    gioscn_screen(0);
+    /* set current line as the executor would */
+    extern WORD g_curlin;
+    g_curlin = 30;
+    g_state->current_line = 30;
+    gwsts_exec_statement("CIRCLE (50,50), 20");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "error code 5 set");
+    gioscn_screen(1);
+    TEST_PASS("gfx2 screen0 err line set");
+}

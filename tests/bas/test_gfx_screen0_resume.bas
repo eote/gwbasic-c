@@ -1,0 +1,12 @@
+' test_gfx_screen0_resume.bas — v156 MEDIUM-1: SCREEN 0 gate with
+' ON ERROR + RESUME NEXT (ERR=5, resume continues after error line)
+10 SCREEN 0
+20 ON ERROR GOTO 200
+30 PSET (1,1)
+40 PRINT "PSET-FAIL"
+50 CIRCLE (10,10), 5
+60 PRINT "CIRCLE-FAIL"
+70 PRINT "GATE-DONE"
+80 END
+200 PRINT "ERR="; ERR
+210 RESUME NEXT

@@ -93,8 +93,12 @@ static bool gwsts_parse_coord_pair(const char **pp, int *x, int *y) {
 
 /* GET (x1,y1)-(x2,y2),array — save screen block into numeric array */
 static int gwsts_handle_gfx_get(const char *trimmed) {
-    /* v156 obs-5: graphics statement in text mode → error (ASM FCERR) */
-    if (gengrp_get_screen_mode() == 0) return ERROR;
+    /* v156 obs-5: graphics statement in text mode → error (ASM FCERR);
+     * v156 MEDIUM-1: set code/line so ON ERROR + RESUME NEXT works */
+    if (gengrp_get_screen_mode() == 0) {
+        gwdata_set_error(5, (uint16_t)g_state->current_line, 0);
+        return ERROR;
+    }
     const char *p = trimmed + 3;
     while (*p && isspace((unsigned char)*p)) p++;
     int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
@@ -123,8 +127,12 @@ static int gwsts_handle_gfx_get(const char *trimmed) {
 
 /* PUT (x,y),array[,action] — action: PSET/PRESET/AND/OR/XOR (default XOR) */
 static int gwsts_handle_gfx_put(const char *trimmed) {
-    /* v156 obs-5: graphics statement in text mode → error (ASM FCERR) */
-    if (gengrp_get_screen_mode() == 0) return ERROR;
+    /* v156 obs-5: graphics statement in text mode → error (ASM FCERR);
+     * v156 MEDIUM-1: set code/line so ON ERROR + RESUME NEXT works */
+    if (gengrp_get_screen_mode() == 0) {
+        gwdata_set_error(5, (uint16_t)g_state->current_line, 0);
+        return ERROR;
+    }
     const char *p = trimmed + 3;
     while (*p && isspace((unsigned char)*p)) p++;
     int px = 0, py = 0;
@@ -965,7 +973,12 @@ int gwsts_exec_statement(const char *text) {
             result = SUCCESS;
         }
         }  /* end screen-mode gate */
-        if (gengrp_get_screen_mode() == 0) result = ERROR;
+        if (gengrp_get_screen_mode() == 0) {
+            /* v156 MEDIUM-1: set error code/line so ON ERROR +
+             * RESUME NEXT works (ASM: Illegal function call = 5) */
+            gwdata_set_error(5, (uint16_t)g_state->current_line, 0);
+            result = ERROR;
+        }
     }
     /* LINE statement: LINE [(x1,y1)]-(x2,y2)[,color[,B[F]]] — expression
      * coordinates; omitted first coord = current graphics cursor.
@@ -1035,7 +1048,12 @@ int gwsts_exec_statement(const char *text) {
             result = SUCCESS;
         }
         }  /* end screen-mode gate */
-        if (gengrp_get_screen_mode() == 0) result = ERROR;
+        if (gengrp_get_screen_mode() == 0) {
+            /* v156 MEDIUM-1: set error code/line so ON ERROR +
+             * RESUME NEXT works (ASM: Illegal function call = 5) */
+            gwdata_set_error(5, (uint16_t)g_state->current_line, 0);
+            result = ERROR;
+        }
     }
     /* CIRCLE statement: CIRCLE (x,y),radius[,color[,start[,end[,aspect]]]]
      * (ASM ADVGRP CIRCLE L460: SCAN1 coords, angles in radians, 0=east CCW;
@@ -1148,7 +1166,12 @@ int gwsts_exec_statement(const char *text) {
             result = ERROR;
         }
         }  /* end screen-mode gate */
-        if (gengrp_get_screen_mode() == 0) result = ERROR;
+        if (gengrp_get_screen_mode() == 0) {
+            /* v156 MEDIUM-1: set error code/line so ON ERROR +
+             * RESUME NEXT works (ASM: Illegal function call = 5) */
+            gwdata_set_error(5, (uint16_t)g_state->current_line, 0);
+            result = ERROR;
+        }
     }
     /* PAINT statement: PAINT (x,y)[,fill[,border]] (ASM ADVGRP PAINT L121) */
     else if (starts_with(trimmed, "PAINT") &&
@@ -1202,7 +1225,12 @@ int gwsts_exec_statement(const char *text) {
             result = ERROR;
         }
         }  /* end screen-mode gate */
-        if (gengrp_get_screen_mode() == 0) result = ERROR;
+        if (gengrp_get_screen_mode() == 0) {
+            /* v156 MEDIUM-1: set error code/line so ON ERROR +
+             * RESUME NEXT works (ASM: Illegal function call = 5) */
+            gwdata_set_error(5, (uint16_t)g_state->current_line, 0);
+            result = ERROR;
+        }
     }
     /* FOR statement: FOR var = start TO limit [STEP step] */
     else if (starts_with(trimmed, "FOR ")) {
