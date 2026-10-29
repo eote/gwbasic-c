@@ -95,6 +95,7 @@ IMPLEMENTED_TESTS=(
     "test_open_varspec.bas"
     "test_gfx_screen0.bas"
     "test_gfx_screen0_resume.bas"
+    "test_m4_funcs.bas"
     "test_onerr_off.bas"
 )
 

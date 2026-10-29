@@ -201,6 +201,20 @@ static char *parse_string_expression(parser_t *p) {
                     return bistrs_str(arg);
                 }
             }
+            else if (strcasecmp_ascii(name, "HEX") == 0 || strcasecmp_ascii(name, "HEX$") == 0) {
+                /* v158: HEX$(num) — 16-bit two's-complement pattern */
+                float arg = parse_expression(p);
+                if (parser_match(p, ')')) {
+                    return bistrs_hex(arg);
+                }
+            }
+            else if (strcasecmp_ascii(name, "OCT") == 0 || strcasecmp_ascii(name, "OCT$") == 0) {
+                /* v158: OCT$(num) — 16-bit two's-complement pattern */
+                float arg = parse_expression(p);
+                if (parser_match(p, ')')) {
+                    return bistrs_oct(arg);
+                }
+            }
             else if (strcasecmp_ascii(name, "CHR") == 0 || strcasecmp_ascii(name, "CHR$") == 0) {
                 /* CHR$(num) — ASM CHR$: CONINT → 0..255 else FCERR */
                 float arg = parse_expression(p);

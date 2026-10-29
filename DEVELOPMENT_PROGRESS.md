@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v157 观察项补齐 — gate 覆盖 4/4 (LINE/PAINT/GET/PUT 错误码单测) + teardown 一致性; 下一步 v158 review |
+| **当前阶段** | M4 收尾批 — PRINT USING 完整重写 (ASM PRINUS 值列表驱动: !/&/\\/数字字段/溢出 %/REUSIN) + SWAP 语句 + HEX$/OCT$; 下一步 v158 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -51,6 +51,45 @@
 
 ---
 
+---
+
+## 当前轮: M4 收尾批 — PRINT USING 重写 + SWAP + HEX$/OCT$ (ASM 对照)
+
+### 背景
+
+probe 盘点发现 M4 三缺口: PRINT USING 从未生效 (分派设计错误:
+"USING 前=格式" 而真实语法 fmt 在 USING 之后, 且值列表跨表达式
+片段); SWAP 语句缺失; HEX$ 未实现 (OCT$ stub)。
+
+### ASM 对照 (BIPRTU.ASM L17-140 PRINUS)
+
+- FRMCHK 求 USING 串 (任意表达式) + SYNCHR 73O (分号必须)
+- 流式扫描: 非字段字符原样输出; "!" 单字符; "&" 整串;
+  "\"(2+空格) 定宽; "#" 数字字段 (+ . , $ ** ^ 前后缀);
+  USFLG/REUSIN: 格式扫完值未尽 → 重扫格式串 (打印过值才合法)
+- 溢出: 值超字段宽 → '%' 前缀 + 完整值
+
+### 实现
+
+| # | 内容 |
+|---|------|
+| 1 | biprtu_print_using_values(fmt, vals[], n) 值列表驱动 (含 scientific /$,逗号分组/前后缀; 溢出 % + PUFOUT 风格十进制; frac=0 整数无小数) |
+| 2 | gwsts_print_using() 语句级 handler: fmt 分割 (顶层 ';' 引号/括号感知) + 值列表收集 (三段式类型探测: 引号→串; 串解析探针成功→串; 否则数值) + 尾分隔符 newline 语义 |
+| 3 | gwsts PRINT 入口 USING 前缀分派 (整条语句, 不进逐表达式循环) |
+| 4 | SWAP 语句: 同型标量交换 (字符串换 ptr/len; 数值 member-wise); 类型不匹配/缺失 → error 13 |
+| 5 | HEX$/OCT$: 16 位补码 (HEX$(-1)="FFFF"); gweval 函数分派 |
+| 6 | 旧 USING 测试 expected 重写 (旧为缺陷产物: 无格式化输出) |
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3344/3344 PASS**, 0 警告 |
+| .bas 逐个验证 | ✅ **85/85**（+test_using +test_m4_funcs; 3 个旧 USING expected 按真值重写） |
+| 孤儿检测 | ✅ **897 = 897** |
+| ASM 语义 probe | ✅ ##.##→3.14 / 溢出 %1234 / , 字面量 / -45.68 符号紧贴 / REUSIN 重用 / ! & \\ 字段 / SWAP 数值串浮点 / HEX$(-1)=FFFF |
+
+---
 ## 当前轮: CODE_REVIEW v157 复核确认 — 0 问题 + 观察项 1/2 补齐
 
 - v157 报告: 0 CRITICAL/HIGH/MEDIUM/LOW; MEDIUM-1 修复确认

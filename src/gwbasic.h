@@ -365,7 +365,9 @@ char *bistrs_str(double val);
 double bistrs_val(const char *str);
 char *bistrs_string(int n, char ch);
 char *bistrs_space(int n);
-double bistrs_fre(int arg);  /* FRE - free memory (returns numeric) */
+double bistrs_fre(int arg);
+char *bistrs_hex(double val);  /* v158 */
+char *bistrs_oct(double val);  /* v158 */  /* FRE - free memory (returns numeric) */
 
 /* Random file I/O conversion functions */
 char *bistrs_mki(int val);      /* MKI$ - integer to 2-byte string */
@@ -396,6 +398,14 @@ float math2_fix(float x);
 void biprtu_init(void);
 void biprtu_print_using(const char *fmt, double val);
 void biprtu_print_using_str(const char *fmt, const char *str);
+
+/* v158: PRINT USING value-list driver (ASM BIPRTU PRINUS) */
+struct using_value {
+    bool is_str;
+    double num;
+    char *str;   /* borrowed (string-heap / eval result), not freed here */
+};
+void biprtu_print_using_values(const char *fmt, const struct using_value *vals, int count);
 
 /* BIPTRG module functions */
 void biptrg_init(void);

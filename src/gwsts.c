@@ -688,6 +688,102 @@ int gwsts_exec_open(const char *trimmed) {
     return result;
 }
 
+/* ===== v158: PRINT USING statement handler (ASM BIPRTU PRINUS) =====
+ * rest = text after "PRINT USING". Grammar:
+ *   USING <fmt-expr> ; <value> [{;|,} <value>...]
+ * Returns SUCCESS/ERROR; *trailing_sep_out = 1 if the value list ends
+ * with ';' (no newline), 2 if ',' (zone), 0 otherwise. */
+static int gwsts_print_using(const char *rest, int *trailing_sep_out) {
+    *trailing_sep_out = 0;
+    while (*rest == ' ' || *rest == '\t') rest++;
+    /* fmt-expr: up to the top-level ';' (quote/paren aware) */
+    const char *fp = rest;
+    bool in_q = false;
+    int depth = 0;
+    while (*fp && !(!in_q && depth == 0 && *fp == ';')) {
+        if (*fp == '"') in_q = !in_q;
+        else if (!in_q && *fp == '(') depth++;
+        else if (!in_q && *fp == ')') depth--;
+        fp++;
+    }
+    if (in_q || depth != 0 || *fp != ';') return ERROR;  /* SNERR */
+    const char *fend = fp;
+    while (fend > rest && isspace((unsigned char)fend[-1])) fend--;
+    if (fend == rest) return ERROR;  /* empty fmt expr */
+    size_t flen = (size_t)(fend - rest);
+    char *fmt_expr = (char *)gwram_alloc(flen + 1);
+    if (!fmt_expr) return ERROR;
+    memcpy(fmt_expr, rest, flen);
+    fmt_expr[flen] = '\0';
+    gwdata_clear_error();
+    char *fmt_val = gweval_eval_string(fmt_expr);
+    gwram_free(fmt_expr);
+    if (!fmt_val || gwdata_get_error() != 0) return ERROR;  /* fmt must be string */
+
+    /* value list */
+    struct using_value vals[64];
+    int vcount = 0;
+    const char *vp = fp + 1;
+    int trailing = 0;
+    while (*vp && vcount < 64) {
+        while (*vp == ' ' || *vp == '\t') vp++;
+        if (!*vp) break;
+        const char *vs = vp;
+        bool vin_q = false;
+        int vdepth = 0;
+        while (*vp && !(!vin_q && vdepth == 0 && (*vp == ',' || *vp == ';'))) {
+            if (*vp == '"') vin_q = !vin_q;
+            else if (!vin_q && *vp == '(') vdepth++;
+            else if (!vin_q && *vp == ')') vdepth--;
+            vp++;
+        }
+        const char *ve = vp;
+        while (ve > vs && isspace((unsigned char)ve[-1])) ve--;
+        if (*vp == ',') trailing = 2;
+        else if (*vp == ';') trailing = 1;
+        else trailing = 0;
+        if (ve == vs) { if (*vp) vp++; continue; }
+        size_t vlen = (size_t)(ve - vs);
+        char *vexpr = (char *)gwram_alloc(vlen + 1);
+        if (!vexpr) break;
+        memcpy(vexpr, vs, vlen);
+        vexpr[vlen] = '\0';
+        const char *probe = vexpr;
+        while (*probe == ' ') probe++;
+        bool is_str = (*probe == '"');
+        if (!is_str) {
+            /* string-parse probe first (three-tier INSTR pattern) */
+            gwdata_clear_error();
+            char *sprobe = gweval_eval_string(vexpr);
+            if (sprobe && gwdata_get_error() == 0) {
+                vals[vcount].is_str = true;
+                vals[vcount].str = sprobe;  /* borrowed (eval contract) */
+                vals[vcount].num = 0;
+                vcount++;
+            } else {
+                gwdata_clear_error();
+                vals[vcount].is_str = false;
+                vals[vcount].str = NULL;
+                vals[vcount].num = gweval_eval_numeric(vexpr);
+                vcount++;
+            }
+        } else {
+            gwdata_clear_error();
+            vals[vcount].is_str = true;
+            vals[vcount].str = gweval_eval_string(vexpr);
+            vals[vcount].num = 0;
+            if (!vals[vcount].str) vals[vcount].str = "";
+            vcount++;
+        }
+        gwram_free(vexpr);
+        if (gwdata_get_error() != 0) break;
+        if (*vp) vp++;
+    }
+    biprtu_print_using_values(fmt_val, vals, vcount);
+    *trailing_sep_out = trailing;
+    return SUCCESS;
+}
+
 int gwsts_exec_statement(const char *text) {
     if (!text) return ERROR;
     
@@ -921,6 +1017,96 @@ int gwsts_exec_statement(const char *text) {
             
             if (var_ref) gwram_free(var_ref);
             if (expr) gwram_free(expr);
+        }
+    }
+    /* SWAP statement: SWAP var1, var2 — v158 (ASM: exchange two
+     * variables; both must be the same type, else Type mismatch). */
+    else if (starts_with(trimmed, "SWAP ") || starts_with(trimmed, "SWAP")) {
+        const char *sp = trimmed + 4;
+        while (*sp == ' ' || *sp == '\t') sp++;
+        /* var1: up to top-level ',' (array indices allowed) */
+        const char *c1 = sp;
+        bool in_q1 = false;
+        int d1 = 0;
+        while (*c1 && !(!in_q1 && d1 == 0 && *c1 == ',')) {
+            if (*c1 == '"') in_q1 = !in_q1;
+            else if (!in_q1 && *c1 == '(') d1++;
+            else if (!in_q1 && *c1 == ')') d1--;
+            c1++;
+        }
+        if (*c1 != ',') {
+            result = ERROR;  /* SNERR */
+        } else {
+            const char *v1end = c1;
+            while (v1end > sp && isspace((unsigned char)v1end[-1])) v1end--;
+            size_t n1 = (size_t)(v1end - sp);
+            char *var1 = (char *)gwram_alloc(n1 + 1);
+            if (!var1) result = ERROR;
+            else {
+            memcpy(var1, sp, n1);
+            var1[n1] = '\0';
+            const char *v2s = c1 + 1;
+            while (*v2s == ' ' || *v2s == '\t') v2s++;
+            const char *v2e = v2s + strlen(v2s);
+            while (v2e > v2s && isspace((unsigned char)v2e[-1])) v2e--;
+            size_t n2 = (size_t)(v2e - v2s);
+            char *var2 = (char *)gwram_alloc(n2 + 1);
+            if (!var2) { gwram_free(var1); result = ERROR; }
+            else {
+            memcpy(var2, v2s, n2);
+            var2[n2] = '\0';
+            /* evaluate both as expressions on the CURRENT values:
+             * SWAP is a plain exchange — resolve variable references
+             * via gwdata_find_variable (names may carry %!#$ suffixes;
+             * array elements parse as A(i) — handle simple vars and
+             * 1-D/2-D elements via assign helper? Keep scope: simple
+             * scalar variables (most common ASM usage in programs). */
+            char *nm1 = var1, *nm2 = var2;
+            /* uppercase-insensitive lookup is done by find_variable */
+            struct variable *a = gwdata_find_variable(nm1);
+            struct variable *b = gwdata_find_variable(nm2);
+            if (a && b && a->type == b->type &&
+                !a->is_array && !b->is_array) {
+                if (a->type == VT_STRING) {
+                    /* swap string contents (both heap-owned) */
+                    char *tmp_ptr = a->value.s.ptr;
+                    int tmp_len = a->value.s.len;
+                    a->value.s.ptr = b->value.s.ptr;
+                    a->value.s.len = b->value.s.len;
+                    b->value.s.ptr = tmp_ptr;
+                    b->value.s.len = tmp_len;
+                } else {
+                    /* numeric swap — swap all numeric union members
+                     * (i/f/d); only the active member matters, but a
+                     * full member-wise swap is safe for scalars. */
+                    struct variable *tmpv = a;
+                    int32_t ti = a->value.i; 
+                    (void)tmpv;
+                    int32_t bi = b->value.i;
+                    a->value.i = bi;
+                    b->value.i = ti;
+                    float tf = a->value.f;
+                    float bf = b->value.f;
+                    a->value.f = bf;
+                    b->value.f = tf;
+                    double td = a->value.d;
+                    double bd = b->value.d;
+                    a->value.d = bd;
+                    b->value.d = td;
+                }
+                result = SUCCESS;
+            } else {
+                /* missing var, array, or type mismatch → Type
+                 * mismatch (13) per ASM; missing var → 0 per
+                 * GW-BASIC auto-create? SWAP requires both to
+                 * exist (FCERR otherwise). Use error 13. */
+                gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                result = ERROR;
+            }
+            gwram_free(var2);
+            }
+            gwram_free(var1);
+            }
         }
     }
     /* SCREEN statement: SCREEN <mode> (v138 M2: 0/1/2 → gengrp mode).
@@ -1741,6 +1927,21 @@ delete_done:
                     gwram_free(rest_copy);
                 }
             } else {
+                /* v158: PRINT USING <fmt>; <list> — whole-statement
+                 * handler (the value list spans multiple expression
+                 * fragments, so it cannot live in the per-fragment
+                 * loop). */
+                const char *up = trimmed + 5;
+                while (*up == ' ' || *up == '\t') up++;
+                if (up == strstr(up, "USING") &&
+                    (up[5] == ' ' || up[5] == '\t' || up[5] == '\0')) {
+                    int trail = 0;
+                    result = gwsts_print_using(up + 5, &trail);
+                    /* newline unless list ended with ';' or ',' */
+                    if (trail == 0) printf("\n");
+                    gwram_free(trimmed);
+                    return result;
+                }
                 /* Regular PRINT to console */
                 char *expr = strdup_trim(trimmed + 5);  /* After "PRINT" */
                 if (expr) {
@@ -1785,46 +1986,17 @@ delete_done:
                         while (*trim_start && isspace((unsigned char)*trim_start)) trim_start++;
                         
                         if (*trim_start) {
-                            /* Check for USING keyword - PRINT USING format; value */
-                            char *using_pos = strstr(trim_start, "USING");
-                            if (using_pos && (using_pos == trim_start || *(using_pos - 1) == ' ' || *(using_pos - 1) == '\t')) {
-                                /* Found USING keyword - extract format string and value */
-                                *using_pos = '\0';
-                                char *format_str = strdup_trim(trim_start);
-                                if (format_str) {
-                                    char *value_expr = strdup_trim(using_pos + 5);  /* Skip "USING" */
-                                    if (value_expr) {
-                                        /* Evaluate format string (should be string literal) */
-                                        char *fmt_val = gweval_eval_string(format_str);
-                                        if (fmt_val) {
-                                            /* Evaluate value expression */
-                                            float val = gweval_eval_numeric(value_expr);
-                                            biprtu_print_using(fmt_val, val);
-                                        } else {
-                                            /* Fallback: try numeric format string */
-                                            float val = gweval_eval_numeric(value_expr);
-                                            biprtu_print_using(format_str, val);
-                                        }
-                                        gwram_free(value_expr);
-                                    }
-                                    gwram_free(format_str);
-                                }
+                            /* Try string evaluation first, then numeric */
+                            char *str_val = gweval_eval_string(trim_start);
+                            if (str_val) {
+                                printf("%s", str_val);
+                            } else if (gwdata_get_error() != 0) {
+                                /* v137: error-aware PRINT */
+                                ;
                             } else {
-                                /* Try string evaluation first, then numeric */
-                                char *str_val = gweval_eval_string(trim_start);
-                                if (str_val) {
-                                    printf("%s", str_val);
-                                } else if (gwdata_get_error() != 0) {
-                                    /* String eval raised an error (e.g. OM on
-                                     * literal alloc with exhausted heap) —
-                                     * abort PRINT, let statement loop handle
-                                     * the error (v137: error-aware PRINT). */
-                                    ;
-                                } else {
-                                    float val = gweval_eval_numeric(trim_start);
-                                    /* GW-BASIC: positive numbers have leading space */
-                                    printf("%s%g", (val >= 0) ? " " : "", val);
-                                }
+                                float val = gweval_eval_numeric(trim_start);
+                                /* GW-BASIC: positive numbers have leading space */
+                                printf("%s%g", (val >= 0) ? " " : "", val);
                             }
                         }
                         

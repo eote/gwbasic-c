@@ -274,3 +274,26 @@ double bistrs_fre(int arg) {
     
     return (double)free_mem;
 }
+
+/* ===== v158: HEX$ / OCT$ (ASM: BIPRTU? — 16-bit unsigned range) =====
+ * GW-BASIC: HEX$(n)/OCT$(n) take n in -32768..65535; negative values
+ * are the two's-complement 16-bit pattern (HEX$(-1) = "FFFF"). */
+char *bistrs_hex(double val) {
+    int n = (int)val;
+    unsigned short u = (unsigned short)(n & 0xFFFF);
+    char buf[8];
+    sprintf(buf, "%X", u);
+    char *s = gwdata_alloc_string(strlen(buf) + 1);
+    if (s) strcpy(s, buf);
+    return s;
+}
+
+char *bistrs_oct(double val) {
+    int n = (int)val;
+    unsigned short u = (unsigned short)(n & 0xFFFF);
+    char buf[8];
+    sprintf(buf, "%o", u);
+    char *s = gwdata_alloc_string(strlen(buf) + 1);
+    if (s) strcpy(s, buf);
+    return s;
+}
