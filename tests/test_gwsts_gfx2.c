@@ -371,6 +371,61 @@ void test_gwsts_gfx2_screen0_err_line(void) {
     g_state->current_line = 30;
     gwsts_exec_statement("CIRCLE (50,50), 20");
     TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "error code 5 set");
+    gwdata_clear_error();  /* v157 obs-2: teardown consistency */
     gioscn_screen(1);
     TEST_PASS("gfx2 screen0 err line set");
+}
+
+/* ===== v157 obs-1: remaining 4 gates (LINE/PAINT/GET/PUT) set error 5 ===== */
+
+static void gwsts_o1_setup(void) {
+    gwdata_init();
+    gwram_init();
+    gwinit_init();
+    giodsk_init();
+    gwdata_clear_error();
+    gioscn_screen(0);
+    extern WORD g_curlin;
+    g_curlin = 50;
+    g_state->current_line = 50;
+}
+
+static void gwsts_o1_teardown(void) {
+    gwdata_clear_error();  /* v157 obs-2: teardown consistency */
+    gioscn_screen(1);
+    remove("t_v157g.txt");
+}
+
+void test_gwsts_gfx2_screen0_line_err(void) {
+    gwsts_o1_setup();
+    TEST_ASSERT(gwsts_exec_statement("LINE (0,0)-(10,10)") != 0, "LINE gated");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "LINE: error code 5");
+    gwsts_o1_teardown();
+    TEST_PASS("gfx2 screen0 line err");
+}
+
+void test_gwsts_gfx2_screen0_paint_err(void) {
+    gwsts_o1_setup();
+    TEST_ASSERT(gwsts_exec_statement("PAINT (10,10), 1") != 0, "PAINT gated");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "PAINT: error code 5");
+    gwsts_o1_teardown();
+    TEST_PASS("gfx2 screen0 paint err");
+}
+
+void test_gwsts_gfx2_screen0_get_err(void) {
+    gwsts_o1_setup();
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("DIM G(100)"), 0, "dim ok");
+    TEST_ASSERT(gwsts_exec_statement("GET (0,0)-(3,3),G") != 0, "GET gated");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "GET: error code 5");
+    gwsts_o1_teardown();
+    TEST_PASS("gfx2 screen0 get err");
+}
+
+void test_gwsts_gfx2_screen0_put_err(void) {
+    gwsts_o1_setup();
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("DIM G(100)"), 0, "dim ok");
+    TEST_ASSERT(gwsts_exec_statement("PUT (10,10),G") != 0, "PUT gated");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 5, "PUT: error code 5");
+    gwsts_o1_teardown();
+    TEST_PASS("gfx2 screen0 put err");
 }

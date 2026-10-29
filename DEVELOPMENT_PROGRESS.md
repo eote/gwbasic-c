@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v156 MEDIUM-1 修复 — SCREEN 0 gate 补 gwdata_set_error(5, line) (ERR/ERL/RESUME NEXT 闭环, 双路径实证); 下一步 v157 review |
+| **当前阶段** | v157 观察项补齐 — gate 覆盖 4/4 (LINE/PAINT/GET/PUT 错误码单测) + teardown 一致性; 下一步 v158 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -49,6 +49,23 @@
 
 ---
 
+---
+
+## 当前轮: CODE_REVIEW v157 复核确认 — 0 问题 + 观察项 1/2 补齐
+
+- v157 报告: 0 CRITICAL/HIGH/MEDIUM/LOW; MEDIUM-1 修复确认
+  (6/6 gate probe 闭环); 观察项 1 (gate 覆盖 2/6) + 2 (teardown
+  不一致) 本轮补齐
+- 观察项 1: 补 LINE/PAINT/GET/PUT 4 处 gate 错误码单测
+  (test_gwsts_gfx2_screen0_{line,paint,get,put}_err — 各断言
+  语句失败 + error==5); 端到端 probe: LINE/PAINT RESUME NEXT
+  恢复 (ERR=5 → *-FAIL → GATE-DONE) ✓
+- 观察项 2: err_line 测试补 gwdata_clear_error() teardown;
+  新测试统一走 gwsts_o1_setup/teardown helper
+- 验证: 单测 3344/3344 (893→897 定义, +4), 0 警告, 84/84,
+  孤儿 897=897; 提交含共同作者 trailer
+
+---
 ## 当前轮: CODE_REVIEW v156 — MEDIUM-1 修复 (SCREEN 0 gate 错误码/RESUME NEXT)
 
 ### 问题 (reviewer 实证)

@@ -215,6 +215,10 @@ void test_gwsts_gfx2_screen0_getput(void);
 void test_gwsts_gfx2_screen0_fileform_ok(void);
 void test_gwsts_gfx2_screen0_resume_next(void);
 void test_gwsts_gfx2_screen0_err_line(void);
+void test_gwsts_gfx2_screen0_line_err(void);
+void test_gwsts_gfx2_screen0_paint_err(void);
+void test_gwsts_gfx2_screen0_get_err(void);
+void test_gwsts_gfx2_screen0_put_err(void);
 void test_gweval_strfuncs_if_compound_str_and(void);
 void test_gweval_strfuncs_if_compound_str_or(void);
 void test_gweval_strfuncs_if_else_both(void);
@@ -1171,6 +1175,10 @@ failed += run_test("test_gwsts_gfx2_screen0_getput", test_gwsts_gfx2_screen0_get
 failed += run_test("test_gwsts_gfx2_screen0_fileform_ok", test_gwsts_gfx2_screen0_fileform_ok);
 failed += run_test("test_gwsts_gfx2_screen0_resume_next", test_gwsts_gfx2_screen0_resume_next);
 failed += run_test("test_gwsts_gfx2_screen0_err_line", test_gwsts_gfx2_screen0_err_line);
+failed += run_test("test_gwsts_gfx2_screen0_line_err", test_gwsts_gfx2_screen0_line_err);
+failed += run_test("test_gwsts_gfx2_screen0_paint_err", test_gwsts_gfx2_screen0_paint_err);
+failed += run_test("test_gwsts_gfx2_screen0_get_err", test_gwsts_gfx2_screen0_get_err);
+failed += run_test("test_gwsts_gfx2_screen0_put_err", test_gwsts_gfx2_screen0_put_err);
 
 failed += run_test("gweval_strfuncs_if_compound_str_and", test_gweval_strfuncs_if_compound_str_and);
 failed += run_test("gweval_strfuncs_if_compound_str_or", test_gweval_strfuncs_if_compound_str_or);
