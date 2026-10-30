@@ -421,12 +421,35 @@ static float parse_factor(parser_t *p) {
         }
     }
     
-    /* Number */
-    if (isdigit((unsigned char)c) || c == '.') {
+    /* Number — v159: scientific notation (1E+10, 2.5D-3; GW-BASIC
+     * accepts both E and D exponents) */
+    if (isdigit((unsigned char)c) || (c == '.' && p->pos + 1 < p->len &&
+        isdigit((unsigned char)p->input[p->pos + 1]))) {
         char buf[64];
         size_t i = 0;
         while (p->pos < p->len && (isdigit((unsigned char)p->input[p->pos]) || p->input[p->pos] == '.') && i < sizeof(buf) - 1) {
             buf[i++] = p->input[p->pos++];
+        }
+        /* exponent part: E or D followed by optional sign + digits */
+        if (p->pos < p->len && (p->input[p->pos] == 'E' || p->input[p->pos] == 'e' ||
+                                p->input[p->pos] == 'D' || p->input[p->pos] == 'd')) {
+            /* only treat as exponent if a digit follows (optionally
+             * after a sign) — otherwise "E" is a variable */
+            size_t save = p->pos;
+            size_t q = p->pos + 1;
+            if (q < p->len && (p->input[q] == '+' || p->input[q] == '-')) q++;
+            if (q < p->len && isdigit((unsigned char)p->input[q])) {
+                buf[i++] = 'E';  /* normalize D → E for atof */
+                p->pos++;
+                if (p->pos < p->len && (p->input[p->pos] == '+' || p->input[p->pos] == '-')) {
+                    buf[i++] = p->input[p->pos++];
+                }
+                while (p->pos < p->len && isdigit((unsigned char)p->input[p->pos]) && i < sizeof(buf) - 1) {
+                    buf[i++] = p->input[p->pos++];
+                }
+            } else {
+                (void)save;  /* not an exponent: E belongs to a name */
+            }
         }
         buf[i] = '\0';
         return (float)atof(buf);

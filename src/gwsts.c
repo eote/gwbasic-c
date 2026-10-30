@@ -706,7 +706,11 @@ static int gwsts_print_using(const char *rest, int *trailing_sep_out) {
         else if (!in_q && *fp == ')') depth--;
         fp++;
     }
-    if (in_q || depth != 0 || *fp != ';') return ERROR;  /* SNERR */
+    if (in_q || depth != 0 || *fp != ';') {
+        /* v159 MEDIUM-2: missing ';' → SNERR (error 2) */
+        gwdata_set_error(2, g_state ? (uint16_t)g_state->current_line : 0, 0);
+        return ERROR;
+    }
     const char *fend = fp;
     while (fend > rest && isspace((unsigned char)fend[-1])) fend--;
     if (fend == rest) return ERROR;  /* empty fmt expr */
@@ -718,14 +722,33 @@ static int gwsts_print_using(const char *rest, int *trailing_sep_out) {
     gwdata_clear_error();
     char *fmt_val = gweval_eval_string(fmt_expr);
     gwram_free(fmt_expr);
-    if (!fmt_val || gwdata_get_error() != 0) return ERROR;  /* fmt must be string */
+    if (!fmt_val || gwdata_get_error() != 0) {
+        if (gwdata_get_error() == 0) {
+            /* fmt evaluated but not a string → SNERR */
+            gwdata_set_error(2, g_state ? (uint16_t)g_state->current_line : 0, 0);
+        }
+        return ERROR;
+    }
 
-    /* value list */
-    struct using_value vals[64];
+    /* value list — v159 HIGH-7: dynamically sized (no 64 cap) */
+    int vcap = 64;
+    struct using_value *vals = (struct using_value *)gwram_alloc(
+        sizeof(struct using_value) * vcap);
+    if (!vals) return ERROR;
     int vcount = 0;
     const char *vp = fp + 1;
     int trailing = 0;
-    while (*vp && vcount < 64) {
+    while (*vp) {
+        if (vcount >= vcap) {
+            int ncap = vcap * 2;
+            struct using_value *nv = (struct using_value *)gwram_alloc(
+                sizeof(struct using_value) * ncap);
+            if (!nv) break;
+            memcpy(nv, vals, sizeof(struct using_value) * vcount);
+            gwram_free(vals);
+            vals = nv;
+            vcap = ncap;
+        }
         while (*vp == ' ' || *vp == '\t') vp++;
         if (!*vp) break;
         const char *vs = vp;
@@ -780,7 +803,11 @@ static int gwsts_print_using(const char *rest, int *trailing_sep_out) {
         if (*vp) vp++;
     }
     biprtu_print_using_values(fmt_val, vals, vcount);
+    gwram_free(vals);
     *trailing_sep_out = trailing;
+    /* v159: errors set inside the driver (TMERR 13 / FCERR 5) must
+     * propagate — otherwise the statement reports success */
+    if (gwdata_get_error() != 0) return ERROR;
     return SUCCESS;
 }
 
@@ -1055,54 +1082,112 @@ int gwsts_exec_statement(const char *text) {
             else {
             memcpy(var2, v2s, n2);
             var2[n2] = '\0';
-            /* evaluate both as expressions on the CURRENT values:
-             * SWAP is a plain exchange — resolve variable references
-             * via gwdata_find_variable (names may carry %!#$ suffixes;
-             * array elements parse as A(i) — handle simple vars and
-             * 1-D/2-D elements via assign helper? Keep scope: simple
-             * scalar variables (most common ASM usage in programs). */
-            char *nm1 = var1, *nm2 = var2;
-            /* uppercase-insensitive lookup is done by find_variable */
-            struct variable *a = gwdata_find_variable(nm1);
-            struct variable *b = gwdata_find_variable(nm2);
-            if (a && b && a->type == b->type &&
-                !a->is_array && !b->is_array) {
-                if (a->type == VT_STRING) {
-                    /* swap string contents (both heap-owned) */
-                    char *tmp_ptr = a->value.s.ptr;
-                    int tmp_len = a->value.s.len;
-                    a->value.s.ptr = b->value.s.ptr;
-                    a->value.s.len = b->value.s.len;
-                    b->value.s.ptr = tmp_ptr;
-                    b->value.s.len = tmp_len;
-                } else {
-                    /* numeric swap — swap all numeric union members
-                     * (i/f/d); only the active member matters, but a
-                     * full member-wise swap is safe for scalars. */
-                    struct variable *tmpv = a;
-                    int32_t ti = a->value.i; 
-                    (void)tmpv;
-                    int32_t bi = b->value.i;
-                    a->value.i = bi;
-                    b->value.i = ti;
-                    float tf = a->value.f;
-                    float bf = b->value.f;
-                    a->value.f = bf;
-                    b->value.f = tf;
-                    double td = a->value.d;
-                    double bd = b->value.d;
-                    a->value.d = bd;
-                    b->value.d = td;
-                }
-                result = SUCCESS;
-            } else {
-                /* missing var, array, or type mismatch → Type
-                 * mismatch (13) per ASM; missing var → 0 per
-                 * GW-BASIC auto-create? SWAP requires both to
-                 * exist (FCERR otherwise). Use error 13. */
+            /* v159 HIGH-5: ASM PTRGET semantics — array elements
+             * supported; undefined scalars are auto-created (0/"").
+             * Values are exchanged through a temporary string/number
+             * capture: read both, then write both back. */
+            result = SUCCESS;  /* reset: only real failures set ERROR */
+            /* parse_var_ref: static in this file (L27) — bool return */
+            char *bn1 = NULL, *bn2 = NULL;
+            int ai1 = -1, ai2 = -1;
+            int idx1[8], idx2[8];
+            int ni1 = 0, ni2 = 0;
+            bool ok1 = parse_var_ref(var1, &bn1, &ai1, idx1, &ni1);
+            (void)ok1;
+            bool ok2 = parse_var_ref(var2, &bn2, &ai2, idx2, &ni2);
+            (void)ok2;
+            if (!bn1 || !bn2) {
                 gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
                 result = ERROR;
+            } else {
+                /* read value 1 */
+                bool s1 = false; double d1v = 0; char *s1p = NULL;
+                if (ni1 > 0) {
+                    d1v = (ni1 == 1)
+                        ? biptrg_get_array_element(bn1, idx1[0])
+                        : biptrg_get_array_element_multi(bn1, idx1);
+                } else {
+                    struct variable *a = gwdata_find_variable(bn1);
+                    if (!a) {
+                        /* auto-create: string vs numeric by suffix */
+                        size_t L1 = strlen(bn1);
+                        a = gwdata_alloc_variable(bn1,
+                            (L1 && bn1[L1-1]=='$') ? VT_STRING : VT_SINGLE);
+                    }
+                    if (!a) { result = ERROR; }
+                    else if (a->type == VT_STRING) {
+                        s1 = true;
+                        s1p = gwdata_alloc_string(a->value.s.len + 1);
+                        if (s1p && a->value.s.ptr) {
+                            memcpy(s1p, a->value.s.ptr, a->value.s.len);
+                            s1p[a->value.s.len] = '\0';
+                        }
+                    } else d1v = a->value.f;
+                }
+                if (result != ERROR) {
+                /* read value 2 */
+                bool s2 = false; double d2v = 0; char *s2p = NULL;
+                if (ni2 > 0) {
+                    d2v = (ni2 == 1)
+                        ? biptrg_get_array_element(bn2, idx2[0])
+                        : biptrg_get_array_element_multi(bn2, idx2);
+                } else {
+                    struct variable *b = gwdata_find_variable(bn2);
+                    if (!b) {
+                        size_t L2 = strlen(bn2);
+                        b = gwdata_alloc_variable(bn2,
+                            (L2 && bn2[L2-1]=='$') ? VT_STRING : VT_SINGLE);
+                    }
+                    if (!b) { result = ERROR; }
+                    else if (b->type == VT_STRING) {
+                        s2 = true;
+                        s2p = gwdata_alloc_string(b->value.s.len + 1);
+                        if (s2p && b->value.s.ptr) {
+                            memcpy(s2p, b->value.s.ptr, b->value.s.len);
+                            s2p[b->value.s.len] = '\0';
+                        }
+                    } else d2v = b->value.f;
+                }
+                if (result != ERROR) {
+                /* write back: value2 → var1, value1 → var2 */
+                if (ni1 > 0) {
+                    if (ni1 == 1) result = biptrg_set_array_element(bn1, idx1[0], (float)d2v);
+                    else result = biptrg_set_array_element_multi(bn1, idx1, (float)d2v);
+                } else {
+                    struct variable *a = gwdata_find_variable(bn1);
+                    if (a && a->type == VT_STRING && s2 && s2p) {
+                        /* v159 CRITICAL fix: string ptrs come from the
+                         * string heap (mixed gwdata/gwram origin) — do
+                         * NOT free the old pointer; swap the pointer
+                         * itself (the old value's owner is now var2). */
+                        a->value.s.len = (int)strlen(s2p);
+                        a->value.s.ptr = s2p; s2p = NULL;
+                    } else if (a) {
+                        a->value.f = (float)d2v;
+                    }
+                }
+                if (ni2 > 0) {
+                    if (ni2 == 1) result = biptrg_set_array_element(bn2, idx2[0], (float)d1v);
+                    else result = biptrg_set_array_element_multi(bn2, idx2, (float)d1v);
+                } else {
+                    struct variable *b = gwdata_find_variable(bn2);
+                    if (b && b->type == VT_STRING && s1 && s1p) {
+                        /* same: pointer swap, no cross-heap free */
+                        b->value.s.len = (int)strlen(s1p);
+                        b->value.s.ptr = s1p; s1p = NULL;
+                    } else if (b) {
+                        b->value.f = (float)d1v;
+                    }
+                }
+                if (result == SUCCESS || result == 0) result = SUCCESS;
+                else if (result != ERROR) result = SUCCESS;
+                }
+                if (s1p) gwram_free(s1p);
+                if (s2p) gwram_free(s2p);
+                }
             }
+            if (bn1) gwram_free(bn1);
+            if (bn2) gwram_free(bn2);
             gwram_free(var2);
             }
             gwram_free(var1);
@@ -1933,12 +2018,17 @@ delete_done:
                  * loop). */
                 const char *up = trimmed + 5;
                 while (*up == ' ' || *up == '\t') up++;
-                if (up == strstr(up, "USING") &&
+                /* v159 HIGH-6: keyword is case-insensitive */
+                if ((up[0]=='U'||up[0]=='u') && (up[1]=='S'||up[1]=='s') &&
+                    (up[2]=='I'||up[2]=='i') && (up[3]=='N'||up[3]=='n') &&
+                    (up[4]=='G'||up[4]=='g') &&
                     (up[5] == ' ' || up[5] == '\t' || up[5] == '\0')) {
                     int trail = 0;
                     result = gwsts_print_using(up + 5, &trail);
-                    /* newline unless list ended with ';' or ',' */
+                    /* v159 MEDIUM-5: trailing ',' advances to the next
+                     * print zone (14 columns); ';' suppresses newline */
                     if (trail == 0) printf("\n");
+                    else if (trail == 2) printf("\t");
                     gwram_free(trimmed);
                     return result;
                 }

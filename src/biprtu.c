@@ -13,479 +13,566 @@ void biprtu_init(void) {
 }
 
 /* Format flags for USING numeric fields */
-#define USING_FLAG_LEADING_PLUS   0x01  /* + before number */
-#define USING_FLAG_TRAILING_MINUS 0x02  /* - after number */
-#define USING_FLAG_TRAILING_PLUS  0x04  /* + after number */
-#define USING_FLAG_SCIENTIFIC     0x08  /* ^^^^ scientific notation */
-#define USING_FLAG_COMMA          0x10  /* , every 3 digits */
-#define USING_FLAG_DOLLAR         0x20  /* $ floating dollar sign */
-#define USING_FLAG_ASTERISK       0x40  /* * fill */
+#define USING_FLAG_LEADING_PLUS   0x01
+#define USING_FLAG_TRAILING_MINUS 0x02
+#define USING_FLAG_TRAILING_PLUS  0x04
+#define USING_FLAG_SCIENTIFIC     0x08
+#define USING_FLAG_COMMA          0x10
+#define USING_FLAG_ASTERISK       0x40
 
-/* Count digits and parse format string */
-static int parse_using_format(const char *fmt, int *int_digits, int *frac_digits, unsigned char *flags) {
-    if (!fmt || !int_digits || !frac_digits || !flags) return -1;
-    
-    *int_digits = 0;
-    *frac_digits = 0;
-    *flags = 0;
-    
-    const char *p = fmt;
-    bool in_frac = false;
-    bool seen_digit = false;
-    (void)seen_digit;
-    int temp = 0;
-    (void)temp;
-    
-    while (*p) {
-        if (*p == '#') {
-            if (in_frac) (*frac_digits)++;
-            else (*int_digits)++;
-            seen_digit = true;
-        } else if (*p == '.') {
-            in_frac = true;
-        } else if (*p == '+') {
-            *flags |= USING_FLAG_LEADING_PLUS;
-        } else if (*p == '-') {
-            *flags |= USING_FLAG_TRAILING_MINUS;
-        } else if (*p == '^') {
-            /* Check for ^^^^ */
-            if (p[1] == '^' && p[2] == '^' && p[3] == '^') {
-                *flags |= USING_FLAG_SCIENTIFIC;
-                p += 3;
-            }
-        } else if (*p == ',') {
-            *flags |= USING_FLAG_COMMA;
-        } else if (*p == '$') {
-            *flags |= USING_FLAG_DOLLAR;
-        } else if (*p == '*') {
-            *flags |= USING_FLAG_ASTERISK;
-        }
-        p++;
-    }
-    
-    return 0;
+/* ASM BIPRTU.ASM 292-300: leading+trailing digits > 24 → FCERR */
+#define USING_MAX_FIELD_DIGITS 24
+
+/* ===== v159: growable output (CRITICAL-1) =====
+ * Chunks flush to stdout as they fill; no total-length limit. */
+#define USING_OUT_CHUNK 4096
+static char *g_out_chunk = NULL;
+static size_t g_out_len = 0;
+
+static void using_out_reset(void) {
+    if (!g_out_chunk) g_out_chunk = (char *)malloc(USING_OUT_CHUNK);
+    g_out_len = 0;
 }
 
-/* Format number with comma separators */
-static void format_with_commas(char *buf, const char *num_str) {
-    char temp[64];
-    (void)temp;
-    int len = strlen(num_str);
-    int comma_pos = len % 3;
-    if (comma_pos == 0) comma_pos = 3;
-    
-    int out_pos = 0;
-    for (int i = 0; i < len; i++) {
-        if (i > 0 && i % 3 == comma_pos) {
-            buf[out_pos++] = ',';
-        }
-        buf[out_pos++] = num_str[i];
-    }
-    buf[out_pos] = '\0';
-}
-
-/* Format number for USING */
-static void format_using_number(char *output, double val, int int_digits, int frac_digits, unsigned char flags) {
-    /* Handle sign */
-    bool negative = val < 0;
-    double abs_val = negative ? -val : val;
-    
-    /* Round to fractional digits */
-    double round_factor = 1.0;
-    for (int i = 0; i < frac_digits; i++) round_factor *= 10.0;
-    abs_val = round(abs_val * round_factor) / round_factor;
-    
-    /* Format integer part */
-    long long int_part = (long long)abs_val;
-    double frac_part = abs_val - int_part;
-    
-    char int_str[32];
-    sprintf(int_str, "%lld", int_part);
-    int actual_int_digits = strlen(int_str);
-    
-    /* Check if integer part exceeds format width */
-    if (actual_int_digits > int_digits) {
-        /* Overflow - fill with * per GW-BASIC spec */
-        int total_chars = int_digits + frac_digits + (frac_digits > 0 ? 1 : 0);
-        memset(output, '*', total_chars);
-        output[total_chars] = '\0';
-        return;
-    }
-    
-    /* Build output */
-    char *out = output;
-    
-    /* Handle sign */
-    if (flags & USING_FLAG_LEADING_PLUS) {
-        *out++ = negative ? '-' : '+';
-    } else if (negative) {
-        *out++ = '-';
-    }
-    
-    /* Add integer part (no leading zeros - print as-is) */
-    strcpy(out, int_str);
-    out += actual_int_digits;
-    
-    /* Add fractional part */
-    if (frac_digits > 0) {
-        *out++ = '.';
-        for (int i = 0; i < frac_digits; i++) {
-            frac_part *= 10.0;
-            int digit = (int)frac_part;
-            *out++ = '0' + digit;
-            frac_part -= digit;
-        }
-    }
-    
-    /* Handle trailing sign */
-    if (flags & (USING_FLAG_TRAILING_MINUS | USING_FLAG_TRAILING_PLUS)) {
-        if (negative) {
-            *out++ = '-';
-        } else {
-            *out++ = '+';
-        }
-    }
-    
-    *out = '\0';
-    
-    /* Apply comma formatting if needed */
-    if (flags & USING_FLAG_COMMA) {
-        char temp[128];
-        format_with_commas(temp, output);
-        strcpy(output, temp);
-    }
-}
-/* Simple PRINT USING for numeric values */
-void biprtu_print_using(const char *fmt, double val) {
-    if (!fmt) return;
-    
-    int int_digits = 0;
-    int frac_digits = 0;
-    unsigned char flags = 0;
-    
-    parse_using_format(fmt, &int_digits, &frac_digits, &flags);
-    
-    char output[128];
-    format_using_number(output, val, int_digits, frac_digits, flags);
-    
-    printf("%s", output);
-}
-
-/* PRINT USING for string values */
-void biprtu_print_using_str(const char *fmt, const char *str) {
-    if (!fmt || !str) return;
-    
-    /* Count \ characters for string field width */
-    int width = 0;
-    for (const char *p = fmt; *p; p++) {
-        if (*p == '\\') width++;
-    }
-    
-    if (width > 0) {
-        printf("%-*s", width, str);
-    } else {
-        printf("%s", str);
+static void using_out_flush(void) {
+    if (g_out_len > 0) {
+        fwrite(g_out_chunk, 1, g_out_len, stdout);
+        g_out_len = 0;
     }
 }
 
-/* ===== v158: PRINT USING value-list driver (ASM BIPRTU PRINUS) =====
- * Scan the format string; non-field characters are output verbatim.
- * Fields:  "!" single-char string, "&" whole string, "\" (2+spaces)
- * fixed-width string, "#...[.###]" numeric (with , and + -),
- * leading "+" applies to the following numeric field.
- * Value list exhausted → keep outputting literal characters only.
- * Format exhausted with values remaining → rescan (ASM REUSIN). */
+static void using_out_char(char ch) {
+    if (!g_out_chunk) using_out_reset();
+    if (g_out_len >= USING_OUT_CHUNK - 1) using_out_flush();
+    g_out_chunk[g_out_len++] = ch;
+}
+
+static void using_out_str(const char *s, size_t n) {
+    if (!g_out_chunk) using_out_reset();
+    while (n > 0) {
+        if (g_out_len >= USING_OUT_CHUNK - 1) using_out_flush();
+        size_t space = USING_OUT_CHUNK - 1 - g_out_len;
+        size_t take = (n < space) ? n : space;
+        memcpy(g_out_chunk + g_out_len, s, take);
+        g_out_len += take;
+        s += take;
+        n -= take;
+    }
+}
 
 /* Locate the end of a numeric field starting at p (already on '#');
- * returns pointer past the field, sets *out_flags via chars seen. */
+ * returns pointer past the field. v159 MEDIUM-8/CRITICAL-2: enforces
+ * the ASM 24-digit limit via *too_long. */
 static const char *using_scan_numfield(const char *p, int *int_digits,
-                                       int *frac_digits, unsigned char *flags) {
+                                       int *frac_digits, unsigned char *flags,
+                                       bool *too_long) {
     *int_digits = 0;
     *frac_digits = 0;
     *flags = 0;
+    *too_long = false;
     bool in_frac = false;
     while (*p) {
         if (*p == '#') {
             if (in_frac) (*frac_digits)++; else (*int_digits)++;
+            if (*int_digits + *frac_digits > USING_MAX_FIELD_DIGITS) {
+                *too_long = true;
+                return p;
+            }
             p++;
         } else if (*p == '.') {
-            if (in_frac) break;  /* second dot ends field */
+            if (in_frac) break;
             in_frac = true;
             p++;
         } else if (*p == ',') {
-            /* v158: comma is a digit-grouping char only if another
-             * '#' follows; otherwise it terminates the field (the
-             * comma is a literal, e.g. "X=##, Y=##.##"). */
+            /* comma groups digits only if another '#' follows;
+             * otherwise it ends the field (literal comma) */
             const char *peek = p + 1;
             while (*peek == ' ') peek++;
             if (*peek == '#') {
                 *flags |= USING_FLAG_COMMA;
                 p++;
             } else {
-                break;  /* field ends; comma handled as literal */
+                break;
             }
         } else if (*p == '+') {
-            /* leading or trailing sign */
             *flags |= (in_frac || *int_digits || *frac_digits)
                       ? USING_FLAG_TRAILING_PLUS : USING_FLAG_LEADING_PLUS;
             p++;
         } else if (*p == '-') {
             *flags |= USING_FLAG_TRAILING_MINUS;
             p++;
-        } else if (*p == '$') {
-            *flags |= USING_FLAG_DOLLAR;
-            p++;
-        } else if (*p == '*') {
-            *flags |= USING_FLAG_ASTERISK;
-            p++;
         } else if (*p == '^') {
             *flags |= USING_FLAG_SCIENTIFIC;
             while (*p == '^') p++;
-            break;  /* scientific field ends here */
+            break;
         } else {
-            break;  /* any other char ends the field */
+            break;
         }
     }
     return p;
 }
 
-/* Format one numeric value into a numeric field; appends to out.
- * GW-BASIC: value wider than field → prefix '%' and print full value. */
-static void using_emit_number(char **out, double val, int int_digits,
-                              int frac_digits, unsigned char flags,
-                              bool leading_plus) {
-    char buf[160];
-    bool negative = val < 0;
-    double abs_val = negative ? -val : val;
+/* Emit one numeric value into a numeric field.
+ * v159: bounded — field digits <= 24 (scanner-enforced), so every
+ * intermediate fits a fixed 64-byte scratch; output goes through the
+ * growable chunk writer (no unbounded sprintf into fixed buffers).
+ * value_too_big → double outside +/-1e37? GW-BASIC overflow; we
+ * format with the %g fallback only inside safe bounds. */
+static void using_emit_number(double val, int int_digits, int frac_digits,
+                              unsigned char flags, bool leading_plus,
+                              bool star_fill, bool dollar_float) {
+    bool negative = (val < 0.0);
 
     if (flags & USING_FLAG_SCIENTIFIC) {
-        /* ^^^^ — scientific notation with frac_digits mantissa digits */
-        const char *sgn = negative ? "-" : (leading_plus ? "+" : "");
-        int exp_digits = 2;
-        sprintf(buf, "%s%.*fE+%0*d", sgn, frac_digits, abs_val,
-                exp_digits, 10);
-        strcpy(*out, buf);
-        *out += strlen(buf);
+        /* v159 HIGH-1: ASM $PUFE — normalized mantissa + exponent.
+         * Format: d.dddE+ee (mantissa width = int_digits + frac_digits,
+         * exponent 2 digits, sign always). */
+        if (val == 0.0) {
+            /* GW-BASIC prints E+00 with zero mantissa as digits */
+            char m[64];
+            int frac = frac_digits > 0 ? frac_digits : 0;
+            sprintf(m, "0%s", frac > 0 ? "." : "");
+            for (int i = 0; i < frac; i++) strcat(m, "0");
+            using_out_str(m, strlen(m));
+            using_out_str("E+00", 4);
+            return;
+        }
+        int exp10 = (int)floor(log10(fabs(val)));
+        double mant = val / pow(10.0, exp10);
+        /* normalize mantissa into [1,10) */
+        if (fabs(mant) >= 10.0) { mant /= 10.0; exp10++; }
+        if (fabs(mant) < 1.0)  { mant *= 10.0; exp10--; }
+        /* round mantissa to frac_digits — rounding may bump to 10 */
+        double rf = 1.0;
+        for (int i = 0; i < frac_digits; i++) rf *= 10.0;
+        mant = round(mant * rf) / rf;
+        if (fabs(mant) >= 10.0) { mant /= 10.0; exp10++; }
+        int m_int = (int)fabs(mant);
+        double m_frac = fabs(mant) - m_int;
+        if (negative) using_out_char('-');
+        else if (leading_plus || (flags & USING_FLAG_LEADING_PLUS)) using_out_char('+');
+        char tmp[64];
+        sprintf(tmp, "%d", m_int);
+        using_out_str(tmp, strlen(tmp));
+        if (frac_digits > 0) {
+            using_out_char('.');
+            for (int i = 0; i < frac_digits; i++) {
+                m_frac *= 10.0;
+                int d = (int)(m_frac + 1e-9);
+                if (d > 9) d = 9;
+                using_out_char((char)('0' + d));
+                m_frac -= d;
+            }
+        }
+        using_out_char('E');
+        using_out_char(exp10 < 0 ? '-' : '+');
+        int ae = exp10 < 0 ? -exp10 : exp10;
+        sprintf(tmp, "%02d", ae);
+        using_out_str(tmp, strlen(tmp));
         return;
     }
 
-    /* Round to fractional digits */
+    /* --- fixed-point path --- */
+    /* v159 CRITICAL-2: range-check the double→integer conversion.
+     * |val| above 1e18 cannot be represented in a 24-digit field
+     * anyway — route through the overflow (%) path with %g avoided. */
+    if (fabs(val) >= 1e18 || val != val) {  /* NaN too */
+        /* print full decimal via bounded manual conversion */
+        using_out_char('%');
+        if (negative) using_out_char('-');
+        /* scientific-free expansion via %f with generous precision,
+         * chunked out directly */
+        char bigbuf[512];
+        snprintf(bigbuf, sizeof(bigbuf), "%.0f", fabs(val));
+        using_out_str(bigbuf, strlen(bigbuf));
+        if (flags & USING_FLAG_TRAILING_MINUS) using_out_char(negative ? '-' : ' ');
+        else if (flags & USING_FLAG_TRAILING_PLUS) using_out_char(negative ? '-' : '+');
+        return;
+    }
+
     double round_factor = 1.0;
     for (int i = 0; i < frac_digits; i++) round_factor *= 10.0;
-    abs_val = round(abs_val * round_factor) / round_factor;
+    double abs_val = round(fabs(val) * round_factor) / round_factor;
 
     long long int_part = (long long)abs_val;
     double frac_part = abs_val - (double)int_part;
 
-    char int_str[40];
-    /* comma grouping */
-    if (flags & USING_FLAG_COMMA) {
-        char raw[40];
-        sprintf(raw, "%lld", int_part);
-        int n = (int)strlen(raw);
-        int pos = 0;
-        for (int i = 0; i < n; i++) {
-            int rem = n - i;
-            buf[pos++] = raw[i];
-            if (rem > 1 && (rem - 1) % 3 == 0 && i > 0 ? 0 : 0) { }
-            if ((rem - 1) % 3 == 0 && i > 0) {
-                /* place comma when remaining digits form a group boundary */
+    /* integer digits with optional comma grouping */
+    char int_str[48];
+    {
+        char raw[48];
+        snprintf(raw, sizeof(raw), "%lld", int_part);
+        if (flags & USING_FLAG_COMMA) {
+            int n = (int)strlen(raw);
+            int pos = 0;
+            for (int i = 0; i < n; i++) {
+                int_str[pos++] = raw[i];
+                int remaining = n - 1 - i;
+                if (remaining > 0 && remaining % 3 == 0) int_str[pos++] = ',';
             }
+            int_str[pos] = '\0';
+        } else {
+            strcpy(int_str, raw);
         }
-        /* simpler: rebuild with commas */
-        pos = 0;
-        for (int i = 0; i < n; i++) {
-            buf[pos++] = raw[i];
-            int remaining = n - 1 - i;
-            if (remaining > 0 && remaining % 3 == 0) buf[pos++] = ',';
-        }
-        buf[pos] = '\0';
-        strcpy(int_str, buf);
-    } else {
-        sprintf(int_str, "%lld", int_part);
     }
+    size_t numlen = strlen(int_str);
+    int actual_int = (int)numlen;
 
-    int actual_int = (int)strlen(int_str);
-    char *o = *out;
+    /* field width accounting: comma columns count toward the width
+     * (v159 MEDIUM-4: ASM NUMNUM INC DL for each comma) */
+    int commas_in_field = 0;
+    if (flags & USING_FLAG_COMMA) {
+        /* commas the format will place = (digits-1)/3 rounded down
+         * positions present in the output when int_part fills the
+         * field; count from format width instead */
+        int width_digits = int_digits;
+        commas_in_field = (width_digits - 1) / 3;
+        if (commas_in_field < 0) commas_in_field = 0;
+    }
+    int field_width = int_digits + commas_in_field +
+                      (frac_digits > 0 ? 1 + frac_digits : 0);
 
     if (actual_int > int_digits) {
-        /* GW-BASIC: overflow → '%' prefix + the full value (decimal,
-         * not scientific — ASM PUFOUT full-precision print) */
-        *o++ = '%';
-        if (negative) *o++ = '-';
+        /* v159 HIGH-3: overflow → single '%' prefix, single sign */
+        using_out_char('%');
+        if (negative) using_out_char('-');
+        char tmp[64];
         if (frac_digits > 0) {
-            sprintf(o, "%.*f", frac_digits, val);
+            snprintf(tmp, sizeof(tmp), "%.*f", frac_digits, fabs(val));
+        } else if (val == (double)(long long)fabs(val)) {
+            snprintf(tmp, sizeof(tmp), "%lld", (long long)fabs(val));
         } else {
-            /* GW-BASIC PUFOUT-style: integer-looking values print
-             * without decimals; fractional values print with their
-             * significant digits (never scientific for this range) */
-            if (val == (double)(long long)val) {
-                sprintf(o, "%lld", (long long)val);
-            } else {
-                sprintf(o, "%g", val);
-                /* %g may produce scientific notation for >=1e5 —
-                 * expand it back to decimal */
-                if (strchr(o, 'e')) {
-                    sprintf(o, "%.6f", val);
-                    char *tail = o + strlen(o) - 1;
-                    while (*tail == '0' && tail > o && tail[-1] != '.') {
-                        *tail = '\0';
-                        tail--;
-                    }
-                    if (*tail == '.') *tail = '\0';
-                }
+            snprintf(tmp, sizeof(tmp), "%g", fabs(val));
+            if (strchr(tmp, 'e')) {
+                snprintf(tmp, sizeof(tmp), "%f", fabs(val));
+                char *tail = tmp + strlen(tmp) - 1;
+                while (tail > tmp && *tail == '0') { *tail = '\0'; tail--; }
+                if (*tail == '.') *tail = '\0';
             }
         }
-        o += strlen(o);
-        if (flags & USING_FLAG_TRAILING_MINUS) *o++ = negative ? '-' : ' ';
-        else if (flags & USING_FLAG_TRAILING_PLUS) *o++ = negative ? '-' : '+';
-        *o = '\0';
-        *out = o;
+        using_out_str(tmp, strlen(tmp));
+        if (flags & USING_FLAG_TRAILING_MINUS) using_out_char(negative ? '-' : ' ');
+        else if (flags & USING_FLAG_TRAILING_PLUS) using_out_char(negative ? '-' : '+');
         return;
     }
 
-    /* v158: GW-BASIC pads first, sign hugs the digits (" -45.68") */
-    for (int i = actual_int; i < int_digits; i++) *o++ = ' ';
-    if (negative) *o++ = '-';
-    else if (leading_plus || (flags & USING_FLAG_LEADING_PLUS)) *o++ = '+';
-    strcpy(o, int_str);
-    o += actual_int;
+    /* v159 HIGH-2: fill prefix (** → stars, $$ → spaces then $) */
+    /* compute available leading columns: total field minus digits the
+     * number needs minus sign column if applicable */
+    /* v159: sign occupies a column within the field (GW-BASIC
+     * right-aligns "-45.68" into "###.##" with no extra space;
+     * a leading '+' from the format also occupies a column) */
+    int sign_col = (negative || leading_plus ||
+                    (flags & USING_FLAG_LEADING_PLUS)) ? 1 : 0;
+    int dollar_col = dollar_float ? 1 : 0;
+    int used = actual_int + (frac_digits > 0 ? 1 + frac_digits : 0);
+    int lead = field_width - used - sign_col - dollar_col;
+    if (lead < 0) lead = 0;
 
-    if (flags & USING_FLAG_DOLLAR) *o++ = '$';
+    if (star_fill) {
+        for (int i = 0; i < lead; i++) using_out_char('*');
+    } else {
+        for (int i = 0; i < lead; i++) using_out_char(' ');
+    }
+    if (dollar_float) using_out_char('$');
+
+    if (negative) using_out_char('-');
+    else if (leading_plus || (flags & USING_FLAG_LEADING_PLUS)) using_out_char('+');
+    using_out_str(int_str, numlen);
 
     if (frac_digits > 0) {
-        *o++ = '.';
+        using_out_char('.');
         for (int i = 0; i < frac_digits; i++) {
             frac_part *= 10.0;
             int digit = (int)(frac_part + 1e-9);
             if (digit > 9) digit = 9;
-            *o++ = '0' + digit;
+            using_out_char((char)('0' + digit));
             frac_part -= digit;
         }
     }
 
-    if (flags & USING_FLAG_TRAILING_MINUS) *o++ = negative ? '-' : ' ';
-    else if (flags & USING_FLAG_TRAILING_PLUS) *o++ = negative ? '-' : '+';
-    *o = '\0';
-    *out = o;
+    if (flags & USING_FLAG_TRAILING_MINUS) using_out_char(negative ? '-' : ' ');
+    else if (flags & USING_FLAG_TRAILING_PLUS) using_out_char(negative ? '-' : '+');
 }
 
-static void using_emit_string(char **out, const char *s, int width) {
-    char *o = *out;
-    if (width < 0) {           /* & — whole string */
-        strcpy(o, s); o += strlen(s);
-    } else if (width == 1) {   /* ! — first char */
-        *o++ = s[0];
-    } else {                   /* \ field — width chars, space pad */
+/* Emit a string value into a string field.
+ * width: -1 = & (whole), 1 = ! (first char, empty → space), n = \ field */
+static void using_emit_string(const char *s, int width) {
+    if (width < 0) {
+        using_out_str(s, strlen(s));
+    } else if (width == 1) {
+        /* v159 LOW-4: empty string → single space fill */
+        using_out_char(s[0] ? s[0] : ' ');
+    } else {
         int n = (int)strlen(s);
-        for (int i = 0; i < width; i++) *o++ = (i < n) ? s[i] : ' ';
+        for (int i = 0; i < width; i++)
+            using_out_char((i < n) ? s[i] : ' ');
     }
-    *o = '\0';
-    *out = o;
 }
 
 void biprtu_print_using_values(const char *fmt, const struct using_value *vals, int count) {
+    using_out_reset();
+    g_out_len = 0;
+
     if (!fmt || !*fmt) {
-        /* ASM FCERR3: empty USING string → Illegal function call */
+        /* ASM FCERR3: empty USING string → Illegal function call;
+         * v159 LOW-3: error only, no stray newline */
         gwdata_set_error(5, g_state ? (uint16_t)g_state->current_line : 0, 0);
         return;
     }
-    char outbuf[1024];
-    char *out = outbuf;
-    int vi = 0;               /* next value index */
-    bool printed_any = false; /* USFLG */
+
+    int vi = 0;
+    bool printed_any = false;   /* USFLG */
+    bool any_field = false;     /* MEDIUM-1: fmt with no fields */
     const char *p = fmt;
+    bool rescan = false;
 
 scan_restart:
+    if (rescan) {
+        /* v159: REUSIN — rescan the full format; fields consume the
+         * remaining values; stop when a field finds no value
+         * (observation 4: ASM ends the format there) */
+        if (vi >= count) {
+            /* no values left: emit literals until first field */
+            while (*p) {
+                char ch = *p;
+                if (ch == '_') { p++; if (*p) { using_out_char(*p); p++; } continue; }
+                if (ch == '#' || ch == '!' || ch == '&' || ch == '\\') break;
+                if (ch == '$' && p[1] == '$') break;
+                if (ch == '*' && p[1] == '*') break;
+                if (ch == '+' || ch == '-') {
+                    const char *q = p + 1;
+                    while (*q == '+') q++;
+                    if (*q == '#') break;
+                    using_out_char(ch); p++;
+                    continue;
+                }
+                using_out_char(ch);
+                p++;
+            }
+            using_out_flush();
+            return;
+        }
+        printed_any = false;
+    }
     while (*p) {
         char ch = *p;
+        if (ch == '_') {
+            /* v159 MEDIUM-3: escape — next char is a literal */
+            p++;
+            if (*p) { using_out_char(*p); p++; }
+            continue;
+        }
+        if (ch == '$' && p[1] == '$') {
+            /* v159 HIGH-2: $$ floating dollar — numeric field follows */
+            if (vi < count) {
+                const char *q = p + 2;
+                int id, fd; unsigned char fl;
+                bool too_long = false;
+                if (*q == '#') {
+                    q = using_scan_numfield(q, &id, &fd, &fl, &too_long);
+                    if (too_long) {
+                        gwdata_set_error(5, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        using_out_flush();
+                        return;
+                    }
+                    if (!vals[vi].is_str) {
+                        using_emit_number(vals[vi].num, id + 1, fd, fl, false, false, true);
+                        vi++; printed_any = true; any_field = true;
+                    } else {
+                        gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        using_out_flush();
+                        return;
+                    }
+                    p = q;
+                    continue;
+                }
+            }
+            /* no value or not numeric field: literal '$$' */
+            using_out_char('$'); p++;
+            continue;
+        }
+        if (ch == '*' && (p[1] == '*' )) {
+            /* v159 HIGH-2: ** star fill — numeric field follows
+             * (**$ → star fill + floating dollar) */
+            const char *q = p + 2;
+            bool dol = (*q == '$');
+            if (dol) q++;
+            if (*q == '#') {
+                if (vi < count) {
+                    int id, fd; unsigned char fl;
+                    bool too_long = false;
+                    q = using_scan_numfield(q, &id, &fd, &fl, &too_long);
+                    if (too_long) {
+                        gwdata_set_error(5, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        using_out_flush();
+                        return;
+                    }
+                    if (!vals[vi].is_str) {
+                        /* field width includes the 2 star columns and
+                         * the $ column (ASM **$ = star-filled dollar) */
+                        using_emit_number(vals[vi].num, id + 2 + (dol ? 1 : 0), fd,
+                                          fl, false, true, dol);
+                        vi++; printed_any = true; any_field = true;
+                    } else {
+                        gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        using_out_flush();
+                        return;
+                    }
+                    p = q;
+                    continue;
+                }
+            }
+            /* literal '**' */
+            using_out_char('*'); using_out_char('*');
+            p += 2;
+            if (dol) { using_out_char('$'); p++; }
+            continue;
+        }
         if (ch == '+' || ch == '-') {
-            /* leading sign for a following numeric field */
             bool lead_plus = (ch == '+');
             const char *q = p + 1;
-            /* allow "++" runs like ASM PLSFIN */
             while (*q == '+') q++;
             if (*q == '#') {
-                if (vi >= count) { p = q; continue; }  /* no value: skip field */
                 int id, fd; unsigned char fl;
-                q = using_scan_numfield(q, &id, &fd, &fl);
-                if (vi < count && !vals[vi].is_str) {
-                    using_emit_number(&out, vals[vi].num, id, fd, fl, lead_plus);
-                    vi++; printed_any = true;
-                } else if (vi < count) {
-                    /* string into numeric field — GW-BASIC: mismatch error;
-                     * print as-is (lenient) */
-                    using_emit_string(&out, vals[vi].str ? vals[vi].str : "", -1);
+                bool too_long = false;
+                q = using_scan_numfield(q, &id, &fd, &fl, &too_long);
+                if (too_long) {
+                    gwdata_set_error(5, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    using_out_flush();
+                    return;
+                }
+                any_field = true;
+                if (vi < count) {
+                    if (!vals[vi].is_str) {
+                        using_emit_number(vals[vi].num, id, fd, fl, lead_plus, false, false);
+                    } else {
+                        /* v159 HIGH-8: string into numeric field → TMERR */
+                        gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        using_out_flush();
+                        return;
+                    }
                     vi++; printed_any = true;
                 }
                 p = q;
                 continue;
             }
-            /* sign before a non-field: literal '+'/'-' */
-            *out++ = ch; p++;
+            using_out_char(ch); p++;
             continue;
         }
         if (ch == '#') {
+            int id, fd; unsigned char fl;
+            bool too_long = false;
+            p = using_scan_numfield(p, &id, &fd, &fl, &too_long);
+            if (too_long) {
+                gwdata_set_error(5, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                using_out_flush();
+                return;
+            }
+            any_field = true;
             if (vi < count) {
-                int id, fd; unsigned char fl;
-                p = using_scan_numfield(p, &id, &fd, &fl);
                 if (!vals[vi].is_str) {
-                    using_emit_number(&out, vals[vi].num, id, fd, fl, false);
+                    using_emit_number(vals[vi].num, id, fd, fl, false, false, false);
                 } else {
-                    using_emit_string(&out, vals[vi].str ? vals[vi].str : "", -1);
+                    /* v159 HIGH-8: TMERR */
+                    gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    using_out_flush();
+                    return;
                 }
                 vi++; printed_any = true;
-            } else {
-                /* value list exhausted: skip the field silently */
-                int id, fd; unsigned char fl;
-                p = using_scan_numfield(p, &id, &fd, &fl);
             }
             continue;
         }
         if (ch == '!') {
+            any_field = true;
             if (vi < count) {
-                using_emit_string(&out, vals[vi].is_str ? (vals[vi].str ? vals[vi].str : "") : "", 1);
+                if (vals[vi].is_str) {
+                    using_emit_string(vals[vi].str ? vals[vi].str : "", 1);
+                } else {
+                    /* v159 HIGH-8: number into string field → TMERR */
+                    gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    using_out_flush();
+                    return;
+                }
                 vi++; printed_any = true;
             }
             p++;
             continue;
         }
         if (ch == '&') {
+            any_field = true;
             if (vi < count) {
-                using_emit_string(&out, vals[vi].is_str ? (vals[vi].str ? vals[vi].str : "") : "", -1);
+                if (vals[vi].is_str) {
+                    using_emit_string(vals[vi].str ? vals[vi].str : "", -1);
+                } else {
+                    gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    using_out_flush();
+                    return;
+                }
                 vi++; printed_any = true;
             }
             p++;
             continue;
         }
         if (ch == '\\') {
-            /* fixed-width string field: width = 2 + spaces between */
             int width = 2;
             const char *q = p + 1;
             while (*q == ' ') { width++; q++; }
             if (*q == '\\') {
+                any_field = true;
                 if (vi < count) {
-                    using_emit_string(&out, vals[vi].is_str ? (vals[vi].str ? vals[vi].str : "") : "", width);
+                    if (vals[vi].is_str) {
+                        using_emit_string(vals[vi].str ? vals[vi].str : "", width);
+                    } else {
+                        gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        using_out_flush();
+                        return;
+                    }
                     vi++; printed_any = true;
                 }
                 p = q + 1;
             } else {
-                /* unterminated: literal backslash */
-                *out++ = ch; p++;
+                using_out_char(ch); p++;
             }
             continue;
         }
-        /* ordinary character → output verbatim */
-        *out++ = ch;
+        /* ordinary character → verbatim */
+        using_out_char(ch);
         p++;
     }
-    *out = '\0';
 
-    /* ASM REUSIN: values remain but format exhausted → rescan fmt */
-    if (vi < count && printed_any) {
-        p = fmt;
-        goto scan_restart;
+    /* ASM REUSST/FCERR3:
+     * - format has no fields at all + values → FCERR (MEDIUM-1)
+     * - values remain and format was fully used → REUSIN rescan;
+     *   the second pass emits literals and stops at the first field */
+    if (vi < count) {
+        if (!any_field) {
+            gwdata_set_error(5, g_state ? (uint16_t)g_state->current_line : 0, 0);
+            using_out_flush();
+            return;
+        }
+        if (printed_any) {
+            rescan = true;
+            p = fmt;
+            goto scan_restart;
+        }
     }
+    using_out_flush();
+}
 
-    fputs(outbuf, stdout);
+/* Legacy single-value helpers (kept for API compatibility) */
+void biprtu_print_using(const char *fmt, double val) {
+    struct using_value v;
+    v.is_str = false;
+    v.num = val;
+    v.str = NULL;
+    biprtu_print_using_values(fmt, &v, 1);
+}
+
+void biprtu_print_using_str(const char *fmt, const char *str) {
+    struct using_value v;
+    v.is_str = true;
+    v.num = 0;
+    v.str = (char *)str;
+    biprtu_print_using_values(fmt, &v, 1);
 }

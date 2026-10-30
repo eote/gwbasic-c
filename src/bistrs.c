@@ -278,8 +278,21 @@ double bistrs_fre(int arg) {
 /* ===== v158: HEX$ / OCT$ (ASM: BIPRTU? — 16-bit unsigned range) =====
  * GW-BASIC: HEX$(n)/OCT$(n) take n in -32768..65535; negative values
  * are the two's-complement 16-bit pattern (HEX$(-1) = "FFFF"). */
+/* v159 HIGH-4: ASM FRQINT/FRCINT semantics — round to nearest
+ * integer (FRCINT ADC rounding), valid range -32768..65535,
+ * out of range → Overflow (error 6). */
+static int bistrs_conv_int(double val) {
+    if (val > 65535.0 || val < -32768.0 || val != val) {
+        gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
+        return 0;
+    }
+    /* round half away from zero (ASM ADC rounding on magnitude) */
+    return (int)(val >= 0.0 ? floor(val + 0.5) : ceil(val - 0.5));
+}
+
 char *bistrs_hex(double val) {
-    int n = (int)val;
+    int n = bistrs_conv_int(val);
+    if (g_state && g_state->error_code != 0) return NULL;
     unsigned short u = (unsigned short)(n & 0xFFFF);
     char buf[8];
     sprintf(buf, "%X", u);
@@ -289,7 +302,8 @@ char *bistrs_hex(double val) {
 }
 
 char *bistrs_oct(double val) {
-    int n = (int)val;
+    int n = bistrs_conv_int(val);
+    if (g_state && g_state->error_code != 0) return NULL;
     unsigned short u = (unsigned short)(n & 0xFFFF);
     char buf[8];
     sprintf(buf, "%o", u);

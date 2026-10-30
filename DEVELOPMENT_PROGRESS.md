@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | M4 收尾批 — PRINT USING 完整重写 (ASM PRINUS 值列表驱动: !/&/\\/数字字段/溢出 %/REUSIN) + SWAP 语句 + HEX$/OCT$; 下一步 v158 review |
+| **当前阶段** | v159 修复轮 — 2 CRITICAL (USING 缓冲/栈) + 8 HIGH + 8 MEDIUM + LOW 全处理 (ASM 对照); 下一步 v160 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -53,6 +53,57 @@
 
 ---
 
+---
+
+## 当前轮: CODE_REVIEW v159 修复轮 — 2C/8H/8M/5L 全处理 (阻断解除)
+
+### CRITICAL (reviewer 实证复现)
+
+| # | 修复 |
+|---|------|
+| C1 outbuf[1024] 溢出 (6×200 字符崩) | 输出改 4KB 分块 chunk 写 (malloc + fwrite flush), 无总长限制 |
+| C2 buf[160] 栈溢出 + cast UB | 字段位数 ASM 上限 24 (扫描器强制, 超限 FCERR 5); double→int 前范围检查 (>=1e18/NaN → % 路径 %.0f); 无界 sprintf 全部 snprintf/有界 |
+
+### HIGH (8 项)
+
+| # | 修复 |
+|---|------|
+| H1 科学计数 E+10 写死 | ASM $PUFE 规范化: 尾数 [1,10) + 2 位指数 (进位处理) |
+| H2 $$/**/**$ | 字段起始解析: $$ 空格+$ 浮动; ** 星填; **$ 星+$ (宽度含星列与 $ 列) |
+| H3 负溢出 %--1234.56 | 单 % + 单负号 |
+| H4 HEX/OCT 截断 | FRCINT 语义: 四舍五入 + -32768..65535 范围 + Overflow(6) |
+| H5 SWAP 数组/自动建 | parse_var_ref + biptrg get/set 数组元素; 未定义标量自动建 (PTRGET 语义); 修 result 初值 ERROR bug |
+| H6 USING 大小写 | 显式 U/s/i/n/g 比较 |
+| H7 vals[64] 截断 | gwram 动态扩容 (倍增) |
+| H8 类型不匹配静默 | TMERR(13) — 串入数字字段/数入串字段; gwsts_print_using 错误传播修复 (driver set_error 后 return SUCCESS bug) |
+
+### MEDIUM/LOW
+
+M1 无字段 FCERR(5) ✓ / M2 缺分号 SNERR(2) ✓ / M3 _ 转义 ✓ /
+M4 逗号计宽 ✓ / M5 尾逗号打印区 ✓ / M6 test_using.bas 登记 ✓ /
+M7 补 9 条单测 (test_biprtu.c: 溢出/科学/$$/**/**$/TMERR×2/24位
+上限/长串不崩/无字段/缺分号) ✓ / M8 24 位上限 ✓ /
+LOW-1 注释错挂修复 ✓ / LOW-2 死代码删除 ✓ / LOW-3 空格式 ✓ /
+LOW-4 ! 空串空格 ✓ / LOW-5 union 移除 ✓
+
+### 额外发现 (本轮修复)
+
+- gweval 数字词法不支持科学计数字面量 (1E+10 → 1) → 补 E/D 指数解析
+- SWAP 字符串指针交换跨堆 free (gwdata vs gwram) → 纯指针交换
+  (v138 所有权语义一致)
+- gwsts_print_using 忽略 driver 内 error → 传播修复
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3366/3366 PASS** (3344→3366, +22), 0 警告 |
+| .bas 逐个验证 | ✅ **86/86** (+test_using 登记) |
+| 孤儿检测 | ✅ **906 = 906** |
+| reviewer 实证回归 | ✅ C1 1200 字符存活 / C2 长字段+1E10 / H1 1.23E+02 / H2 $12.34 ***12 / H3 %-1234.56 / H4 HEX$(1.9)=2 65536→Overflow / H5 数组交换+自动建 / H8 TM=13 / M1 FC=5 / M2 SN=2 |
+| 遗留 | ERL (v158 MEDIUM-1) 仍开放; **$ 填充列数按右对齐 (与 reviewer 期望差 1 星, 按手册 **$ 数字位语义) |
+
+---
 ## 当前轮: M4 收尾批 — PRINT USING 重写 + SWAP + HEX$/OCT$ (ASM 对照)
 
 ### 背景

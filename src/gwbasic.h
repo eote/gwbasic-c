@@ -367,7 +367,7 @@ char *bistrs_string(int n, char ch);
 char *bistrs_space(int n);
 double bistrs_fre(int arg);
 char *bistrs_hex(double val);  /* v158 */
-char *bistrs_oct(double val);  /* v158 */  /* FRE - free memory (returns numeric) */
+char *bistrs_oct(double val);  /* v158 */
 
 /* Random file I/O conversion functions */
 char *bistrs_mki(int val);      /* MKI$ - integer to 2-byte string */
