@@ -30,25 +30,45 @@ static char *g_out_chunk = NULL;
 static size_t g_out_len = 0;
 
 static void using_out_reset(void) {
-    if (!g_out_chunk) g_out_chunk = (char *)malloc(USING_OUT_CHUNK);
+    if (!g_out_chunk) {
+        g_out_chunk = (char *)malloc(USING_OUT_CHUNK);
+        if (!g_out_chunk) {
+            /* v160 LOW-1: allocation failure — emit via unbuffered
+             * putchar fallback instead of writing through NULL */
+            g_out_len = 0;
+            return;
+        }
+    }
     g_out_len = 0;
+}
+
+static int g_out_cols = 0;  /* v160: columns emitted by last USING */
+
+int biprtu_last_output_columns(void) {
+    return g_out_cols;
 }
 
 static void using_out_flush(void) {
     if (g_out_len > 0) {
         fwrite(g_out_chunk, 1, g_out_len, stdout);
+        g_out_cols += (int)g_out_len;
         g_out_len = 0;
     }
 }
 
 static void using_out_char(char ch) {
     if (!g_out_chunk) using_out_reset();
+    if (!g_out_chunk) { putchar(ch); return; }  /* LOW-1 fallback */
     if (g_out_len >= USING_OUT_CHUNK - 1) using_out_flush();
     g_out_chunk[g_out_len++] = ch;
 }
 
 static void using_out_str(const char *s, size_t n) {
     if (!g_out_chunk) using_out_reset();
+    if (!g_out_chunk) {  /* LOW-1 fallback */
+        for (size_t i = 0; i < n; i++) putchar(s[i]);
+        return;
+    }
     while (n > 0) {
         if (g_out_len >= USING_OUT_CHUNK - 1) using_out_flush();
         size_t space = USING_OUT_CHUNK - 1 - g_out_len;
@@ -173,10 +193,15 @@ static void using_emit_number(double val, int int_digits, int frac_digits,
     }
 
     /* --- fixed-point path --- */
+    /* v160 HIGH-2: non-finite (inf/NaN) → Overflow, never format */
+    if (!isfinite(val)) {
+        gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
+        return;
+    }
     /* v159 CRITICAL-2: range-check the double→integer conversion.
      * |val| above 1e18 cannot be represented in a 24-digit field
      * anyway — route through the overflow (%) path with %g avoided. */
-    if (fabs(val) >= 1e18 || val != val) {  /* NaN too */
+    if (fabs(val) >= 1e18) {
         /* print full decimal via bounded manual conversion */
         using_out_char('%');
         if (negative) using_out_char('-');
@@ -261,12 +286,24 @@ static void using_emit_number(double val, int int_digits, int frac_digits,
      * number needs minus sign column if applicable */
     /* v159: sign occupies a column within the field (GW-BASIC
      * right-aligns "-45.68" into "###.##" with no extra space;
-     * a leading '+' from the format also occupies a column) */
-    int sign_col = (negative || leading_plus ||
-                    (flags & USING_FLAG_LEADING_PLUS)) ? 1 : 0;
+     * a leading '+' from the format also occupies a column).
+     * v160 HIGH-3: TRAILING_MINUS moves the sign to the tail —
+     * the number itself is unsigned (no leading '-'/'+' column). */
+    bool tail_minus = (flags & USING_FLAG_TRAILING_MINUS) != 0;
+    bool leading_sign_col;
+    if (negative) {
+        /* negative: '-' leads unless a tail-sign field moves it */
+        leading_sign_col = !tail_minus;
+    } else {
+        leading_sign_col = leading_plus ||
+                           (flags & USING_FLAG_LEADING_PLUS) != 0;
+    }
+    int sign_col = leading_sign_col ? 1 : 0;
     int dollar_col = dollar_float ? 1 : 0;
     int used = actual_int + (frac_digits > 0 ? 1 + frac_digits : 0);
-    int lead = field_width - used - sign_col - dollar_col;
+    /* v160: the tail-sign column also consumes width */
+    int lead = field_width - used - sign_col - dollar_col
+               - (tail_minus ? 1 : 0);
     if (lead < 0) lead = 0;
 
     if (star_fill) {
@@ -276,7 +313,10 @@ static void using_emit_number(double val, int int_digits, int frac_digits,
     }
     if (dollar_float) using_out_char('$');
 
-    if (negative) using_out_char('-');
+    /* v160 HIGH-3: tail-sign field → no leading sign */
+    if (tail_minus) {
+        /* sign is emitted at the tail (below) */
+    } else if (negative) using_out_char('-');
     else if (leading_plus || (flags & USING_FLAG_LEADING_PLUS)) using_out_char('+');
     using_out_str(int_str, numlen);
 
@@ -313,6 +353,7 @@ static void using_emit_string(const char *s, int width) {
 void biprtu_print_using_values(const char *fmt, const struct using_value *vals, int count) {
     using_out_reset();
     g_out_len = 0;
+    g_out_cols = 0;
 
     if (!fmt || !*fmt) {
         /* ASM FCERR3: empty USING string → Illegal function call;
@@ -388,7 +429,12 @@ scan_restart:
                     continue;
                 }
             }
-            /* no value or not numeric field: literal '$$' */
+            /* v160 LOW-3: no value → the format ENDS at the field
+             * (ASM ENDNUM → FLDFIN), not a literal '$$' */
+            if (vi >= count) {
+                using_out_flush();
+                return;
+            }
             using_out_char('$'); p++;
             continue;
         }
@@ -423,6 +469,11 @@ scan_restart:
                     continue;
                 }
             }
+            /* v160 LOW-3: no value → format ends at the field */
+            if (vi >= count) {
+                using_out_flush();
+                return;
+            }
             /* literal '**' */
             using_out_char('*'); using_out_char('*');
             p += 2;
@@ -430,7 +481,11 @@ scan_restart:
             continue;
         }
         if (ch == '+' || ch == '-') {
+            /* v160 HIGH-3: ASM PLSFIN/ENDNUS — '+' before digits is a
+             * LEADING sign (column counts toward width); '-' before
+             * digits is a TRAILING sign (also counts toward width). */
             bool lead_plus = (ch == '+');
+            bool trail_sign = (ch == '-');
             const char *q = p + 1;
             while (*q == '+') q++;
             if (*q == '#') {
@@ -441,6 +496,14 @@ scan_restart:
                     gwdata_set_error(5, g_state ? (uint16_t)g_state->current_line : 0, 0);
                     using_out_flush();
                     return;
+                }
+                /* v160 HIGH-3: '-' → trailing sign column (+1 width) */
+                if (trail_sign) {
+                    fl |= USING_FLAG_TRAILING_MINUS;
+                    id += 1;
+                } else if (lead_plus) {
+                    /* leading '+' occupies a column within the field */
+                    id += 1;
                 }
                 any_field = true;
                 if (vi < count) {

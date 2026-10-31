@@ -96,6 +96,7 @@ TEST_SRCS = \
 	test_gwmain_resetenv.c \
 	test_gwsts_openmodes.c \
 	test_biprtu.c \
+	test_biprtu_out.c \
 	../tests/test_gwmain_uaf.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)

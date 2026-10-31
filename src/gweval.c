@@ -452,7 +452,18 @@ static float parse_factor(parser_t *p) {
             }
         }
         buf[i] = '\0';
-        return (float)atof(buf);
+        /* v160 HIGH-2: constant out of single-precision range →
+         * Overflow (6); isfinite guards against atof overflow to inf */
+        double dval = atof(buf);
+        if (dval > 3.402823e38 || (dval != 0.0 && dval < -3.402823e38)) {
+            gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
+            return 0.0f;
+        }
+        if (dval != 0.0 && !isfinite(dval)) {
+            gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
+            return 0.0f;
+        }
+        return (float)dval;
     }
     
     /* String literal in numeric context = 0 */

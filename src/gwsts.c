@@ -1082,12 +1082,17 @@ int gwsts_exec_statement(const char *text) {
             else {
             memcpy(var2, v2s, n2);
             var2[n2] = '\0';
-            /* v159 HIGH-5: ASM PTRGET semantics — array elements
-             * supported; undefined scalars are auto-created (0/"").
-             * Values are exchanged through a temporary string/number
-             * capture: read both, then write both back. */
-            result = SUCCESS;  /* reset: only real failures set ERROR */
-            /* parse_var_ref: static in this file (L27) — bool return */
+            /* v160 CRITICAL-1 rewrite (reviewer probe: mixed-type SWAP
+             * crashed EXIT=116; string-heap ptrs handed to free()).
+             * ASM BIMISC SWAP semantics:
+             *  1. PTRGET resolves both (arrays + auto-create scalars)
+             *  2. types must match → else Type mismatch (13), no write
+             *  3. exchange values via descriptors — string swap moves
+             *     the value.s descriptor (ptr+len); no copies, no
+             *     cross-heap free (string heap is a bump allocator).
+             *  4. numeric exchange = raw value union copy (same type
+             *     both sides → member layout identical). */
+            result = SUCCESS;
             char *bn1 = NULL, *bn2 = NULL;
             int ai1 = -1, ai2 = -1;
             int idx1[8], idx2[8];
@@ -1100,90 +1105,82 @@ int gwsts_exec_statement(const char *text) {
                 gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
                 result = ERROR;
             } else {
-                /* read value 1 */
-                bool s1 = false; double d1v = 0; char *s1p = NULL;
-                if (ni1 > 0) {
-                    d1v = (ni1 == 1)
-                        ? biptrg_get_array_element(bn1, idx1[0])
-                        : biptrg_get_array_element_multi(bn1, idx1);
-                } else {
-                    struct variable *a = gwdata_find_variable(bn1);
-                    if (!a) {
-                        /* auto-create: string vs numeric by suffix */
+                /* resolve both operands to (variable*, or array ref) */
+                struct variable *va = NULL, *vb = NULL;
+                bool arr1 = (ni1 > 0), arr2 = (ni2 > 0);
+                if (!arr1) {
+                    va = gwdata_find_variable(bn1);
+                    if (!va) {
                         size_t L1 = strlen(bn1);
-                        a = gwdata_alloc_variable(bn1,
+                        va = gwdata_alloc_variable(bn1,
                             (L1 && bn1[L1-1]=='$') ? VT_STRING : VT_SINGLE);
                     }
-                    if (!a) { result = ERROR; }
-                    else if (a->type == VT_STRING) {
-                        s1 = true;
-                        s1p = gwdata_alloc_string(a->value.s.len + 1);
-                        if (s1p && a->value.s.ptr) {
-                            memcpy(s1p, a->value.s.ptr, a->value.s.len);
-                            s1p[a->value.s.len] = '\0';
-                        }
-                    } else d1v = a->value.f;
-                }
-                if (result != ERROR) {
-                /* read value 2 */
-                bool s2 = false; double d2v = 0; char *s2p = NULL;
-                if (ni2 > 0) {
-                    d2v = (ni2 == 1)
-                        ? biptrg_get_array_element(bn2, idx2[0])
-                        : biptrg_get_array_element_multi(bn2, idx2);
                 } else {
-                    struct variable *b = gwdata_find_variable(bn2);
-                    if (!b) {
+                    va = biptrg_ensure_array(bn1);  /* for type query */
+                }
+                if (!arr2) {
+                    vb = gwdata_find_variable(bn2);
+                    if (!vb) {
                         size_t L2 = strlen(bn2);
-                        b = gwdata_alloc_variable(bn2,
+                        vb = gwdata_alloc_variable(bn2,
                             (L2 && bn2[L2-1]=='$') ? VT_STRING : VT_SINGLE);
                     }
-                    if (!b) { result = ERROR; }
-                    else if (b->type == VT_STRING) {
-                        s2 = true;
-                        s2p = gwdata_alloc_string(b->value.s.len + 1);
-                        if (s2p && b->value.s.ptr) {
-                            memcpy(s2p, b->value.s.ptr, b->value.s.len);
-                            s2p[b->value.s.len] = '\0';
+                } else {
+                    vb = biptrg_ensure_array(bn2);
+                }
+                var_type_t t1 = va ? va->type : VT_SINGLE;
+                var_type_t t2 = vb ? vb->type : VT_SINGLE;
+                if (!va || !vb) {
+                    gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    result = ERROR;
+                } else if (t1 != t2 || (arr1 && !arr2) || (!arr1 && arr2)) {
+                    /* v160 C1: type check BEFORE any write (scalar vs
+                     * array element also mismatch → 13) */
+                    gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    result = ERROR;
+                } else if (t1 == VT_STRING) {
+                    if (arr1 && arr2) {
+                        /* string array elements (v160 HIGH-1) */
+                        char *tmp = biptrg_get_array_string(bn1, idx1[0]);
+                        char *s2v = biptrg_get_array_string(bn2, idx2[0]);
+                        if (tmp && s2v) {
+                            biptrg_set_array_string(bn1, idx1[0], s2v);
+                            biptrg_set_array_string(bn2, idx2[0], tmp);
                         }
-                    } else d2v = b->value.f;
-                }
-                if (result != ERROR) {
-                /* write back: value2 → var1, value1 → var2 */
-                if (ni1 > 0) {
-                    if (ni1 == 1) result = biptrg_set_array_element(bn1, idx1[0], (float)d2v);
-                    else result = biptrg_set_array_element_multi(bn1, idx1, (float)d2v);
-                } else {
-                    struct variable *a = gwdata_find_variable(bn1);
-                    if (a && a->type == VT_STRING && s2 && s2p) {
-                        /* v159 CRITICAL fix: string ptrs come from the
-                         * string heap (mixed gwdata/gwram origin) — do
-                         * NOT free the old pointer; swap the pointer
-                         * itself (the old value's owner is now var2). */
-                        a->value.s.len = (int)strlen(s2p);
-                        a->value.s.ptr = s2p; s2p = NULL;
-                    } else if (a) {
-                        a->value.f = (float)d2v;
+                        /* bump-heap copies: nothing to free */
+                    } else {
+                        /* scalar ↔ scalar: swap the descriptors */
+                        struct { char *ptr; int len; } tmps;
+                        tmps.ptr = va->value.s.ptr;
+                        tmps.len = va->value.s.len;
+                        va->value.s.ptr = vb->value.s.ptr;
+                        va->value.s.len = vb->value.s.len;
+                        vb->value.s.ptr = tmps.ptr;
+                        vb->value.s.len = tmps.len;
                     }
-                }
-                if (ni2 > 0) {
-                    if (ni2 == 1) result = biptrg_set_array_element(bn2, idx2[0], (float)d1v);
-                    else result = biptrg_set_array_element_multi(bn2, idx2, (float)d1v);
                 } else {
-                    struct variable *b = gwdata_find_variable(bn2);
-                    if (b && b->type == VT_STRING && s1 && s1p) {
-                        /* same: pointer swap, no cross-heap free */
-                        b->value.s.len = (int)strlen(s1p);
-                        b->value.s.ptr = s1p; s1p = NULL;
-                    } else if (b) {
-                        b->value.f = (float)d1v;
+                    /* numeric: raw union exchange (same type both
+                     * sides — layout identical; works for i/f/d) */
+                    if (arr1 && arr2) {
+                        float f1 = (ni1 == 1)
+                            ? biptrg_get_array_element(bn1, idx1[0])
+                            : biptrg_get_array_element_multi(bn1, idx1);
+                        float f2 = (ni2 == 1)
+                            ? biptrg_get_array_element(bn2, idx2[0])
+                            : biptrg_get_array_element_multi(bn2, idx2);
+                        if (ni1 == 1) result = biptrg_set_array_element(bn1, idx1[0], f2);
+                        else result = biptrg_set_array_element_multi(bn1, idx1, f2);
+                        if (result == SUCCESS || result == 0) {
+                            if (ni2 == 1) result = biptrg_set_array_element(bn2, idx2[0], f1);
+                            else result = biptrg_set_array_element_multi(bn2, idx2, f1);
+                        }
+                        if (result != ERROR) result = SUCCESS;
+                    } else {
+                        unsigned char tmpv[sizeof(va->value)];
+                        memcpy(tmpv, &va->value, sizeof(tmpv));
+                        memcpy(&va->value, &vb->value, sizeof(tmpv));
+                        memcpy(&vb->value, tmpv, sizeof(tmpv));
                     }
-                }
-                if (result == SUCCESS || result == 0) result = SUCCESS;
-                else if (result != ERROR) result = SUCCESS;
-                }
-                if (s1p) gwram_free(s1p);
-                if (s2p) gwram_free(s2p);
                 }
             }
             if (bn1) gwram_free(bn1);
@@ -1975,6 +1972,13 @@ delete_done:
                                         }
                                     } else {
                                         float val = gweval_eval_numeric(trim_start);
+                                        if (gwdata_get_error() != 0) {
+                                            /* v160 HIGH-2: eval raised
+                                             * Overflow (1E+39) — abort
+                                             * PRINT, propagate error */
+                                            gwram_free(trimmed);
+                                            return ERROR;
+                                        }
                                         char buf[64];
                                         /* GW-BASIC: positive numbers have leading space */
                                         snprintf(buf, sizeof(buf), "%s%g", (val >= 0) ? " " : "", val);
@@ -2025,10 +2029,25 @@ delete_done:
                     (up[5] == ' ' || up[5] == '\t' || up[5] == '\0')) {
                     int trail = 0;
                     result = gwsts_print_using(up + 5, &trail);
-                    /* v159 MEDIUM-5: trailing ',' advances to the next
-                     * print zone (14 columns); ';' suppresses newline */
-                    if (trail == 0) printf("\n");
-                    else if (trail == 2) printf("\t");
+                    /* v159 MEDIUM-5 / v160 MEDIUM-2: trailing ';'
+                     * suppresses newline; trailing ',' advances to the
+                     * next 14-column print zone (spaces, not '\t');
+                     * on error no newline is emitted (empty format
+                     * must not print a stray blank line) */
+                    if (gwdata_get_error() == 0) {
+                        if (trail == 0) printf("\n");
+                        else if (trail == 2) {
+                            /* current column = chars printed this line;
+                             * approximate with the chunk-writer state is
+                             * unavailable here — use the using-out
+                             * flush count tracked by biprtu */
+                            extern int biprtu_last_output_columns(void);
+                            int col = biprtu_last_output_columns();
+                            int zone = 14;
+                            int next = ((col / zone) + 1) * zone;
+                            for (int k = col; k < next; k++) putchar(' ');
+                        }
+                    }
                     gwram_free(trimmed);
                     return result;
                 }
@@ -2081,10 +2100,21 @@ delete_done:
                             if (str_val) {
                                 printf("%s", str_val);
                             } else if (gwdata_get_error() != 0) {
-                                /* v137: error-aware PRINT */
-                                ;
+                                /* v137/v160: error-aware PRINT — keep
+                                 * the baseline trailing newline (PRINT
+                                 * is line-oriented; test_gwram OM
+                                 * handler layout depends on it) */
+                                printf("\n");
+                                gwram_free(trimmed);
+                                return ERROR;
                             } else {
                                 float val = gweval_eval_numeric(trim_start);
+                                if (gwdata_get_error() != 0) {
+                                    /* v160 HIGH-2: eval raised Overflow
+                                     * etc. — abort, propagate, no output */
+                                    gwram_free(trimmed);
+                                    return ERROR;
+                                }
                                 /* GW-BASIC: positive numbers have leading space */
                                 printf("%s%g", (val >= 0) ? " " : "", val);
                             }

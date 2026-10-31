@@ -282,12 +282,18 @@ double bistrs_fre(int arg) {
  * integer (FRCINT ADC rounding), valid range -32768..65535,
  * out of range → Overflow (error 6). */
 static int bistrs_conv_int(double val) {
-    if (val > 65535.0 || val < -32768.0 || val != val) {
+    /* v160 MEDIUM-4: ASM FRQINT order — round FIRST, then range
+     * check (65535.4 → 65535 ✓; -32768.4 → -32768 ✓) */
+    if (val != val || !isfinite(val)) {
         gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
         return 0;
     }
-    /* round half away from zero (ASM ADC rounding on magnitude) */
-    return (int)(val >= 0.0 ? floor(val + 0.5) : ceil(val - 0.5));
+    int n = (int)(val >= 0.0 ? floor(val + 0.5) : ceil(val - 0.5));
+    if (n > 65535 || n < -32768) {
+        gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
+        return 0;
+    }
+    return n;
 }
 
 char *bistrs_hex(double val) {

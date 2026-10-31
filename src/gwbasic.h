@@ -406,6 +406,7 @@ struct using_value {
     char *str;   /* borrowed (string-heap / eval result), not freed here */
 };
 void biprtu_print_using_values(const char *fmt, const struct using_value *vals, int count);
+int biprtu_last_output_columns(void);  /* v160 MEDIUM-1 */
 
 /* BIPTRG module functions */
 void biptrg_init(void);
