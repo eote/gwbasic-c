@@ -58,7 +58,7 @@ static void using_out_flush(void) {
 
 static void using_out_char(char ch) {
     if (!g_out_chunk) using_out_reset();
-    if (!g_out_chunk) { putchar(ch); return; }  /* LOW-1 fallback */
+    if (!g_out_chunk) { putchar(ch); g_out_cols++; return; }  /* v161 LOW-2 */
     if (g_out_len >= USING_OUT_CHUNK - 1) using_out_flush();
     g_out_chunk[g_out_len++] = ch;
 }
@@ -67,6 +67,7 @@ static void using_out_str(const char *s, size_t n) {
     if (!g_out_chunk) using_out_reset();
     if (!g_out_chunk) {  /* LOW-1 fallback */
         for (size_t i = 0; i < n; i++) putchar(s[i]);
+        g_out_cols += (int)n;  /* v161 LOW-2: keep zone tracking */
         return;
     }
     while (n > 0) {
@@ -115,11 +116,22 @@ static const char *using_scan_numfield(const char *p, int *int_digits,
                 break;
             }
         } else if (*p == '+') {
-            *flags |= (in_frac || *int_digits || *frac_digits)
-                      ? USING_FLAG_TRAILING_PLUS : USING_FLAG_LEADING_PLUS;
+            /* v161 M1/M2: a trailing sign column counts toward the
+             * field width (ASM PLSFIN/ENDNUS INC DL) */
+            if (in_frac || *int_digits || *frac_digits) {
+                *flags |= USING_FLAG_TRAILING_PLUS;
+                (*int_digits)++;
+            } else {
+                *flags |= USING_FLAG_LEADING_PLUS;
+            }
             p++;
         } else if (*p == '-') {
-            *flags |= USING_FLAG_TRAILING_MINUS;
+            if (in_frac || *int_digits || *frac_digits) {
+                *flags |= USING_FLAG_TRAILING_MINUS;
+                (*int_digits)++;
+            } else {
+                *flags |= USING_FLAG_TRAILING_MINUS;
+            }
             p++;
         } else if (*p == '^') {
             *flags |= USING_FLAG_SCIENTIFIC;
@@ -141,6 +153,13 @@ static const char *using_scan_numfield(const char *p, int *int_digits,
 static void using_emit_number(double val, int int_digits, int frac_digits,
                               unsigned char flags, bool leading_plus,
                               bool star_fill, bool dollar_float) {
+    /* v161 HIGH-3: single entry guard — non-finite (arithmetic inf/
+     * NaN) never reaches any formatting path (scientific branch runs
+     * log10/pow which produce UB on inf) */
+    if (!isfinite(val)) {
+        gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
+        return;
+    }
     bool negative = (val < 0.0);
 
     if (flags & USING_FLAG_SCIENTIFIC) {
@@ -289,11 +308,13 @@ static void using_emit_number(double val, int int_digits, int frac_digits,
      * a leading '+' from the format also occupies a column).
      * v160 HIGH-3: TRAILING_MINUS moves the sign to the tail —
      * the number itself is unsigned (no leading '-'/'+' column). */
-    bool tail_minus = (flags & USING_FLAG_TRAILING_MINUS) != 0;
+    /* v161 M2: any tail-sign field (TRAILING_MINUS or TRAILING_PLUS)
+     * moves the sign to the tail — no leading sign column */
+    bool tail_sign = (flags & (USING_FLAG_TRAILING_MINUS |
+                               USING_FLAG_TRAILING_PLUS)) != 0;
     bool leading_sign_col;
     if (negative) {
-        /* negative: '-' leads unless a tail-sign field moves it */
-        leading_sign_col = !tail_minus;
+        leading_sign_col = !tail_sign;
     } else {
         leading_sign_col = leading_plus ||
                            (flags & USING_FLAG_LEADING_PLUS) != 0;
@@ -303,7 +324,7 @@ static void using_emit_number(double val, int int_digits, int frac_digits,
     int used = actual_int + (frac_digits > 0 ? 1 + frac_digits : 0);
     /* v160: the tail-sign column also consumes width */
     int lead = field_width - used - sign_col - dollar_col
-               - (tail_minus ? 1 : 0);
+               - (tail_sign ? 1 : 0);
     if (lead < 0) lead = 0;
 
     if (star_fill) {
@@ -313,8 +334,8 @@ static void using_emit_number(double val, int int_digits, int frac_digits,
     }
     if (dollar_float) using_out_char('$');
 
-    /* v160 HIGH-3: tail-sign field → no leading sign */
-    if (tail_minus) {
+    /* v160/v161: tail-sign field → no leading sign */
+    if (tail_sign) {
         /* sign is emitted at the tail (below) */
     } else if (negative) using_out_char('-');
     else if (leading_plus || (flags & USING_FLAG_LEADING_PLUS)) using_out_char('+');

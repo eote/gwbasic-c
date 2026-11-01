@@ -2,6 +2,7 @@
 /* Based on GWSTS.ASM */
 
 #include "gwbasic.h"
+#include <io.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -26,6 +27,14 @@ static char *strdup_trim(const char *s);
 static bool starts_with(const char *s, const char *prefix);
 static bool parse_var_ref(const char *str, char **var_name, int *index, int *indices, int *num_indices);
 int assign_value(const char *var_ref, const char *expr);
+
+/* v161 MEDIUM-3: line-start tracking for print-zone columns */
+static long g_line_start = 0;
+long gwsts_last_line_start(void) { return g_line_start; }
+void gwsts_note_newline(void) {
+    long pos = ftell(stdout);
+    if (pos >= 0) g_line_start = pos;
+}
 
 void gwsts_init(void) {
     /* No initialization needed */
@@ -743,7 +752,14 @@ static int gwsts_print_using(const char *rest, int *trailing_sep_out) {
             int ncap = vcap * 2;
             struct using_value *nv = (struct using_value *)gwram_alloc(
                 sizeof(struct using_value) * ncap);
-            if (!nv) break;
+            if (!nv) {
+                /* v161 LOW-4: expansion failure = Out of memory (7),
+                 * not a silent truncation */
+                gwdata_set_error(7, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                gwram_free(vals);
+                *trailing_sep_out = trailing;
+                return ERROR;
+            }
             memcpy(nv, vals, sizeof(struct using_value) * vcount);
             gwram_free(vals);
             vals = nv;
@@ -788,6 +804,15 @@ static int gwsts_print_using(const char *rest, int *trailing_sep_out) {
                 vals[vcount].is_str = false;
                 vals[vcount].str = NULL;
                 vals[vcount].num = gweval_eval_numeric(vexpr);
+                if (gwdata_get_error() != 0) {
+                    /* v161 MEDIUM-4: value evaluation failed (e.g.
+                     * 1/0 → ERR 11) — abort BEFORE the driver runs;
+                     * no pseudo field output */
+                    gwram_free(vexpr);
+                    gwram_free(vals);
+                    *trailing_sep_out = trailing;
+                    return ERROR;
+                }
                 vcount++;
             }
         } else {
@@ -1133,54 +1158,84 @@ int gwsts_exec_statement(const char *text) {
                 if (!va || !vb) {
                     gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
                     result = ERROR;
-                } else if (t1 != t2 || (arr1 && !arr2) || (!arr1 && arr2)) {
-                    /* v160 C1: type check BEFORE any write (scalar vs
-                     * array element also mismatch → 13) */
+                } else if (t1 != t2) {
+                    /* v160 C1: type check BEFORE any write */
                     gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
                     result = ERROR;
                 } else if (t1 == VT_STRING) {
-                    if (arr1 && arr2) {
-                        /* string array elements (v160 HIGH-1) */
-                        char *tmp = biptrg_get_array_string(bn1, idx1[0]);
-                        char *s2v = biptrg_get_array_string(bn2, idx2[0]);
-                        if (tmp && s2v) {
-                            biptrg_set_array_string(bn1, idx1[0], s2v);
-                            biptrg_set_array_string(bn2, idx2[0], tmp);
-                        }
-                        /* bump-heap copies: nothing to free */
+                    /* v161 HIGH-1: scalar ↔ array element is legal
+                     * (ASM PTRGET); all four combinations supported.
+                     * v161 HIGH-2: multi-dimensional via *_multi. */
+                    char *tmp1 = NULL, *tmp2 = NULL;
+                    if (arr1) {
+                        tmp1 = (ni1 > 1)
+                            ? biptrg_get_array_string_multi(bn1, idx1)
+                            : biptrg_get_array_string(bn1, idx1[0]);
+                        if (!tmp1) tmp1 = "";
                     } else {
-                        /* scalar ↔ scalar: swap the descriptors */
-                        struct { char *ptr; int len; } tmps;
-                        tmps.ptr = va->value.s.ptr;
-                        tmps.len = va->value.s.len;
-                        va->value.s.ptr = vb->value.s.ptr;
-                        va->value.s.len = vb->value.s.len;
-                        vb->value.s.ptr = tmps.ptr;
-                        vb->value.s.len = tmps.len;
+                        tmp1 = va->value.s.ptr ? va->value.s.ptr : "";
                     }
+                    if (arr2) {
+                        tmp2 = (ni2 > 1)
+                            ? biptrg_get_array_string_multi(bn2, idx2)
+                            : biptrg_get_array_string(bn2, idx2[0]);
+                        if (!tmp2) tmp2 = "";
+                    } else {
+                        tmp2 = vb->value.s.ptr ? vb->value.s.ptr : "";
+                    }
+                    /* write value2 → slot1, value1 → slot2 */
+                    if (arr1) {
+                        if (ni1 > 1) result = biptrg_set_array_string_multi(bn1, idx1, tmp2);
+                        else result = biptrg_set_array_string(bn1, idx1[0], tmp2);
+                    } else {
+                        va->value.s.len = (int)strlen(tmp2);
+                        va->value.s.ptr = gwdata_alloc_string(va->value.s.len + 1);
+                        if (va->value.s.ptr) {
+                            memcpy(va->value.s.ptr, tmp2, va->value.s.len + 1);
+                        }
+                    }
+                    if (arr2) {
+                        if (ni2 > 1) result = biptrg_set_array_string_multi(bn2, idx2, tmp1);
+                        else result = biptrg_set_array_string(bn2, idx2[0], tmp1);
+                    } else {
+                        vb->value.s.len = (int)strlen(tmp1);
+                        vb->value.s.ptr = gwdata_alloc_string(vb->value.s.len + 1);
+                        if (vb->value.s.ptr) {
+                            memcpy(vb->value.s.ptr, tmp1, vb->value.s.len + 1);
+                        }
+                    }
+                    if (result != ERROR) result = SUCCESS;
                 } else {
-                    /* numeric: raw union exchange (same type both
-                     * sides — layout identical; works for i/f/d) */
-                    if (arr1 && arr2) {
-                        float f1 = (ni1 == 1)
-                            ? biptrg_get_array_element(bn1, idx1[0])
-                            : biptrg_get_array_element_multi(bn1, idx1);
-                        float f2 = (ni2 == 1)
-                            ? biptrg_get_array_element(bn2, idx2[0])
-                            : biptrg_get_array_element_multi(bn2, idx2);
-                        if (ni1 == 1) result = biptrg_set_array_element(bn1, idx1[0], f2);
-                        else result = biptrg_set_array_element_multi(bn1, idx1, f2);
-                        if (result == SUCCESS || result == 0) {
-                            if (ni2 == 1) result = biptrg_set_array_element(bn2, idx2[0], f1);
-                            else result = biptrg_set_array_element_multi(bn2, idx2, f1);
-                        }
-                        if (result != ERROR) result = SUCCESS;
+                    /* numeric: v161 HIGH-1 — scalar ↔ array element OK */
+                    float f1, f2;
+                    if (arr1) {
+                        f1 = (ni1 > 1)
+                            ? biptrg_get_array_element_multi(bn1, idx1)
+                            : biptrg_get_array_element(bn1, idx1[0]);
                     } else {
-                        unsigned char tmpv[sizeof(va->value)];
-                        memcpy(tmpv, &va->value, sizeof(tmpv));
-                        memcpy(&va->value, &vb->value, sizeof(tmpv));
-                        memcpy(&vb->value, tmpv, sizeof(tmpv));
+                        f1 = va->value.f;
                     }
+                    if (arr2) {
+                        f2 = (ni2 > 1)
+                            ? biptrg_get_array_element_multi(bn2, idx2)
+                            : biptrg_get_array_element(bn2, idx2[0]);
+                    } else {
+                        f2 = vb->value.f;
+                    }
+                    /* write f2 → slot1, f1 → slot2 */
+                    if (arr1) {
+                        if (ni1 > 1) result = biptrg_set_array_element_multi(bn1, idx1, f2);
+                        else result = biptrg_set_array_element(bn1, idx1[0], f2);
+                    } else {
+                        va->value.f = f2;
+                    }
+                    if (arr2) {
+                        if (ni2 > 1) result = biptrg_set_array_element_multi(bn2, idx2, f1);
+                        else result = biptrg_set_array_element(bn2, idx2[0], f1);
+                    } else {
+                        vb->value.f = f1;
+                    }
+                    if (result != ERROR) result = SUCCESS;
                 }
             }
             if (bn1) gwram_free(bn1);
@@ -1895,6 +1950,7 @@ delete_done:
         /* Check for bare PRINT (no arguments) - outputs newline */
         if (trimmed[5] == '\0') {
             printf("\n");
+            gwsts_note_newline();
             result = SUCCESS;
         }
         /* Check for PRINT #filenum, (file output) - handle optional space after PRINT */
@@ -2042,7 +2098,18 @@ delete_done:
                              * unavailable here — use the using-out
                              * flush count tracked by biprtu */
                             extern int biprtu_last_output_columns(void);
-                            int col = biprtu_last_output_columns();
+                            /* v161 MEDIUM-3: real console column =
+                             * current stdout position minus the last
+                             * line-start position (line starts are
+                             * tracked at every PRINT newline). */
+                            extern long gwsts_last_line_start(void);
+                            int col = -1;
+                            if (!isatty(fileno(stdout))) {
+                                long pos = ftell(stdout);
+                                if (pos >= 0)
+                                    col = (int)(pos - gwsts_last_line_start());
+                            }
+                            if (col < 0) col = biprtu_last_output_columns();
                             int zone = 14;
                             int next = ((col / zone) + 1) * zone;
                             for (int k = col; k < next; k++) putchar(' ');
@@ -2146,6 +2213,7 @@ delete_done:
                     /* Print newline unless last expression ended with comma or semicolon */
                     if (!trailing_comma && !trailing_semicolon) {
                         printf("\n");
+                        gwsts_note_newline();
                     }
                     
                     result = SUCCESS;
@@ -2867,17 +2935,23 @@ int assign_value(const char *var_ref, const char *expr) {
             bool is_string_array = (name_len > 0 && base_name[name_len - 1] == '$');
             
             if (is_string_array) {
-                /* String array: evaluate string expression and use biptrg_set_array_string */
+                /* v161 HIGH-2: multi-dimensional string arrays */
                 char *str_val = gweval_eval_string(expr);
                 if (str_val) {
-                    result = biptrg_set_array_string(base_name, indices[0], str_val);
+                    if (num_indices > 1)
+                        result = biptrg_set_array_string_multi(base_name, indices, str_val);
+                    else
+                        result = biptrg_set_array_string(base_name, indices[0], str_val);
                 } else {
                     /* Fallback: treat raw expr as literal string (for DATA values without quotes) */
                     size_t expr_len = strlen(expr);
                     char *heap_str = gwdata_alloc_string(expr_len + 1);
                     if (heap_str) {
                         strcpy(heap_str, expr);
-                        result = biptrg_set_array_string(base_name, indices[0], heap_str);
+                        if (num_indices > 1)
+                            result = biptrg_set_array_string_multi(base_name, indices, heap_str);
+                        else
+                            result = biptrg_set_array_string(base_name, indices[0], heap_str);
                     }
                 }
             } else {
@@ -2932,6 +3006,12 @@ int assign_value(const char *var_ref, const char *expr) {
                 /* Numeric variable (integer or float) */
                 /* Evaluate expression FIRST before potentially clearing the variable */
                 float val = gweval_eval_numeric(expr);
+                if (gwdata_get_error() != 0) {
+                    /* v161 HIGH-3/LOW-3: evaluation raised Overflow
+                     * etc. — do NOT assign; propagate (A stays old) */
+                    if (base_name) gwram_free(base_name);
+                    return ERROR;
+                }
                 struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
                 if (v) {
                     v->value.f = val;

@@ -252,6 +252,7 @@ float gweval_call_fn(const char *fn_name, float arg);
 /* GWSTS module functions - Statement Execution */
 void gwsts_init(void);
 int gwsts_exec_statement(const char *stmt);
+long gwsts_last_line_start(void);  /* v161 MEDIUM-3 */
 
 /* GWSTS internal - file operations */
 int gwram_delete_file(const char *filename);
@@ -431,7 +432,9 @@ int biptrg_set_array_element_multi(const char *name, const int *indices, float v
 float biptrg_get_array_element(const char *name, int index);
 float biptrg_get_array_element_multi(const char *name, const int *indices);
 int biptrg_set_array_string(const char *name, int index, const char *str);
+int biptrg_set_array_string_multi(const char *name, const int *indices, const char *str);  /* v161 HIGH-2 */
 char *biptrg_get_array_string(const char *name, int index);
+char *biptrg_get_array_string_multi(const char *name, const int *indices);  /* v161 HIGH-2 */
 void biptrg_free_array(struct variable *v);
 
 /* DSKCOM module - File I/O */

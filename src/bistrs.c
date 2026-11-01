@@ -288,6 +288,12 @@ static int bistrs_conv_int(double val) {
         gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
         return 0;
     }
+    /* v161 MEDIUM-5: compare in double BEFORE the int cast —
+     * (int) of an out-of-range double is UB */
+    if (val > 65535.5 || val < -32768.5) {
+        gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
+        return 0;
+    }
     int n = (int)(val >= 0.0 ? floor(val + 0.5) : ceil(val - 0.5));
     if (n > 65535 || n < -32768) {
         gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);

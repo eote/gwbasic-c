@@ -386,6 +386,49 @@ int biptrg_set_array_string(const char *name, int index, const char *str) {
     return SUCCESS;
 }
 
+/* v161 HIGH-2: multi-dimensional string array element access.
+ * Flattens indices via compute_flat_index (same layout as numeric
+ * multi arrays). */
+int biptrg_set_array_string_multi(const char *name, const int *indices, const char *str) {
+    if (!name || !str || !indices) return ERROR;
+    struct variable *v = biptrg_ensure_array(name);
+    if (!v) return ERROR;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
+    if (!desc || desc->type != VT_STRING) return ERROR;
+    for (int i = 0; i < desc->dimensions; i++) {
+        if (indices[i] < 0 || indices[i] >= desc->dim_sizes[i]) {
+            extern uint16_t g_curlin;
+            gwdata_set_error(ERRBS, g_curlin, 0);
+            return ERROR;
+        }
+    }
+    int flat = compute_flat_index(desc, indices);
+    char **data = (char **)desc->data;
+    if (data[flat]) gwram_free(data[flat]);
+    data[flat] = (char *)gwram_alloc(strlen(str) + 1);
+    if (!data[flat]) return ERROR;
+    strcpy(data[flat], str);
+    return SUCCESS;
+}
+
+char *biptrg_get_array_string_multi(const char *name, const int *indices) {
+    if (!name || !indices) return NULL;
+    struct variable *v = biptrg_ensure_array(name);
+    if (!v) return NULL;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
+    if (!desc || desc->type != VT_STRING) return NULL;
+    for (int i = 0; i < desc->dimensions; i++) {
+        if (indices[i] < 0 || indices[i] >= desc->dim_sizes[i]) {
+            extern uint16_t g_curlin;
+            gwdata_set_error(ERRBS, g_curlin, 0);
+            return NULL;
+        }
+    }
+    int flat = compute_flat_index(desc, indices);
+    char **data = (char **)desc->data;
+    return data[flat];
+}
+
 /* Get string array element */
 char *biptrg_get_array_string(const char *name, int index) {
     if (!name) return NULL;

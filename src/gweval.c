@@ -314,16 +314,32 @@ static char *parse_string_expression(parser_t *p) {
             p->pos -= 1;  /* Put back '(' */
         }
         
-        /* Check for array reference: A$(5) */
+        /* Check for array reference: A$(5) or A$(1,2) */
         if (parser_peek(p) == '(') {
             parser_get(p);  /* consume '(' */
             
-            float index_val = parse_expression(p);
-            int index = (int)index_val;
-            if (index < 0) index = 0;
-            
-            if (parser_match(p, ')')) {
-                result = biptrg_get_array_string(name, index);
+            /* v161 HIGH-2: multi-dimensional string arrays */
+            int snd_indices[8];
+            int snd_n = 0;
+            bool snd_ok = true;
+            for (;;) {
+                float idx_val = parse_expression(p);
+                if (gwdata_get_error() != 0) { snd_ok = false; break; }
+                if (snd_n < 8) {
+                    int iv = (int)idx_val;
+                    snd_indices[snd_n++] = (iv < 0) ? 0 : iv;
+                }
+                if (parser_match(p, ',')) continue;
+                if (parser_match(p, ')')) break;
+                snd_ok = false;
+                break;
+            }
+            if (snd_ok && snd_n > 0) {
+                if (snd_n > 1)
+                    result = biptrg_get_array_string_multi(name, snd_indices);
+                else
+                    result = biptrg_get_array_string(name, snd_indices[0]);
+
                 /* fall through to concat loop (v138: S$ = S$ + "X" idiom —
                  * early return silently dropped the "+ ..." tail) */
                 goto after_name;
@@ -1006,6 +1022,11 @@ static float parse_expression(parser_t *p) {
         else if (strcmp(op, "=") == 0) left = (left == right) ? -1.0f : 0.0f;
     }
     
+    /* v161 HIGH-3: +/- overflow → Overflow (6), not inf */
+    if (!isfinite(left)) {
+        if (g_state) gwdata_set_error(6, g_state->current_line, 0);
+        return 0.0f;
+    }
     return left;
 }
 
