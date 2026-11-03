@@ -12,6 +12,7 @@ extern void gwlist_init(void);
 extern void dskcom_close_all(void);
 extern void math2_init(void);  /* For RND reset */
 extern int assign_value(const char *var_ref, const char *expr);  /* From gwsts.c */
+extern int assign_value_raw(const char *var_ref, const char *expr);  /* v162 HIGH-1: READ values are literal text */
 
 /* Trap handling state */
 #define MAX_TRAPS 16
@@ -541,7 +542,7 @@ int bimisc_read(const char **text, int var_count, char **var_names) {
                     char *next_text = parse_data_value(data_text, value, sizeof(value));
                     if (next_text || strlen(value) > 0) {
                         /* Assign value to variable */
-                        if (assign_value(var_name, value) != SUCCESS) {
+                        if (assign_value_raw(var_name, value) != SUCCESS) {
                             return ERROR;
                         }
                         g_state->data_index++;

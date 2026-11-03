@@ -335,8 +335,13 @@ static char *parse_string_expression(parser_t *p) {
                 break;
             }
             if (snd_ok && snd_n > 0) {
-                if (snd_n > 1)
+                if (snd_n > 1) {
+                    /* v162 HIGH-2: auto-DIM undeclared multi arrays */
+                    extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                    if (!gwdata_find_variable(name))
+                        biptrg_ensure_array_nd(name, snd_n);
                     result = biptrg_get_array_string_multi(name, snd_indices);
+                }
                 else
                     result = biptrg_get_array_string(name, snd_indices[0]);
 

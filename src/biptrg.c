@@ -26,13 +26,28 @@ static var_type_t biptrg_infer_type_from_name(const char *name) {
     return VT_SINGLE;   /* ! or no suffix */
 }
 
+/* v162 HIGH-2: ndims-aware forward declaration */
+struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+
 /* Ensure an array variable exists; if the name is unknown, auto-DIM it as
- * A(10) (indices 0..10). Returns the variable or NULL. */
+ * A(10) (indices 0..10). Returns the variable or NULL.
+ * v161 HIGH-2 (v162): ndims-aware variant — GW-BASIC auto-DIMs an
+ * undeclared array with 10 per DIMENSION (A(1,2) implies 2-D 0..10). */
 struct variable *biptrg_ensure_array(const char *name) {
+    return biptrg_ensure_array_nd(name, 1);
+}
+
+struct variable *biptrg_ensure_array_nd(const char *name, int ndims) {
     struct variable *v = gwdata_find_variable(name);
     if (v) return v;
     var_type_t type = biptrg_infer_type_from_name(name);
-    if (biptrg_dim_array(name, 10, type) != SUCCESS) return NULL;
+    if (ndims <= 1) {
+        if (biptrg_dim_array(name, 10, type) != SUCCESS) return NULL;
+    } else {
+        int dims[8];
+        for (int i = 0; i < ndims && i < 8; i++) dims[i] = 10;
+        if (biptrg_dim_array_multi(name, dims, ndims, type) != SUCCESS) return NULL;
+    }
     return gwdata_find_variable(name);
 }
 

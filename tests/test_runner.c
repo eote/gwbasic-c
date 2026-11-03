@@ -282,6 +282,11 @@ void test_biprtu_out2_2d_string_array(void);
 void test_biprtu_out2_arith_inf_overflow(void);
 void test_biprtu_out2_eval_err_no_pseudo(void);
 void test_biprtu_out2_midline_zone(void);
+void test_assign_strict_scalar_tmerr(void);
+void test_assign_strict_read_input_raw(void);
+void test_assign_autodim_multidim(void);
+void test_assign_swap_oob_no_write(void);
+void test_assign_array_err_no_write(void);
 void test_biptrg_init(void);
 void test_biptrg_array(void);
 void test_biptrg_string_array(void);
@@ -1227,6 +1232,11 @@ failed += run_test("test_biprtu_out2_2d_string_array", test_biprtu_out2_2d_strin
 failed += run_test("test_biprtu_out2_arith_inf_overflow", test_biprtu_out2_arith_inf_overflow);
 failed += run_test("test_biprtu_out2_eval_err_no_pseudo", test_biprtu_out2_eval_err_no_pseudo);
 failed += run_test("test_biprtu_out2_midline_zone", test_biprtu_out2_midline_zone);
+failed += run_test("test_assign_strict_scalar_tmerr", test_assign_strict_scalar_tmerr);
+failed += run_test("test_assign_strict_read_input_raw", test_assign_strict_read_input_raw);
+failed += run_test("test_assign_autodim_multidim", test_assign_autodim_multidim);
+failed += run_test("test_assign_swap_oob_no_write", test_assign_swap_oob_no_write);
+failed += run_test("test_assign_array_err_no_write", test_assign_array_err_no_write);
 
 failed += run_test("gweval_strfuncs_if_compound_str_and", test_gweval_strfuncs_if_compound_str_and);
 failed += run_test("gweval_strfuncs_if_compound_str_or", test_gweval_strfuncs_if_compound_str_or);

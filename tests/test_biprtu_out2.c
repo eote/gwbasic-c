@@ -105,8 +105,9 @@ void test_biprtu_out2_eval_err_no_pseudo(void) {
     int rc = capture_statement("PRINT USING \"##\"; 1/0");
     TEST_ASSERT(rc != 0, "eval error propagates");
     TEST_ASSERT_EQ_INT(gwdata_get_error(), 11, "div by zero = 11");
-    TEST_ASSERT(strstr(capbuf, " 1") == NULL || strstr(capbuf, " 1") > capbuf,
-                "no pseudo value before error");
+    /* v162 MEDIUM-6: exact — the output must be EMPTY (no pseudo
+     * field value at all, not even a newline) */
+    TEST_ASSERT_EQ_INT((int)strlen(capbuf), 0, "no pseudo output");
     gwdata_clear_error();
     TEST_PASS("out2 eval err no pseudo");
 }
@@ -114,11 +115,17 @@ void test_biprtu_out2_eval_err_no_pseudo(void) {
 void test_biprtu_out2_midline_zone(void) {
     gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
     gwdata_clear_error();
-    /* v161 MEDIUM-3: 'AB;' leaves col 2; USING ' 1' ends col 4;
-     * trailing ',' advances to zone 14 → X at col 15 */
+    /* v161 MEDIUM-3 / v162 MEDIUM-6: exact layout — 'AB;' leaves
+     * col 2; USING ' 1' ends col 4; trailing ',' pads 10 spaces to
+     * column 14 → the USING statement's own output is " 1" + 10
+     * spaces (no newline). Capture THAT statement exactly. */
     capture_statement("PRINT \"AB\";");
-    gwsts_exec_statement("PRINT USING \"##\"; 1,");
-    capture_statement("PRINT \"X\"");
-    TEST_ASSERT(strstr(capbuf, "X") != NULL, "X printed");
+    capture_statement("PRINT USING \"##\"; 1,");
+    /* capbuf == " 1" + 12 spaces (statement starts at col 0:
+     * value ends col 2 → pad to zone 14 → 12 spaces, no newline) */
+    TEST_ASSERT(strlen(capbuf) == 14, "USING+comma emits 14 chars (2 + 12 pad)");
+    TEST_ASSERT(strncmp(capbuf, " 1", 2) == 0, "value first");
+    for (int i = 2; i < 14; i++)
+        TEST_ASSERT(capbuf[i] == ' ', "padding is spaces (not tab)");
     TEST_PASS("out2 midline zone");
 }

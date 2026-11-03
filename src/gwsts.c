@@ -27,6 +27,7 @@ static char *strdup_trim(const char *s);
 static bool starts_with(const char *s, const char *prefix);
 static bool parse_var_ref(const char *str, char **var_name, int *index, int *indices, int *num_indices);
 int assign_value(const char *var_ref, const char *expr);
+int assign_value_raw(const char *var_ref, const char *expr);  /* v162 HIGH-1 */
 
 /* v161 MEDIUM-3: line-start tracking for print-zone columns */
 static long g_line_start = 0;
@@ -1168,6 +1169,11 @@ int gwsts_exec_statement(const char *text) {
                      * v161 HIGH-2: multi-dimensional via *_multi. */
                     char *tmp1 = NULL, *tmp2 = NULL;
                     if (arr1) {
+                        if (ni1 > 1) {
+                            extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                            if (!gwdata_find_variable(bn1))
+                                biptrg_ensure_array_nd(bn1, ni1);
+                        }
                         tmp1 = (ni1 > 1)
                             ? biptrg_get_array_string_multi(bn1, idx1)
                             : biptrg_get_array_string(bn1, idx1[0]);
@@ -1176,6 +1182,11 @@ int gwsts_exec_statement(const char *text) {
                         tmp1 = va->value.s.ptr ? va->value.s.ptr : "";
                     }
                     if (arr2) {
+                        if (ni2 > 1) {
+                            extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                            if (!gwdata_find_variable(bn2))
+                                biptrg_ensure_array_nd(bn2, ni2);
+                        }
                         tmp2 = (ni2 > 1)
                             ? biptrg_get_array_string_multi(bn2, idx2)
                             : biptrg_get_array_string(bn2, idx2[0]);
@@ -1183,6 +1194,12 @@ int gwsts_exec_statement(const char *text) {
                     } else {
                         tmp2 = vb->value.s.ptr ? vb->value.s.ptr : "";
                     }
+                    /* v162 MEDIUM-5: a get that set ERRBS (subscript
+                     * out of range) must abort BEFORE any write —
+                     * no partial swap data loss */
+                    if (gwdata_get_error() != 0) {
+                        result = ERROR;
+                    } else
                     /* write value2 → slot1, value1 → slot2 */
                     if (arr1) {
                         if (ni1 > 1) result = biptrg_set_array_string_multi(bn1, idx1, tmp2);
@@ -1209,6 +1226,11 @@ int gwsts_exec_statement(const char *text) {
                     /* numeric: v161 HIGH-1 — scalar ↔ array element OK */
                     float f1, f2;
                     if (arr1) {
+                        if (ni1 > 1) {
+                            extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                            if (!gwdata_find_variable(bn1))
+                                biptrg_ensure_array_nd(bn1, ni1);
+                        }
                         f1 = (ni1 > 1)
                             ? biptrg_get_array_element_multi(bn1, idx1)
                             : biptrg_get_array_element(bn1, idx1[0]);
@@ -1216,12 +1238,21 @@ int gwsts_exec_statement(const char *text) {
                         f1 = va->value.f;
                     }
                     if (arr2) {
+                        if (ni2 > 1) {
+                            extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                            if (!gwdata_find_variable(bn2))
+                                biptrg_ensure_array_nd(bn2, ni2);
+                        }
                         f2 = (ni2 > 1)
                             ? biptrg_get_array_element_multi(bn2, idx2)
                             : biptrg_get_array_element(bn2, idx2[0]);
                     } else {
                         f2 = vb->value.f;
                     }
+                    /* v162 MEDIUM-5: abort before write on get error */
+                    if (gwdata_get_error() != 0) {
+                        result = ERROR;
+                    } else
                     /* write f2 → slot1, f1 → slot2 */
                     if (arr1) {
                         if (ni1 > 1) result = biptrg_set_array_element_multi(bn1, idx1, f2);
@@ -2091,7 +2122,7 @@ delete_done:
                      * on error no newline is emitted (empty format
                      * must not print a stray blank line) */
                     if (gwdata_get_error() == 0) {
-                        if (trail == 0) printf("\n");
+                        if (trail == 0) { printf("\n"); gwsts_note_newline(); }
                         else if (trail == 2) {
                             /* current column = chars printed this line;
                              * approximate with the chunk-writer state is
@@ -2750,7 +2781,7 @@ delete_done:
                 char input_buf[256];
                 if (fgets(input_buf, sizeof(input_buf), stdin)) {
                     input_buf[strcspn(input_buf, "\n")] = '\0';
-                    assign_value(var_ref, input_buf);
+                    assign_value_raw(var_ref, input_buf);
                     result = SUCCESS;
                 }
                 gwram_free(var_ref);
@@ -2790,7 +2821,7 @@ delete_done:
                     char input_buf[256];
                     result = dskcom_line_input(filenum, input_buf, sizeof(input_buf));
                     if (result == SUCCESS) {
-                        assign_value(var_ref, input_buf);
+                        assign_value_raw(var_ref, input_buf);
                     }
                     gwram_free(var_ref);
                 }
@@ -2803,7 +2834,7 @@ delete_done:
                 char input_buf[256];
                 if (fgets(input_buf, sizeof(input_buf), stdin)) {
                     input_buf[strcspn(input_buf, "\n")] = '\0';
-                    assign_value(var_ref, input_buf);
+                    assign_value_raw(var_ref, input_buf);
                     result = SUCCESS;
                 }
                 gwram_free(var_ref);
@@ -2913,6 +2944,18 @@ static bool parse_var_ref(const char *str, char **var_name, int *index, int *ind
 }
 
 /* Common assignment function for both LET and direct assignment */
+/* v162 HIGH-1: raw-text assignment mode for INPUT/READ/LINE INPUT,
+ * whose value argument is literal text, not an expression. Strict
+ * mode (default) treats a non-string RHS as Type mismatch (13). */
+static bool g_assign_allow_raw = false;
+
+int assign_value_raw(const char *var_ref, const char *expr) {
+    g_assign_allow_raw = true;
+    int rc = assign_value(var_ref, expr);
+    g_assign_allow_raw = false;
+    return rc;
+}
+
 int assign_value(const char *var_ref, const char *expr) {
     if (!var_ref || !expr) return ERROR;
     
@@ -2936,34 +2979,59 @@ int assign_value(const char *var_ref, const char *expr) {
             
             if (is_string_array) {
                 /* v161 HIGH-2: multi-dimensional string arrays */
+                gwdata_clear_error();  /* v162: stale-error isolation */
                 char *str_val = gweval_eval_string(expr);
                 if (str_val) {
-                    if (num_indices > 1)
+                    if (num_indices > 1) {
+                        extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                        if (!gwdata_find_variable(base_name))
+                            biptrg_ensure_array_nd(base_name, num_indices);
                         result = biptrg_set_array_string_multi(base_name, indices, str_val);
+                    }
                     else
                         result = biptrg_set_array_string(base_name, indices[0], str_val);
-                } else {
-                    /* Fallback: treat raw expr as literal string (for DATA values without quotes) */
+                } else if (gwdata_get_error() != 0) {
+                    /* v162 MEDIUM-4: string function raised an error
+                     * (e.g. CHR$(256)) — keep the old element value */
+                    result = ERROR;
+                } else if (g_assign_allow_raw) {
+                    /* Raw text mode (INPUT/READ/LINE INPUT): literal */
                     size_t expr_len = strlen(expr);
                     char *heap_str = gwdata_alloc_string(expr_len + 1);
                     if (heap_str) {
                         strcpy(heap_str, expr);
-                        if (num_indices > 1)
+                        if (num_indices > 1) {
+                            extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                            if (!gwdata_find_variable(base_name))
+                                biptrg_ensure_array_nd(base_name, num_indices);
                             result = biptrg_set_array_string_multi(base_name, indices, heap_str);
+                        }
                         else
                             result = biptrg_set_array_string(base_name, indices[0], heap_str);
                     }
+                } else {
+                    /* v162 HIGH-1: non-string expression → Type mismatch */
+                    gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    result = ERROR;
                 }
             } else {
                 /* Numeric array: use multi or single interface */
+                gwdata_clear_error();  /* stale-error isolation (tests) */
                 float val = gweval_eval_numeric(expr);
-                DEBUG_PRINT("assign_value: calling biptrg_set_array_element_multi('%s', indices, %f)", base_name, val);
-                if (num_indices == 1) {
+                if (gwdata_get_error() != 0) {
+                    /* v162 MEDIUM-3: evaluation raised Overflow etc. —
+                     * do NOT write 0 into the element */
+                    result = ERROR;
+                } else if (num_indices == 1) {
                     result = biptrg_set_array_element(base_name, indices[0], val);
                 } else {
+                    /* v162 HIGH-2: auto-DIM per dimension (GW-BASIC
+                     * uses 10 per dimension for undeclared arrays) */
+                    extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                    if (!gwdata_find_variable(base_name))
+                        biptrg_ensure_array_nd(base_name, num_indices);
                     result = biptrg_set_array_element_multi(base_name, indices, val);
                 }
-                DEBUG_PRINT("assign_value: biptrg_set_array_element_multi returned %d", result);
             }
         } else {
             /* Simple variable assignment */
@@ -2977,6 +3045,7 @@ int assign_value(const char *var_ref, const char *expr) {
                  * L82-84), so self-referential assignment S$ = S$ + "X"
                  * read the CLEARED (NULL) value. Numeric path already
                  * evaluates first (same file, numeric branch). */
+                gwdata_clear_error();  /* v162: stale-error isolation */
                 char *str_val = gweval_eval_string(expr);
                 struct variable *v = gwdata_alloc_variable(base_name, VT_STRING);
                 if (v) {
@@ -2989,9 +3058,14 @@ int assign_value(const char *var_ref, const char *expr) {
                          * MID$(s,0)) — do NOT fall back to literal; the error
                          * propagates at statement level (v137 audit). */
                         result = ERROR;
+                    } else if (!g_assign_allow_raw) {
+                        /* v162 HIGH-1: numeric expression assigned to a
+                         * string variable → Type mismatch (13) */
+                        gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        result = ERROR;
                     } else {
-                        /* Not a recognized string expression — treat raw expr as literal string
-                           (for LINE INPUT etc. which provide unquoted raw text) */
+                        /* Raw text mode (INPUT/READ/LINE INPUT):
+                         * treat the argument as a literal string */
                         size_t expr_len = strlen(expr);
                         char *heap_str = gwdata_alloc_string(expr_len + 1);
                         if (heap_str) {
@@ -3004,7 +3078,7 @@ int assign_value(const char *var_ref, const char *expr) {
                 }
             } else {
                 /* Numeric variable (integer or float) */
-                /* Evaluate expression FIRST before potentially clearing the variable */
+                gwdata_clear_error();  /* stale-error isolation (tests) */
                 float val = gweval_eval_numeric(expr);
                 if (gwdata_get_error() != 0) {
                     /* v161 HIGH-3/LOW-3: evaluation raised Overflow
