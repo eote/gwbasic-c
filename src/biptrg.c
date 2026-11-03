@@ -34,12 +34,30 @@ struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
  * v161 HIGH-2 (v162): ndims-aware variant — GW-BASIC auto-DIMs an
  * undeclared array with 10 per DIMENSION (A(1,2) implies 2-D 0..10). */
 struct variable *biptrg_ensure_array(const char *name) {
-    return biptrg_ensure_array_nd(name, 1);
+    /* 1-D convenience: NO rank check (multi-dim arrays indexed via
+     * the _multi interfaces are legitimate; only the nd-aware call
+     * sites validate rank) */
+    struct variable *v = gwdata_find_variable(name);
+    if (v) return v;
+    var_type_t type = biptrg_infer_type_from_name(name);
+    if (biptrg_dim_array(name, 10, type) != SUCCESS) return NULL;
+    return gwdata_find_variable(name);
 }
 
 struct variable *biptrg_ensure_array_nd(const char *name, int ndims) {
     struct variable *v = gwdata_find_variable(name);
-    if (v) return v;
+    if (v) {
+        /* v163 HIGH-2: rank mismatch — an existing 1-D array indexed
+         * with 2+ subscripts is a Subscript out of range (ASM FCERRG) */
+        if (v->is_array) {
+            array_desc_t *d = (array_desc_t *)v->value.s.ptr;
+            if (d && d->magic == ARRAY_MAGIC && d->dimensions != ndims) {
+                extern uint16_t g_curlin;
+                gwdata_set_error(ERRBS, g_curlin, 0);
+            }
+        }
+        return v;
+    }
     var_type_t type = biptrg_infer_type_from_name(name);
     if (ndims <= 1) {
         if (biptrg_dim_array(name, 10, type) != SUCCESS) return NULL;

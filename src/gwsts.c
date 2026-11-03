@@ -2978,40 +2978,35 @@ int assign_value(const char *var_ref, const char *expr) {
             bool is_string_array = (name_len > 0 && base_name[name_len - 1] == '$');
             
             if (is_string_array) {
-                /* v161 HIGH-2: multi-dimensional string arrays */
-                gwdata_clear_error();  /* v162: stale-error isolation */
-                char *str_val = gweval_eval_string(expr);
-                if (str_val) {
+                /* v161 HIGH-2: multi-dimensional string arrays.
+                 * v163 HIGH-1: raw mode stores the literal directly
+                 * (never evaluates DATA/INPUT text as an expression). */
+                gwdata_clear_error();  /* stale-error isolation */
+                char *store_ptr = NULL;
+                char *heap_copy = NULL;
+                if (g_assign_allow_raw) {
+                    size_t expr_len = strlen(expr);
+                    heap_copy = gwdata_alloc_string(expr_len + 1);
+                    if (heap_copy) memcpy(heap_copy, expr, expr_len + 1);
+                    store_ptr = heap_copy;
+                } else {
+                    store_ptr = gweval_eval_string(expr);
+                    if (!store_ptr && gwdata_get_error() == 0) {
+                        /* v162 HIGH-1: non-string expression → 13 */
+                        gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    }
+                }
+                if (store_ptr) {
                     if (num_indices > 1) {
                         extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
                         if (!gwdata_find_variable(base_name))
                             biptrg_ensure_array_nd(base_name, num_indices);
-                        result = biptrg_set_array_string_multi(base_name, indices, str_val);
+                        result = biptrg_set_array_string_multi(base_name, indices, store_ptr);
                     }
                     else
-                        result = biptrg_set_array_string(base_name, indices[0], str_val);
-                } else if (gwdata_get_error() != 0) {
-                    /* v162 MEDIUM-4: string function raised an error
-                     * (e.g. CHR$(256)) — keep the old element value */
-                    result = ERROR;
-                } else if (g_assign_allow_raw) {
-                    /* Raw text mode (INPUT/READ/LINE INPUT): literal */
-                    size_t expr_len = strlen(expr);
-                    char *heap_str = gwdata_alloc_string(expr_len + 1);
-                    if (heap_str) {
-                        strcpy(heap_str, expr);
-                        if (num_indices > 1) {
-                            extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
-                            if (!gwdata_find_variable(base_name))
-                                biptrg_ensure_array_nd(base_name, num_indices);
-                            result = biptrg_set_array_string_multi(base_name, indices, heap_str);
-                        }
-                        else
-                            result = biptrg_set_array_string(base_name, indices[0], heap_str);
-                    }
+                        result = biptrg_set_array_string(base_name, indices[0], store_ptr);
                 } else {
-                    /* v162 HIGH-1: non-string expression → Type mismatch */
-                    gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                    /* eval error or TMERR — keep the old element value */
                     result = ERROR;
                 }
             } else {
@@ -3030,6 +3025,11 @@ int assign_value(const char *var_ref, const char *expr) {
                     extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
                     if (!gwdata_find_variable(base_name))
                         biptrg_ensure_array_nd(base_name, num_indices);
+                    else
+                        biptrg_ensure_array_nd(base_name, num_indices);  /* v163: rank check → ERRBS */
+                    if (gwdata_get_error() != 0) {
+                        result = ERROR;   /* rank mismatch — no write */
+                    } else
                     result = biptrg_set_array_element_multi(base_name, indices, val);
                 }
             }
@@ -3040,40 +3040,48 @@ int assign_value(const char *var_ref, const char *expr) {
             bool is_string_var = (name_len > 0 && base_name[name_len - 1] == '$');
             
             if (is_string_var) {
-                /* v138: evaluate RHS BEFORE alloc_variable — alloc on an
-                 * EXISTING string variable clears value.s.ptr (gwdata.c
-                 * L82-84), so self-referential assignment S$ = S$ + "X"
-                 * read the CLEARED (NULL) value. Numeric path already
-                 * evaluates first (same file, numeric branch). */
-                gwdata_clear_error();  /* v162: stale-error isolation */
-                char *str_val = gweval_eval_string(expr);
-                struct variable *v = gwdata_alloc_variable(base_name, VT_STRING);
-                if (v) {
+                /* v163 CRITICAL-1: decide the new value COMPLETELY
+                 * before gwdata_alloc_variable — alloc on an existing
+                 * string variable CLEARS value.s (gwdata.c L82-84), so
+                 * any failure after alloc would lose the old value
+                 * (v162 regression: A$="old" then A$=5 → LEN 0).
+                 * v163 HIGH-1: raw mode (INPUT/READ/LINE INPUT) never
+                 * evaluates the text as an expression — READ DATA A$
+                 * must store the literal "A$", not the variable's
+                 * value. */
+                gwdata_clear_error();  /* stale-error isolation */
+                result = SUCCESS;      /* reset: failures set ERROR below */
+                char *new_ptr = NULL;
+                int new_len = 0;
+                if (g_assign_allow_raw) {
+                    size_t expr_len = strlen(expr);
+                    new_ptr = gwdata_alloc_string(expr_len + 1);
+                    if (new_ptr) {
+                        memcpy(new_ptr, expr, expr_len + 1);
+                        new_len = (int)expr_len;
+                    }
+                } else {
+                    char *str_val = gweval_eval_string(expr);
                     if (str_val) {
-                        v->value.s.ptr = str_val;
-                        v->value.s.len = strlen(str_val);
-                        result = SUCCESS;
+                        new_ptr = str_val;   /* borrowed (eval contract) */
+                        new_len = (int)strlen(str_val);
                     } else if (gwdata_get_error() != 0) {
-                        /* String function raised FCERR/SNERR (e.g. CHR$(256),
-                         * MID$(s,0)) — do NOT fall back to literal; the error
-                         * propagates at statement level (v137 audit). */
-                        result = ERROR;
-                    } else if (!g_assign_allow_raw) {
-                        /* v162 HIGH-1: numeric expression assigned to a
-                         * string variable → Type mismatch (13) */
-                        gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        /* String function raised FCERR/SNERR (e.g.
+                         * CHR$(256)) — old value must survive */
                         result = ERROR;
                     } else {
-                        /* Raw text mode (INPUT/READ/LINE INPUT):
-                         * treat the argument as a literal string */
-                        size_t expr_len = strlen(expr);
-                        char *heap_str = gwdata_alloc_string(expr_len + 1);
-                        if (heap_str) {
-                            strcpy(heap_str, expr);
-                            v->value.s.ptr = heap_str;
-                            v->value.s.len = expr_len;
-                            result = SUCCESS;
-                        }
+                        /* v162 HIGH-1: non-string expression → Type
+                         * mismatch (13); old value must survive */
+                        gwdata_set_error(13, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        result = ERROR;
+                    }
+                }
+                if (result != ERROR && new_ptr) {
+                    struct variable *v = gwdata_alloc_variable(base_name, VT_STRING);
+                    if (v) {
+                        v->value.s.ptr = new_ptr;
+                        v->value.s.len = new_len;
+                        result = SUCCESS;
                     }
                 }
             } else {

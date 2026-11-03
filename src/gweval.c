@@ -937,6 +937,13 @@ static float parse_factor(parser_t *p) {
                         int_indices[i] = (int)indices[i];
                         if (int_indices[i] < 0) int_indices[i] = 0;
                     }
+                    /* v163 HIGH-2: reading an undeclared multi-dim
+                     * array auto-DIMs it per dimension (GW-BASIC 10
+                     * per dim) — otherwise ensure_array creates 1-D
+                     * and (1,1)/(1,2) alias */
+                    extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
+                    if (!gwdata_find_variable(name))
+                        biptrg_ensure_array_nd(name, num_indices);
                     return biptrg_get_array_element_multi(name, int_indices);
                 }
             }
