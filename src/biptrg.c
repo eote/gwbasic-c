@@ -103,6 +103,16 @@ int biptrg_dim_array(const char *name, int size, var_type_t type) {
         return ERROR;
     }
     
+    /* v164 HIGH-1: string array elements default to the EMPTY string
+     * (GW-BASIC semantics), not NULL */
+    if (type == VT_STRING) {
+        char **sdata = (char **)desc->data;
+        for (int i = 0; i <= size; i++) {
+            sdata[i] = gwram_alloc(1);
+            if (sdata[i]) sdata[i][0] = '\0';
+        }
+    }
+    
     /* Store descriptor in variable's string pointer (reuse for array) */
     v->value.s.ptr = (char *)desc;
     v->type = type;  /* Keep original type for identification */
@@ -155,6 +165,15 @@ int biptrg_dim_array_multi(const char *name, const int *dim_sizes, int dimension
         gwram_free(desc->dim_sizes);
         gwram_free(desc);
         return ERROR;
+    }
+    
+    /* v164 HIGH-1: string array elements default to EMPTY strings */
+    if (type == VT_STRING) {
+        char **sdata = (char **)desc->data;
+        for (int i = 0; i < total_size; i++) {
+            sdata[i] = gwram_alloc(1);
+            if (sdata[i]) sdata[i][0] = '\0';
+        }
     }
     
     /* Store descriptor in variable's string pointer (reuse for array) */

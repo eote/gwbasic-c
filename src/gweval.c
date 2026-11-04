@@ -315,7 +315,27 @@ static char *parse_string_expression(parser_t *p) {
         }
         
         /* Check for array reference: A$(5) or A$(1,2) */
-        if (parser_peek(p) == '(') {
+        /* v164: a name followed by '(' that IS a known function
+         * (rewound after a failed string-function match, e.g. the
+         * numeric LEN/INSTR/EOF/FRE family) is NOT an array read —
+         * treating it as one made the string-probe in callers
+         * spuriously succeed on a freshly created empty element. */
+        bool is_known_func_name =
+            strcasecmp_ascii(name, "LEN") == 0 ||
+            strcasecmp_ascii(name, "INSTR") == 0 ||
+            strcasecmp_ascii(name, "EOF") == 0 ||
+            strcasecmp_ascii(name, "FRE") == 0 ||
+            strcasecmp_ascii(name, "VAL") == 0 ||
+            strcasecmp_ascii(name, "ASC") == 0 ||
+            strcasecmp_ascii(name, "TAB") == 0 ||
+            strcasecmp_ascii(name, "SPC") == 0 ||
+            strcasecmp_ascii(name, "POINT") == 0 ||
+            strcasecmp_ascii(name, "RND") == 0 ||
+            strcasecmp_ascii(name, "LPOS") == 0 ||
+            strcasecmp_ascii(name, "CSRLIN") == 0 ||
+            strcasecmp_ascii(name, "PEEK") == 0 ||
+            strcasecmp_ascii(name, "USR") == 0;
+        if (parser_peek(p) == '(' && !is_known_func_name) {
             parser_get(p);  /* consume '(' */
             
             /* v161 HIGH-2: multi-dimensional string arrays */
@@ -336,10 +356,10 @@ static char *parse_string_expression(parser_t *p) {
             }
             if (snd_ok && snd_n > 0) {
                 if (snd_n > 1) {
-                    /* v162 HIGH-2: auto-DIM undeclared multi arrays */
+                    /* v162/v164 HIGH-2: auto-DIM + rank validation */
                     extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
-                    if (!gwdata_find_variable(name))
-                        biptrg_ensure_array_nd(name, snd_n);
+                    biptrg_ensure_array_nd(name, snd_n);
+                    if (gwdata_get_error() != 0) return NULL;
                     result = biptrg_get_array_string_multi(name, snd_indices);
                 }
                 else
@@ -351,8 +371,22 @@ static char *parse_string_expression(parser_t *p) {
             }
         }
         
-        /* Scalar string variable */
+        /* Scalar string variable.
+         * v164 HIGH-1: an UNDEFINED string variable is the empty
+         * string (GW-BASIC default) — not NULL (which callers
+         * interpreted as "not a string" → TMERR 13 on assignment,
+         * and printed as 0). */
         struct variable *v = gwdata_find_variable(name);
+        if (v && v->type == VT_STRING && !v->value.s.ptr) {
+            /* defined but never assigned → empty string */
+            char *empty = gwdata_alloc_string(1);
+            if (empty) { empty[0] = '\0'; result = empty; goto after_name; }
+        }
+        if (!v && name[0] != '\0' && name[strlen(name) - 1] == '$') {
+            /* undefined string variable → empty string */
+            char *empty = gwdata_alloc_string(1);
+            if (empty) { empty[0] = '\0'; result = empty; goto after_name; }
+        }
         if (v && v->type == VT_STRING && v->value.s.ptr) {
             if (v->is_field) {
                 /* Field variables may not be null-terminated - create a copy */
@@ -937,13 +971,12 @@ static float parse_factor(parser_t *p) {
                         int_indices[i] = (int)indices[i];
                         if (int_indices[i] < 0) int_indices[i] = 0;
                     }
-                    /* v163 HIGH-2: reading an undeclared multi-dim
-                     * array auto-DIMs it per dimension (GW-BASIC 10
-                     * per dim) — otherwise ensure_array creates 1-D
-                     * and (1,1)/(1,2) alias */
+                    /* v163/v164 HIGH-2: auto-DIM undeclared arrays
+                     * per dimension AND validate the rank of existing
+                     * arrays (ERRBS 9 on mismatch) */
                     extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
-                    if (!gwdata_find_variable(name))
-                        biptrg_ensure_array_nd(name, num_indices);
+                    biptrg_ensure_array_nd(name, num_indices);
+                    if (gwdata_get_error() != 0) return 0.0f;
                     return biptrg_get_array_element_multi(name, int_indices);
                 }
             }

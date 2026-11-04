@@ -2999,8 +2999,10 @@ int assign_value(const char *var_ref, const char *expr) {
                 if (store_ptr) {
                     if (num_indices > 1) {
                         extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
-                        if (!gwdata_find_variable(base_name))
-                            biptrg_ensure_array_nd(base_name, num_indices);
+                        biptrg_ensure_array_nd(base_name, num_indices);  /* v164: rank check too */
+                        if (gwdata_get_error() != 0) {
+                            result = ERROR;   /* rank mismatch — no write */
+                        } else
                         result = biptrg_set_array_string_multi(base_name, indices, store_ptr);
                     }
                     else

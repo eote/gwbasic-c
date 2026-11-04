@@ -100,6 +100,7 @@ TEST_SRCS = \
 	test_biprtu_out2.c \
 	test_assign_strict.c \
 	test_assign_strict2.c \
+	test_str_semantics.c \
 	../tests/test_gwmain_uaf.c
 
 TEST_OBJS = $(TEST_SRCS:.c=.o)
