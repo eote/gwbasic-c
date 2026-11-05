@@ -200,7 +200,6 @@ run_test() {
 # Tests that terminate with a legit GW-BASIC error (ON ERROR GOTO 0 etc.)
 TERMERROR_TESTS=(
     "test_onerr_off.bas"
-    "test_gwram.bas"
 )
 
 is_termerror() {

@@ -319,7 +319,15 @@ int biptrg_set_array_element(const char *name, int index, float val) {
         DEBUG_PRINT("biptrg_set_array_element: string array");
         return ERROR;  /* String arrays cannot be written as numeric */
     }
-    
+    /* v165 HIGH-2: single-subscript access to a multi-dimensional
+     * array is a Subscript out of range (GW-BASIC requires every
+     * dimension to be subscripted) — flat-index aliasing must not
+     * silently read/write M(0,1) via M(1). */
+    if (desc->dimensions != 1) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(ERRBS, g_curlin, 0);
+        return ERROR /* set */ ;
+    }
     DEBUG_PRINT("biptrg_set_array_element: desc->size=%d, desc->dimensions=%d", desc->size, desc->dimensions);
     
     /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
@@ -374,6 +382,15 @@ float biptrg_get_array_element(const char *name, int index) {
         DEBUG_PRINT("biptrg_get_array_element: string array");
         return 0.0f;  /* String arrays cannot be read as numeric */
     }
+    /* v165 HIGH-2: single-subscript access to a multi-dimensional
+     * array is a Subscript out of range (GW-BASIC requires every
+     * dimension to be subscripted) — flat-index aliasing must not
+     * silently read M(0,1) via M(1). */
+    if (desc->dimensions != 1) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(ERRBS, g_curlin, 0);
+        return 0.0f;
+    }
     if (!desc->data) {
         DEBUG_PRINT("biptrg_get_array_element: no data");
         return 0.0f;  /* Defensive check */
@@ -415,7 +432,15 @@ int biptrg_set_array_string(const char *name, int index, const char *str) {
     if (!desc) return ERROR;
     
     if (desc->type != VT_STRING) return ERROR;
-    
+    /* v165 HIGH-2: single-subscript access to a multi-dimensional
+     * array is a Subscript out of range (GW-BASIC requires every
+     * dimension to be subscripted) — flat-index aliasing must not
+     * silently read/write M(0,1) via M(1). */
+    if (desc->dimensions != 1) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(ERRBS, g_curlin, 0);
+        return ERROR;
+    }
     /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
     if (index < 0 || index >= desc->size) {
         extern uint16_t g_curlin;
@@ -492,7 +517,15 @@ char *biptrg_get_array_string(const char *name, int index) {
     if (!desc) return NULL;
     
     if (desc->type != VT_STRING) return NULL;
-    
+    /* v165 HIGH-2: single-subscript access to a multi-dimensional
+     * array is a Subscript out of range (GW-BASIC requires every
+     * dimension to be subscripted) — flat-index aliasing must not
+     * silently read/write M(0,1) via M(1). */
+    if (desc->dimensions != 1) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(ERRBS, g_curlin, 0);
+        return NULL;
+    }
     /* v141 MEDIUM-1: subscript out of range → ERRBS (ASM FCERRG) */
     if (index < 0 || index >= desc->size) {
         extern uint16_t g_curlin;
