@@ -87,12 +87,13 @@ static char *parse_string_expression(parser_t *p) {
             p->pos++;  /* consume closing quote */
         }
         buf[i] = '\0';
-        result = gwdata_alloc_string(strlen(buf) + 1);
-        if (result) strcpy(result, buf);
-        else {
-            /* String heap exhausted → OM error 14 (GW-BASIC). Prevents the
-             * silent numeric-fallback garbage print in PRINT (v137 audit). */
-            if (g_state) gwdata_set_error(14, g_state->current_line, 0);
+        /* v165 HIGH-1: literals are interned — a loop body re-parsing
+         * the same "" literal every iteration must not drain the heap */
+        result = gwdata_intern_literal(buf, strlen(buf));
+        if (!result) {
+            result = gwdata_alloc_string(strlen(buf) + 1);
+            if (result) strcpy(result, buf);
+            /* OOM → gwdata_alloc_string sets OM(7) itself (v165) */
         }
     }
     
@@ -377,15 +378,15 @@ static char *parse_string_expression(parser_t *p) {
          * interpreted as "not a string" → TMERR 13 on assignment,
          * and printed as 0). */
         struct variable *v = gwdata_find_variable(name);
-        if (v && v->type == VT_STRING && !v->value.s.ptr) {
-            /* defined but never assigned → empty string */
-            char *empty = gwdata_alloc_string(1);
-            if (empty) { empty[0] = '\0'; result = empty; goto after_name; }
-        }
-        if (!v && name[0] != '\0' && name[strlen(name) - 1] == '$') {
-            /* undefined string variable → empty string */
-            char *empty = gwdata_alloc_string(1);
-            if (empty) { empty[0] = '\0'; result = empty; goto after_name; }
+        if ((v && v->type == VT_STRING && !v->value.s.ptr) ||
+            (!v && name[0] != '\0' && name[strlen(name) - 1] == '$')) {
+            /* v165 HIGH-1: defined-but-unassigned or undefined string
+             * variable reads as the empty string. Static sentinel —
+             * do NOT allocate (a 4000-iteration `IF C$=""` loop
+             * drained the 16 KB string heap at 4 bytes/eval). */
+            static char g_empty_str[] = "";
+            result = g_empty_str;
+            goto after_name;
         }
         if (v && v->type == VT_STRING && v->value.s.ptr) {
             if (v->is_field) {

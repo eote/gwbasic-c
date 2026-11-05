@@ -38,6 +38,7 @@ void gwdata_init(void) {
             g_state->var_table[i] = NULL;
         }
         g_state->str_heap.used = 0;
+    gwdata_lit_cache_reset();  /* v165: literals die with the heap */
         g_state->prog_buf.used = 0;
         g_state->current_line = 0;
         g_state->in_direct_mode = true;
@@ -125,11 +126,42 @@ char *gwdata_alloc_string(size_t len) {
     len = (len + 1) & ~1;
     
     if (g_state->str_heap.used + len > STRING_HEAP_SIZE) {
+        /* v165 MEDIUM-3: OOM sets Out of memory (7), not silent NULL */
+        gwdata_set_error(7, g_state ? (uint16_t)g_state->current_line : 0, 0);
         return NULL;  /* Out of memory */
     }
     
     char *ptr = &g_state->str_heap.data[g_state->str_heap.used];
     g_state->str_heap.used += len;
+    return ptr;
+}
+
+/* v165 HIGH-1: literal interning — repeated string literals (loop
+ * bodies like IF C$="" re-parse the RHS every iteration) reuse the
+ * same heap allocation instead of draining the string heap. Only
+ * small literals are interned; the table is reset with the heap. */
+#define GW_LIT_INTERN_MAX 32
+#define GW_LIT_INTERN_LEN 64
+static struct {
+    char text[GW_LIT_INTERN_LEN];
+    char *ptr;
+} g_lit_cache[GW_LIT_INTERN_MAX];
+static int g_lit_count = 0;
+
+void gwdata_lit_cache_reset(void) { g_lit_count = 0; }
+
+char *gwdata_intern_literal(const char *text, size_t n) {
+    if (n >= GW_LIT_INTERN_LEN) return NULL;  /* too big — normal alloc */
+    for (int i = 0; i < g_lit_count; i++) {
+        if (strcmp(g_lit_cache[i].text, text) == 0) return g_lit_cache[i].ptr;
+    }
+    if (g_lit_count >= GW_LIT_INTERN_MAX) return NULL;
+    char *ptr = gwdata_alloc_string(n + 1);
+    if (!ptr) return NULL;
+    memcpy(ptr, text, n + 1);
+    strcpy(g_lit_cache[g_lit_count].text, text);
+    g_lit_cache[g_lit_count].ptr = ptr;
+    g_lit_count++;
     return ptr;
 }
 
@@ -142,6 +174,7 @@ void gwdata_free_string(char *s) {
 /* GWDATA module - ON ERROR / RESUME / ERROR support */
 
 void gwdata_set_error(int code, uint16_t line, int text_ptr) {
+
     if (!g_state) return;
     g_state->error_code = code;
     g_state->error_line = line;

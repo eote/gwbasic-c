@@ -83,3 +83,55 @@ void test_rank_assign_string(void) {
     TEST_ASSERT(s && strcmp(s, "z") == 0, "C$(1) preserved (no alias write)");
     TEST_PASS("rank assign string");
 }
+
+void test_scalar_index_2d_numeric(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    gwsts_exec_statement("DIM M(2,2)");
+    gwsts_exec_statement("M(1,1) = 5");
+    /* v165 HIGH-2: M(1) on a 2-D array is Subscript out of range */
+    TEST_ASSERT(gwsts_exec_statement("M(1) = 9") != 0, "M(1) errors");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 9, "ERRBS");
+    gwdata_clear_error();
+    TEST_ASSERT(gwsts_exec_statement("X = M(1)") != 0, "read M(1) errors");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 9, "ERRBS read");
+    gwdata_clear_error();
+    TEST_ASSERT_EQ_INT((int)biptrg_get_array_element_multi("M", (int[]){1,1}), 5,
+                       "M(1,1) preserved");
+    TEST_PASS("scalar index 2D numeric");
+}
+
+void test_scalar_index_2d_string(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    gwsts_exec_statement("DIM N$(2,2)");
+    gwsts_exec_statement("N$(1,1) = \"n\"");
+    TEST_ASSERT(gwsts_exec_statement("N$(1) = \"z\"") != 0, "N$(1) errors");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 9, "ERRBS");
+    gwdata_clear_error();
+    char *s = biptrg_get_array_string_multi("N$", (int[]){1,1});
+    TEST_ASSERT(s && strcmp(s, "n") == 0, "N$(1,1) preserved");
+    TEST_PASS("scalar index 2D string");
+}
+
+void test_empty_str_loop_heap(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v165 HIGH-1: repeated empty-string compares must not drain
+     * the string heap (4000 evals used to leak 16 KB) */
+    gwsts_exec_statement("F1 = FRE(0)");
+    struct variable *vf1 = gwdata_find_variable("F1");
+    TEST_ASSERT(vf1, "F1 set");
+    float f1 = vf1->value.f;
+    for (int i = 0; i < 8000; i++) {
+        TEST_ASSERT_EQ_INT(gwsts_exec_statement("IF C$=\"\" THEN N=N+1"), 0,
+                           "IF C$=\"\"");
+        gwdata_clear_error();
+    }
+    gwsts_exec_statement("F2 = FRE(0)");
+    struct variable *vf2 = gwdata_find_variable("F2");
+    TEST_ASSERT(vf2, "F2 set");
+    float f2 = vf2->value.f;
+    TEST_ASSERT(f1 - f2 < 16.0f, "heap stable (drop < 16 bytes)");
+    TEST_PASS("empty str loop heap stable");
+}

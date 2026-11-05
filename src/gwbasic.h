@@ -181,6 +181,8 @@ void gwdata_init(void);
 struct variable *gwdata_alloc_variable(const char *name, var_type_t type);
 struct variable *gwdata_find_variable(const char *name);
 char *gwdata_alloc_string(size_t len);
+char *gwdata_intern_literal(const char *text, size_t n);  /* v165 HIGH-1 */
+void gwdata_lit_cache_reset(void);
 void gwdata_free_string(char *s);
 struct variable *gwdata_alloc_array(const char *name, var_type_t type, int dim_count, const int *dims);
 char *gwdata_get_txttab(void);
