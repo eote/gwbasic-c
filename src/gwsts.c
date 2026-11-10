@@ -2414,7 +2414,15 @@ delete_done:
                                 char *rt = strdup_trim(rb);
                                 char *ls = lt ? gweval_eval_string(lt) : NULL;
                                 char *rs = rt ? gweval_eval_string(rt) : NULL;
-                                if (ls && rs && gwdata_get_error() == 0) {
+                                if ((!ls || !rs) && gwdata_get_error() != 0) {
+                                    /* v166 HIGH-2: eval failure with an
+                                     * active error (e.g. OM from a literal
+                                     * when the heap is full) must propagate —
+                                     * silently treating NULL as false changed
+                                     * program logic. */
+                                    cv = -3;
+                                }
+                                else if (ls && rs && gwdata_get_error() == 0) {
                                     int cmp = strcmp(ls, rs);
                                     if (strcmp(opf, "=") == 0) cv = (cmp == 0) ? -1 : 0;
                                     else if (strcmp(opf, "<>") == 0) cv = (cmp != 0) ? -1 : 0;
@@ -2426,6 +2434,12 @@ delete_done:
                                 if (lt) gwram_free(lt);
                                 if (rt) gwram_free(rt);
                             }
+                        }
+                        if (cv == -3) {
+                            /* v166 HIGH-2: hard error (OM) from string eval —
+                             * keep the error, fail the statement */
+                            use_atoms = false;
+                            break;
                         }
                         if (cv == -2) {
                             /* numeric atom (handles numeric comparisons and

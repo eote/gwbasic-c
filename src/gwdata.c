@@ -136,30 +136,47 @@ char *gwdata_alloc_string(size_t len) {
     return ptr;
 }
 
-/* v165 HIGH-1: literal interning — repeated string literals (loop
+/* v165/v166 HIGH-1: literal interning — repeated string literals (loop
  * bodies like IF C$="" re-parse the RHS every iteration) reuse the
- * same heap allocation instead of draining the string heap. Only
- * small literals are interned; the table is reset with the heap. */
-#define GW_LIT_INTERN_MAX 32
-#define GW_LIT_INTERN_LEN 64
-static struct {
-    char text[GW_LIT_INTERN_LEN];
+ * same heap allocation instead of draining the string heap.
+ * v166: growable table — NO length/count caps (a fixed 32x64 table
+ * still let >63-byte literals or the 33rd literal drain the heap).
+ * Table entries are malloc'd and freed on reset (heap rebuild). */
+typedef struct gw_lit_entry {
+    char *text;
     char *ptr;
-} g_lit_cache[GW_LIT_INTERN_MAX];
+} gw_lit_entry;
+static gw_lit_entry *g_lit_cache = NULL;
 static int g_lit_count = 0;
+static int g_lit_cap = 0;
 
-void gwdata_lit_cache_reset(void) { g_lit_count = 0; }
+void gwdata_lit_cache_reset(void) {
+    for (int i = 0; i < g_lit_count; i++) free(g_lit_cache[i].text);
+    free(g_lit_cache);
+    g_lit_cache = NULL;
+    g_lit_count = 0;
+    g_lit_cap = 0;
+}
 
 char *gwdata_intern_literal(const char *text, size_t n) {
-    if (n >= GW_LIT_INTERN_LEN) return NULL;  /* too big — normal alloc */
+    /* v166: no length cap — long literals intern too */
     for (int i = 0; i < g_lit_count; i++) {
         if (strcmp(g_lit_cache[i].text, text) == 0) return g_lit_cache[i].ptr;
     }
-    if (g_lit_count >= GW_LIT_INTERN_MAX) return NULL;
+    if (g_lit_count >= g_lit_cap) {
+        int new_cap = g_lit_cap ? g_lit_cap * 2 : 32;
+        gw_lit_entry *nc = (gw_lit_entry *)realloc(g_lit_cache,
+                                                   new_cap * sizeof(gw_lit_entry));
+        if (!nc) return NULL;  /* fall back to per-eval alloc */
+        g_lit_cache = nc;
+        g_lit_cap = new_cap;
+    }
     char *ptr = gwdata_alloc_string(n + 1);
     if (!ptr) return NULL;
     memcpy(ptr, text, n + 1);
-    strcpy(g_lit_cache[g_lit_count].text, text);
+    g_lit_cache[g_lit_count].text = (char *)malloc(n + 1);
+    if (!g_lit_cache[g_lit_count].text) return NULL;
+    memcpy(g_lit_cache[g_lit_count].text, text, n + 1);
     g_lit_cache[g_lit_count].ptr = ptr;
     g_lit_count++;
     return ptr;

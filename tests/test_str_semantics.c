@@ -123,15 +123,64 @@ void test_empty_str_loop_heap(void) {
     struct variable *vf1 = gwdata_find_variable("F1");
     TEST_ASSERT(vf1, "F1 set");
     float f1 = vf1->value.f;
+    int loop_fail = 0;
     for (int i = 0; i < 8000; i++) {
-        TEST_ASSERT_EQ_INT(gwsts_exec_statement("IF C$=\"\" THEN N=N+1"), 0,
-                           "IF C$=\"\"");
+        if (gwsts_exec_statement("IF C$=\"\" THEN N=N+1") != 0) loop_fail++;
         gwdata_clear_error();
     }
+    TEST_ASSERT_EQ_INT(loop_fail, 0, "all 8000 IF evals succeed");
     gwsts_exec_statement("F2 = FRE(0)");
     struct variable *vf2 = gwdata_find_variable("F2");
     TEST_ASSERT(vf2, "F2 set");
     float f2 = vf2->value.f;
     TEST_ASSERT(f1 - f2 < 16.0f, "heap stable (drop < 16 bytes)");
     TEST_PASS("empty str loop heap stable");
+}
+
+void test_long_literal_loop_heap(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v166 HIGH-1: >63-byte literals must intern too (no length cap) */
+    gwsts_exec_statement("F1 = FRE(0)");
+    struct variable *vf1 = gwdata_find_variable("F1");
+    TEST_ASSERT(vf1, "F1 set");
+    float f1 = vf1->value.f;
+    const char *longlit = "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+                          "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL";
+    char stmt[256];
+    int loop_fail = 0;
+    for (int i = 0; i < 500; i++) {
+        snprintf(stmt, sizeof(stmt), "IF C$=\"%s\" THEN N=N+1", longlit);
+        if (gwsts_exec_statement(stmt) != 0) loop_fail++;
+        gwdata_clear_error();
+    }
+    TEST_ASSERT_EQ_INT(loop_fail, 0, "500 long-literal evals succeed");
+    gwsts_exec_statement("F2 = FRE(0)");
+    struct variable *vf2 = gwdata_find_variable("F2");
+    TEST_ASSERT(vf2, "F2 set");
+    float drop = vf1->value.f - vf2->value.f;
+    TEST_ASSERT(drop < 200.0f, "long literal heap stable (<200 drop)");
+    TEST_PASS("long literal loop heap stable");
+}
+
+void test_many_distinct_literals(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v166 HIGH-1: >32 distinct literals must all intern (growable) */
+    gwsts_exec_statement("F1 = FRE(0)");
+    struct variable *vf1 = gwdata_find_variable("F1");
+    float f1 = vf1 ? vf1->value.f : 0.0f;
+    (void)f1;
+    char stmt[128];
+    for (int i = 0; i < 40; i++) {
+        snprintf(stmt, sizeof(stmt), "IF C$=\"STR%02d\" THEN N=N+1", i);
+        gwsts_exec_statement(stmt);
+        gwdata_clear_error();
+    }
+    gwsts_exec_statement("F2 = FRE(0)");
+    struct variable *vf2 = gwdata_find_variable("F2");
+    TEST_ASSERT(vf2, "F2 set");
+    float drop = f1 - vf2->value.f;
+    TEST_ASSERT(drop < 600.0f, "40 distinct literals interned (<600 drop)");
+    TEST_PASS("many distinct literals interned");
 }
