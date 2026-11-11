@@ -1,68 +1,39 @@
-# GW-BASIC C Port - Code Review v166
+# GW-BASIC C Port - Code Review v167
 
-**日期**: 2026-11-07
-**审查范围**: `d16b294` → `898b864`（修复轮 `03f6212` + 补遗 `898b864`：v165 的 2 HIGH + 3 条单测）
-**测试状态**: 单元断言 **11488/11488 通过**（名义 +8011，其中 8000 来自单条循环测试）| 编译警告 **0** | 已登记 .bas **86/86 一致** | 定义/注册 **938 = 938**（0 孤儿）
-**修复轮结论**: v165 的两项 HIGH 已实测闭环——空串读取/赋值 8000 次 `FRE` 仅下降 2 字节（静态 sentinel），2D 数组单下标读/写在四个入口均 ERR=9 且元素不变，1D 访问正常；`gwdata_alloc_string` OOM 现在会设 OM(7)，赋值路径可被 ON ERROR 捕获。但**字面量 intern 只覆盖 ≤63 字节且最多 32 项**，80 字节字面量循环 500 次仍耗尽 16318 字节；且 IF 比较中的 OOM 被静默吞掉（N 停在 401、无 ERR）。
-**工作区状态**: 本次仅更新 `CODE_REVIEW.md`；`progress.md` 为审查前既有修改；未跟踪 `.reposman`、`GW-BASIC-READONLY-SOURCE`、`QWEN_SETUP.md`、`REVIEWER.md`、`tests/mini_u2.c`
-**总体评分**: **B-（暂不合并）** — 本轮 0 CRITICAL；3 HIGH（长字面量堆耗尽 + IF 中 OOM 静默 + 既有类型后缀）
+**日期**: 2026-11-11
+**审查范围**: `898b864` → `ef7b6ca`（修复轮 `328c568`：v166 的 2 HIGH + M1）
+**测试状态**: 断言 **3495**（**3494 通过 / 1 失败**）| 测试函数 **940 = 940** | 编译警告 **1** | 已登记 .bas **86/86 通过**
+**失败用例**: `tests/test_biprtu_out.c:95` — string array swapped（期望 `twoone`）
+**总体评分**: **D（阻断合并）** — 2 CRITICAL（SWAP use-after-free、CLEAR/RUN 后 intern 悬空）+ 2 HIGH（IF OOM 仍静默、既有类型后缀）
 
 ---
 
 ## 一、概述
 
-修复轮 `03f6212` + `898b864`（6 文件，+113/-20 与 +36/-4）处理 v165 清单：
+`328c568`（4 文件，+100/-16）：字面量 intern 改为可增长表（去掉 32×64 上限）、IF 字符串比较增加 `cv=-3` OOM 传播、循环测试不再逐次断言、新增“长字面量 500 次/40 个不同字面量”2 条测试。
 
-| 文件 | 变更 |
+### 验证结果
+
+| 项 | 结果 |
+|----|------|
+| 构建 | ⚠️ 默认 `/myplace`/`/mnt/d` argv0 使 gcc 找不到 `cc1`；用 `CC=D:/myplace/program/mingw64/bin/gcc.exe` 构建成功 |
+| 单测 | ❌ **3494/3495**，唯一失败 `test_biprtu_out.c:95` 字符串数组 SWAP |
+| 警告 | ❌ **1**：`tests/test_str_semantics.c:147` `f1` 未使用（零警告门禁破坏） |
+| 断言计数 | ✅ 从 11488 回落到 **3495**（循环内断言已移除） |
+| 长字面量/40 字面量单测 | ✅ 均通过 |
+| 86 .bas | ✅ **86/86** |
+| 手工 SWAP 字符串数组 | ❌ `[two][<二进制垃圾>]`（实测） |
+| 手工 CLEAR 后重复字面量 | ❌ 第二次 `PRINT "LIT"` 输出 `Z` |
+| 手工 IF 内 OOM | ❌ 输出 `DONE`，无 `ERR=7` |
+
+### v166 问题闭环
+
+| v166 | 状态 |
 |------|------|
-| `src/gweval.c` | +31/-?：空串返回静态 sentinel（不分配）；字符串字面量 `gwdata_intern_literal()` |
-| `src/gwdata.c` | +33：字面量缓存（32×64）、`gwdata_lit_cache_reset()`、OOM 设 OM(7) |
-| `src/biptrg.c` | +39：1D get/set 四入口检查 `desc->dimensions != 1` → ERRBS(9)（补遗） |
-| `tests/test_str_semantics.c` | +52：单下标 2D 数值/字符串、空串循环堆稳定（3 条） |
-| `tests/bas/test_gwram.bas/.expected` | `RESUME 900` 防 OM 恢复死循环；FRE 期望按新真值重写 |
-| `run_bas_tests.sh` | `test_gwram.bas` 移出 TERMERROR（OM 现被 ON ERROR 捕获，rc=0） |
-
-### 验证结果（独立执行）
-
-| 验证项 | 结果 |
-|--------|------|
-| 干净重建 + 单测 | ✅ **11488/11488**，0 失败，0 警告 |
-| 定义/注册 | ✅ **938 = 938**，0 孤儿 |
-| 已登记 .bas | ✅ **86/86** |
-| 空串读取 8000 次 | ✅ `FRE` DROP=2，N=8000 |
-| 空串赋值 4000 次（`A$=""`） | ✅ `FRE` DROP=2 |
-| 单下标 2D 数值读/写 | ✅ `M(1)`/`M(1)=9` → ERR=9，M(0,1)/M(1,1) 不变 |
-| 单下标 2D 字符串读/写 | ✅ `N$(1)`/`N$(1)="z"` → ERR=9，元素不变 |
-| 1D 数组正常访问 | ✅ `A(1)=7`、`B$(1)="q"` |
-| 长字面量（80 字节）500 次 | ❌ `FRE` DROP=**16318**（16KB 堆耗尽） |
-| 长字面量 IF 600 次 | ❌ `N= 401`，无 ERR（静默停止匹配） |
-| 长字面量赋值 1000 次 | ⚠️ ERR=7 反复触发（OM 可捕获，但无法继续） |
-| 10k 字符串数组 | ✅ `DIM A$(10000)` 正常 |
-| 类型后缀 / ERL | ❌ `A#`→1.23457、`A%`→40000、`ERL=0` |
-
-### v165 问题闭环表
-
-| v165 编号 | 状态 | 说明 |
-|-----------|------|------|
-| H1 空串每次读取分配 | ✅ | 静态 sentinel；8000 次 DROP=2 |
-| H2 单下标 2D 绕过 rank | ✅ | 四入口 `dimensions != 1` → ERR9；1D 正常 |
-| H3 数值类型后缀 | ❌ | 未处理（既有） |
-| M1 控制台打印区 | ❌ | 仍 `isatty` fallback |
-| M2 测试覆盖 | ⚠️ | +3 条；未覆盖长字面量/32 项缓存/IF OOM/控制台 |
-| M3 OOM 设 OM(7) | ⚠️ | 赋值路径 ✅；IF 比较中仍静默 |
-| M4 错误优先级 | ❌ | `A$=1/0` 仍 13 |
-
-### 正面确认
-
-| 功能 | 结果 |
-|------|------|
-| 空串读取/赋值堆稳定 | ✅ DROP=2（原 4 字节/次） |
-| 单下标 2D 秩校验 | ✅ 数值/字符串读/写均 ERR=9 |
-| 1D 数组/字符串数组访问 | ✅ 正常，无误报 |
-| 字符串字面量 intern（≤63 字节） | ✅ 常见短字面量不增长 |
-| OOM 设 OM(7) | ✅ 赋值路径可被 ON ERROR 捕获 |
-| gwram 测试移出 TERMERROR | ✅ 86/86，ERR=7 路径可测 |
-| 10k 字符串数组 | ✅ |
+| H1 长字面量/32 项上限 | ✅ 可增长表；2 条测试通过 |
+| H2 IF 中 OOM 静默 | ❌ **仍静默**（实测 `DONE`、无 ERR） |
+| M1 断言膨胀 | ✅ 3495 |
+| 新问题 | ❌ SWAP UAF（测试失败）、CLEAR/RUN 缓存悬空 |
 
 ---
 
@@ -70,201 +41,154 @@
 
 ### 🟥 CRITICAL
 
-无。
+| # | 描述 | 文件 | 行号 |
+|---|------|------|------|
+| 1 | **字符串数组 SWAP 的 use-after-free（唯一失败单测）** | `src/gwsts.c` / `src/biptrg.c` | 1209-1227 / 455 |
+| 2 | **CLEAR/RUN/NEW 重置字符串堆但不重置字面量缓存，intern 指针悬空** | `src/bimisc.c` | 69、117、149 |
 
----
+**CRITICAL-1 详情:** SWAP 先取两个元素指针，再写回：
+
+```c
+tmp1 = biptrg_get_array_string(bn1, idx1[0]);   /* 指向 data1 */
+tmp2 = biptrg_get_array_string(bn2, idx2[0]);   /* 指向 data2 */
+result = biptrg_set_array_string(bn1, idx1[0], tmp2); /* free(data1)! tmp1 悬空 */
+result = biptrg_set_array_string(bn2, idx2[0], tmp1); /* 复制已释放内存 */
+```
+
+`biptrg_set_array_string` 在 `biptrg.c:455` `gwram_free(data[index])`。本轮 heap 布局变化后分配器复用 `data1` 块，第二次 set 从已释放内存复制：
+
+```basic
+10 DIM A$(2)
+20 A$(1)="one"
+30 A$(2)="two"
+40 SWAP A$(1),A$(2)
+50 PRINT "[";A$(1);"][";A$(2);"]"
+```
+
+实测：`[two][\xE0\x92\x57\xBE\x06\x02]`（第二元素为二进制垃圾）；单测断言 `twoone` 失败。该缺陷自 v164 数组字符串 SWAP 起存在，此前靠分配器“不立刻复用”偶然通过。
+
+**修复**: 写入前把 tmp1/tmp2 复制到独立缓冲，或直接交换两个 `char*` 槽并管理所有权；禁止第二次 set 引用第一次 set 已释放的指针。
+
+**CRITICAL-2 详情:** intern 表项 `ptr` 指向 `str_heap.data`，但 `bimisc_new()` / `bimisc_clear_with_args()` / `bimisc_run_setup()` 只执行 `str_heap.used = 0`，未调用 `gwdata_lit_cache_reset()`（仅 `gwdata_init` 调用）：
+
+```basic
+10 PRINT "LIT"
+20 CLEAR
+30 A$=STRING$(100,"Z")
+40 PRINT "LIT"
+```
+
+实测：第二次输出为 `Z`（缓存 ptr 指向已被 A$ 覆盖的堆区），而不是 `LIT`。`RUN`、`NEW` 同样可触发；属字面量常量被改写的数据损坏。
+
+**修复**: 所有 `str_heap.used=0` 处统一调用 `gwdata_lit_cache_reset()`（或封装 `gwdata_reset_string_heap()`）；补 CLEAR/RUN 后重复字面量测试。
 
 ### 🟧 HIGH
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | **字面量 intern 仅 ≤63 字节/32 项：长字面量循环仍耗尽 16KB 堆** | `src/gwdata.c` / `src/gweval.c` | 143-158 / 88-96 |
-| 2 | **IF 比较中的 OOM 被静默：堆满后比较结果错误且无 ERR** | `src/gweval.c` / `src/gwdata.c` | 88-96 / 127 |
-| 3 | 数值类型后缀未实现（既有）：`#` 为 single、`%` 无整数溢出 | `src/gwsts.c` | 3099 |
+| 1 | **IF 字符串比较的 OOM 仍静默：v167 `cv=-3` 修复未生效** | `src/gwsts.c` | 2414-2440 |
+| 2 | 数值类型后缀未实现（既有）：`#` 为 single、`%` 无整数溢出 | `src/gwsts.c` | 3099 |
 
-**HIGH-1 详情:** `gwdata_intern_literal()` 只缓存长度 `< 64` 且总数 `< 32` 的字面量：
-
-```c
-#define GW_LIT_INTERN_MAX 32
-#define GW_LIT_INTERN_LEN 64
-if (n >= GW_LIT_INTERN_LEN) return NULL;  /* too big — normal alloc */
-if (g_lit_count >= GW_LIT_INTERN_MAX) return NULL;
-```
-
-超限字面量回落到“每次求值都 `gwdata_alloc_string`”。80 字节字面量循环：
+**HIGH-1 详情:** 将字符串堆填满后执行首次出现的新字面量比较：
 
 ```basic
-10 F1=FRE(0)
-20 FOR I=1 TO 500
-30 IF C$="LLLL…（80 字节）" THEN N=N+1
-40 NEXT
-50 F2=FRE(0)
-60 PRINT "DROP=";F1-F2
+10 ON ERROR GOTO 2000
+20 S$=""
+30 FOR I=1 TO 10000
+40 S$=S$+STRING$(100,"A")
+50 NEXT
+500 IF C$="BRANDNEWLITERAL" THEN PRINT "MATCH"
+510 PRINT "DONE"
+2000 R=R+1
+2010 IF R=1 THEN RESUME 500
+2020 PRINT ERR
 ```
 
-实际：`DROP= 16318` —— 500×~82 字节直接耗尽 16KB。更长的循环（600 次）中 `N= 401` 后不再增长（见 HIGH-2）。同理，程序若含 >32 个不同字面量，后续字面量在循环中仍会持续分配。
+实测输出 `DONE`，无 `ERR=7`；说明 `cv=-3` 分支后的回退路径仍把条件当 false 或清除了错误。需继续定位 IF 条件求值回退，并补该场景测试（应 ERR=7，而非 DONE）。
 
-**影响:** 合法程序只要在循环中使用 >63 字节的字符串字面量（长提示、长分隔线、长比较键）或累计 >32 个不同字面量，就会重新出现字符串堆耗尽。**修复建议:** 字面量 intern 不应有长度/数量上限（用可增长的哈希表）；或按语句预扫描一次全部字面量并在 RUN 时驻留。长度为 0 的空串已由静态 sentinel 解决，但非空长字面量仍漏。
-
-**HIGH-2 详情:** `gwdata_alloc_string()` 现在会设 OM(7)（`gwdata.c:127`），但对 `IF C$="<80字节>"` 这类比较，堆满后：
-
-- `parse_string_expression` 分配失败返回 NULL；
-- IF 把 NULL 比较当作 false/继续；
-- 错误 7 未传播到 RUN 循环，下一语句开头又被清除。
-
-实测 600 次循环：`N= 401`，无 `ERR=7` 输出（同循环改为 `A$="<80字节>"` 赋值时，ERR=7 能触发）。这会**静默改变程序逻辑**（比较不再匹配），比直接报 OM 更危险。建议：表达式求值返回 NULL 且 `gwdata_get_error()!=0` 时，IF/PRINT/赋值统一中止并上报；不要在语句执行前无条件 `clear_error`。
-
-**HIGH-3:** 沿用 v160 H4：`A#=1.23456789012345#` → ` 1.23457`；`A%=40000` → `40000`。`assign_value` 数值统一 `alloc_variable(..., VT_SINGLE)`（`gwsts.c:3099`）。
-
----
+**HIGH-2:** `A#=1.23456789012345#` → ` 1.23457`；`A%=40000` → `40000`；`ERL` 仍恒 0（`ERR=11, ERL=0`）。
 
 ### 🟨 MEDIUM
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | 单条测试把 8000 次循环断言计入总数，断言数虚增到 11488 | `tests/test_str_semantics.c` | 126-127 |
-| 2 | 测试未覆盖：长字面量/32 项缓存、IF 中 OOM、控制台打印区 | `tests/test_str_semantics.c` | 117-140 |
-| 3 | 打印区仍只对非 tty 生效；真实控制台走旧 fallback | `src/gwsts.c` | 2138 |
-| 4 | 严格赋值错误优先级：`A$=1/0` → 13（可能应先 11）；`A$=1E+39` → 13（可能 6） | `src/gwsts.c` | 3049-3073 |
+| 1 | 零警告门禁破坏：`float f1` 未使用 | `tests/test_str_semantics.c` | 147 |
+| 2 | 测试缺口：无 CLEAR/RUN 字面量、无 IF OOM 传播；40 字面量测试未断言 `vf1` | `tests/` | — |
+| 3 | 控制台打印区仍走 `isatty` fallback | `src/gwsts.c` | 2138 |
+| 4 | intern 的 `text` malloc 失败发生在 `gwdata_alloc_string` 之后，泄漏 heap 指针且无缓存项 | `src/gwdata.c` | 153-170 |
 
-**MEDIUM-1:** `test_empty_str_loop_heap` 在 8000 次循环内每次 `TEST_ASSERT_EQ_INT(gwsts_exec_statement(...), 0, ...)`，导致 `g_tests_run` 增加 8000，总计从 3477 跳到 **11488**。这既扭曲指标，也会在失败时打印 8000 条相同信息、拖慢套件。应在循环内只用普通变量记录 rc，循环后一次性断言（并断言 FRE 差值）。
-
-**MEDIUM-2:** 本轮新增 3 条测试覆盖了单下标 2D（数值/字符串）与空串读取循环，质量好；但未覆盖：
-
-- >63 字节字面量循环（HIGH-1 实测 500 次耗尽）；
-- 32 个以上不同字面量（缓存溢出）；
-- IF 比较中的 OOM 传播（HIGH-2，N 停在 401）；
-- 控制台打印区（仍仅重定向）。
-
-**MEDIUM-3:** `if (!isatty(fileno(stdout)))` 之外的真实控制台仍用 `biprtu_last_output_columns()`；行中尾逗号在控制台仍错位。
-
-**MEDIUM-4:** `A$=1/0` / `A$=1E+39` 仍返回 13；若 GW-BASIC 先求值再类型检查，应分别为 11/6。建议真机/ASM 核对。
-
----
+**MEDIUM-2:** `test_many_distinct_literals` 中 `f1 = vf1 ? ... : 0.0f`，若 `F1` 未建立则 `drop` 为负、断言恒过；`test_long_literal_loop_heap` 未使用 `f1`。IF OOM 的 `cv=-3` 分支无测试，实测仍静默。
 
 ### 🟩 LOW
 
-| # | 描述 | 文件 | 行号 |
-|---|------|------|------|
-| 1 | 字面量缓存 32×64 为固定静态表，缓存满即退化为每轮分配 | `src/gwdata.c` | 143-148 |
-| 2 | `g_assign_allow_raw` 全局布尔，非可重入/无线程安全 | `src/gwsts.c` | 2950-2956 |
-| 3 | `g_line_start` 未跟踪 CLS/LOCATE/INPUT 提示 | `src/gwsts.c` | 32-36 |
-| 4 | `parse_var_ref` >8 下标静默截断 | `src/gwsts.c` | 2905 |
-| 5 | `biptrg_set_array_string_multi` 先 free 后 alloc，OOM 时 dangling | `src/biptrg.c` | 407-408 |
-| 6 | 字符串数组每元素单独 `gwram_alloc(1)`；`D` 指数按 single | `src/biptrg.c` / `src/gweval.c` | DIM 循环 / 455 |
-
-### 观察项
-
-1. `test_gwram.expected` 的 FRE 初始值 16342（原 16330 等）随内存布局变化；FRE 具体数值依赖实现，但应以“长循环不持续下降”为约束。
-2. `gwdata_intern_literal` 用 `strcmp` 匹配文本，未使用长度；同文本不同位置共享指针，语义正确。
-3. `gwdata_lit_cache_reset()` 只在 `gwdata_init()` 调用；CLEAR 走 gwdata_init，缓存与堆同步重置。
-4. `READ` 数值仍按表达式求值（`DATA 1+2` → 3）；是否符合 DATA 常量语义需核对。
-
-### 遗留问题
-
-| 编号 | 状态 |
-|------|------|
-| v158 MEDIUM-1：`ERL` 恒为 0 | ❌ 仍存在（`ERR=11, ERL=0`） |
-| v158 LOW-1/2：gate 单测未断言 error_line；teardown 残留 | ❌ 未处理 |
-| v157 obs-3..6 | ❌ 仍开放 |
-| v162/163/164/165：类型后缀 | ❌ 转入既有 HIGH-3 |
-| v162 M2：控制台打印区 | ❌ 仍开放 |
+| # | 描述 |
+|---|------|
+| 1 | intern 查找 O(n)、表项/文本 malloc 无上限（大程序性能/内存） |
+| 2 | `g_assign_allow_raw` 全局布尔，非可重入 |
+| 3 | `g_line_start` 未跟踪 CLS/LOCATE/INPUT |
+| 4 | `parse_var_ref` >8 下标静默截断 |
+| 5 | 字符串数组每元素单独 `gwram_alloc(1)`；`D` 指数按 single |
+| 6 | 环境：默认 `gcc` 经 `/myplace` 调用无法定位 `cc1`；需 `CC=D:/...` |
 
 ---
 
 ## 三、架构评估
 
-### 设计决策
-
 | 决策 | 评价 |
 |------|------|
-| 空串使用静态 sentinel | ✅ 正确；8000 次 DROP=2 |
-| 字符串字面量 intern | ⚠️ 方向正确，但 32×64 上限导致长/多字面量仍泄漏（HIGH-1） |
-| OOM 设 OM(7) | ✅ 赋值路径可捕获；❌ IF 比较未传播（HIGH-2） |
-| 1D get/set 四入口 rank 校验 | ✅ 单下标 2D 全覆盖；1D 无误报 |
-| gwram 移出 TERMERROR | ✅ OM 路径可测，86/86 |
-| 8000 次循环内断言 | ❌ 指标虚增、失败噪声（MEDIUM-1） |
+| intern 可增长表（无 32×64 上限） | ✅ 方向正确；2 条测试通过 |
+| IF OOM `cv=-3` 传播 | ❌ 实测仍静默（HIGH-1） |
+| 循环测试不逐次断言 | ✅ 计数回落 3495 |
+| SWAP 字符串数组“get 指针 → set 复制” | ❌ UAF（CRITICAL-1） |
+| 字符串堆重置分散在 bimisc | ❌ 与 intern 缓存生命周期脱节（CRITICAL-2） |
+| 新增测试 | ⚠️ +2，但有未使用变量/弱断言 |
 
-### 测试覆盖
-
-| 功能 | 覆盖情况 |
-|------|----------|
-| 空串读取长循环 | ✅ 单测（但断言膨胀） |
-| 空串赋值长循环 | ❌ 无单测（手工 DROP=2） |
-| 单下标 2D 数值读/写 | ✅ 单测 |
-| 单下标 2D 字符串读/写 | ✅ 单测 |
-| 1D 正常访问 | ✅ 手工/既有测试 |
-| >63 字节字面量循环 | ❌ 无测试（实测耗尽） |
-| >32 个不同字面量 | ❌ 无测试 |
-| IF 中 OOM 传播 | ❌ 无测试（实测静默） |
-| 控制台打印区 | ❌ 无测试 |
-| 全部 .bas | ✅ 86/86 |
-
-### 测试实现质量
-
-| 决策 | 评价 |
-|------|------|
-| 单下标 2D 数值/字符串测试 | ✅ 直接守护 HIGH-2 |
-| 空串循环 FRE 断言 | ✅ 方向正确；⚠️ 8000 次内断言膨胀 |
-| 长字面量/缓存边界 | ❌ 缺失，HIGH-1 漏网 |
-| IF OOM | ❌ 缺失，HIGH-2 漏网 |
-| gwram expected 重写 | ⚠️ FRE 值依赖实现；需以“无增长”约束补充 |
+**测试覆盖缺口**: CLEAR/RUN 后字面量、IF OOM 传播、SWAP 数组 ASAN；`.bas` 已 86/86。
 
 ---
 
 ## 四、改进建议
 
-### 短期（合并前）
-1. **HIGH-1**：字面量 intern 改为无长度/数量上限（可增长哈希表），或在 RUN 前预扫描并驻留全部字面量；补 80 字节字面量 500 次与 40 个不同字面量循环测试。
-2. **HIGH-2**：表达式求值返回 NULL 且 error!=0 时，IF/PRINT/赋值统一中止并上报；不要在 IF 前无条件 `clear_error`。补 `IF C$="<长串>"` 堆满场景（应 ERR=7）。
-3. **MEDIUM-1**：循环内不调用 TEST_ASSERT，仅记录 rc；循环后断言一次。
-4. **MEDIUM-3**：控制台统一输出列计数。
+### 短期（阻断合并）
+1. **CRITICAL-1**：SWAP 字符串数组先复制 tmp1/tmp2（或交换槽指针），补输出断言 + ASAN。
+2. **CRITICAL-2**：`bimisc_new/clear/run_setup` 统一 `gwdata_lit_cache_reset()`；补 CLEAR/RUN 重复字面量用例。
+3. **HIGH-1**：修复 IF 条件回退路径，确保 OOM 后整条 IF 失败并保留 ERR=7；补堆满 + 新字面量测试。
+4. 移除未使用 `f1`，恢复零警告。
 
 ### 中期
-5. 数值类型后缀（`%`/`#`/`!`）按 ASM 实现。
-6. 核对 `A$=1/0`（11 vs 13）与 `A$=1E+39`（6 vs 13）错误优先级。
-7. 字符串数组按块分配/共享空串；OOM 路径安全。
-8. 打印列跟踪覆盖 CLS/LOCATE/INPUT；`parse_var_ref` >8 维明确报错。
+5. 数值类型后缀按 ASM 实现。
+6. 控制台输出列统一计数。
+7. intern malloc 失败先分配 text 再占 heap，避免泄漏。
+8. 40 字面量测试断言 `vf1/vf2`，避免弱断言。
 
 ### 长期
-9. ASAN/UBSAN + fuzz（长字面量、32+ 字面量、OOM、单下标 2D）。
-10. CI：字面量/空串必须做“长循环 FRE 稳定”测试；数组访问覆盖正确秩/多下标/单下标三类。
+9. ASAN/UBSAN + fuzz（SWAP 数组、CLEAR/RUN、OOM、长字面量）。
+10. CI：零失败/零警告；FRE 稳定性与 .bas 纳入。
 
 ---
 
 ## 五、总结
 
-**总体评价**: 本轮把 v165 的两项 HIGH 真正修好了——空串读取/赋值 8000 次仅消耗 2 字节，单下标 2D 四个入口均 ERR=9 且 1D 不受影响；OOM 也开始设 OM(7)，gwram 测试因此可移出 TERMERROR。但字面量 intern 的 32×64 上限使长字面量（>63 字节）或第 33 个以后的字面量仍每次求值分配，500 次 80 字节字面量即耗尽 16KB；IF 比较中的 OOM 又被静默，比较结果悄悄失真。
+**总体评价**: intern 无上限与循环断言计数已修正，长字面量/40 字面量测试通过，86 .bas 全绿；但出现 **1 个失败单测**（字符串数组 SWAP 的 use-after-free，实测第二元素为二进制垃圾），并发现 **CLEAR/RUN/NEW 重置堆却不重置 intern 缓存**（实测 `LIT`→`Z`）的数据损坏路径；IF 内 OOM 的修复实测仍未生效。另有 1 个编译警告。
 
-**关键发现**: **0 CRITICAL / 3 HIGH（长字面量堆耗尽 + IF OOM 静默 + 既有类型后缀）/ 4 MEDIUM / 6 LOW**（另 v158 ERL 未修）。
-**建议**: 暂不合并；先把 intern 改为无上限并让 OOM 在 IF 中传播，再修正循环测试的断言计数。
+**关键发现**: **2 CRITICAL / 2 HIGH / 4 MEDIUM / 6 LOW**；测试 3494/3495，1 警告。
+**建议**: **阻断合并**。先修 SWAP UAF 与缓存生命周期，再修 IF OOM 传播，恢复测试全绿/零警告。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v165 | v166 | 变化 |
+| 指标 | v166 | v167 | 变化 |
 |------|------|------|------|
-| 单元断言通过 | 3477 | **11488** | +8011（其中 8000 为单条循环断言） |
-| 测试函数定义 / 注册 | 935 / 935 | **938 / 938** | +3 |
-| 孤儿数 | 0 | **0** | 保持 |
-| 编译警告 | 0 | **0** | 保持 |
-| 已登记 .bas | 86/86 | **86/86** | 保持 |
-| 空串读取 8000 次 | FRE -16000 | **FRE -2，N=8000** | ✅ 闭环 |
-| 空串赋值 4000 次 | 未测 | **FRE -2** | ✅ |
-| 单下标 2D 数值 | M(0,1) 错位 | **ERR=9，元素不变** | ✅ 闭环 |
-| 单下标 2D 字符串 | N$(0,1) 错位 | **ERR=9，元素不变** | ✅ 闭环 |
-| 1D 数组访问 | 正常 | **正常** | ✅ 无误报 |
-| 长字面量（80B）500 次 | 未测 | **FRE -16318** | ❌ 新 HIGH |
-| IF 中 OOM | 未测 | **N=401，无 ERR** | ❌ 新 HIGH |
-| OOM 设 OM(7) | 未设 | **赋值路径 ERR=7** | ✅ 部分 |
-| 10k 字符串数组 | OK | **OK** | ✅ |
-| 数值类型后缀 | 同左 | **同左** | ❌ 既有 |
-| `ERL` | 恒 0 | **恒 0** | 未修 |
-| 控制台打印区 | 未修 | **未修** | ❌ |
-| CRITICAL / HIGH | 0 / 3 | **0 / 3** | HIGH 组成变化 |
+| 断言 / 通过 | 11488/11488 | **3495 / 3494** | 计数修正；1 失败 |
+| 测试函数 | 938 | **940** | +2 |
+| 警告 | 0 | **1** | ❌ 零警告破坏 |
+| 86 .bas | 86/86 | **86/86** | 保持 |
+| 长字面量 intern | FRE -16318 | **单测通过** | ✅ |
+| IF OOM 传播 | 静默 | **仍静默（DONE）** | ❌ 未修复 |
+| SWAP 数组字符串 | 通过（侥幸） | **二进制垃圾，测试失败** | ❌ 新暴露 |
+| CLEAR 后字面量 | 未测 | **LIT→Z（缓存悬空）** | ❌ 新 CRITICAL |
+| 类型后缀/ERL | 未修 | **未修** | ❌ |
+| CRITICAL / HIGH | 0 / 3 | **2 / 2** | ❌ 阻断 |
 
-**注释**:
-- 独立验证：WSL 原生 `gcc.exe`/`mingw32-make.exe` 干净重建 → 11488 单测 → 86 个已登记 .bas 全量比对 → v165 全部 H/M 探针复跑 → 新增长字面量/32 项缓存/单下标 2D/OOM 传播/空串赋值探针。
-- 断言数从 3477 跳到 11488 是测试内 8000 次 `TEST_ASSERT` 所致，不代表新增 8000 个独立用例（MEDIUM-1）。
-- 全程未写脚本、未改 `src/`/`tests/`、未 commit；仅更新本报告，等待审批。
+**注释**: 单测与 86 .bas 均在磁盘恢复后重新执行；SWAP/CLEAR/IF-OOM 为独立进程手工探针。构建使用 `CC=D:/myplace/program/mingw64/bin/gcc.exe`（默认 `/mnt/d` argv0 找不到 cc1）。未改源码，仅更新本报告。
