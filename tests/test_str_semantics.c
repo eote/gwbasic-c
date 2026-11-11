@@ -184,3 +184,48 @@ void test_many_distinct_literals(void) {
     TEST_ASSERT(drop < 600.0f, "40 distinct literals interned (<600 drop)");
     TEST_PASS("many distinct literals interned");
 }
+
+void test_clear_resets_literal_cache(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    gwsts_exec_statement("PRINT \"LIT\"");   /* interns "LIT" */
+    printf("\n");
+    /* v167 CRITICAL-2: CLEAR wipes the heap — cached ptrs must die */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("CLEAR"), 0, "CLEAR");
+    gwsts_exec_statement("A$ = STRING$(100, \"Z\")");  /* overwrite heap start */
+    char *lit = gwdata_intern_literal("LIT", 3);
+    TEST_ASSERT(lit && strcmp(lit, "LIT") == 0, "interned literal re-alloc'd after CLEAR");
+    TEST_PASS("clear resets literal cache");
+}
+
+void test_if_oom_propagates(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v167 HIGH-1: IF with an OM-ing literal must fail loudly (ERR=7),
+     * not silently evaluate false */
+    /* fill the string heap: distinct LITERALS live in str_heap
+     * (string functions like STRING$ use gwram, NOT str_heap), so
+     * intern 200 distinct 100-byte literals ≈ 20 KB > 16 KB heap */
+    char stmt[256];
+    int err7 = 0;
+    for (int i = 0; i < 200; i++) {
+        snprintf(stmt, sizeof(stmt), "X$ = \"FILL%03d%s\"", i,
+                 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        gwsts_exec_statement(stmt);
+        if (gwdata_get_error() != 0) { err7 = 1; break; }
+    }
+    TEST_ASSERT_EQ_INT(err7, 1, "heap full (OM reached)");
+    gwdata_clear_error();
+    /* fresh literal (not interned yet) → alloc fails → OM.
+     * 200-byte literal: guaranteed to exceed any residual heap space
+     * (the failed S$ concat leaves < 16384 used but can leave > 18
+     * free — a short literal might still fit). */
+    /* ~100-byte fresh literal: the failed fill leaves < 108 bytes
+     * free, so this allocation must fail */
+    int rc = gwsts_exec_statement("IF C$=\"ZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZ\" THEN N=N+1");
+    TEST_ASSERT(rc != 0, "IF with OOM literal fails");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 7, "ERR=7 propagates");
+    gwdata_clear_error();
+    TEST_PASS("if oom propagates");
+}

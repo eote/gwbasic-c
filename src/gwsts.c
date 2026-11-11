@@ -1178,6 +1178,15 @@ int gwsts_exec_statement(const char *text) {
                             ? biptrg_get_array_string_multi(bn1, idx1)
                             : biptrg_get_array_string(bn1, idx1[0]);
                         if (!tmp1) tmp1 = "";
+                        /* v167 CRITICAL-1: copy immediately — the array
+                         * slot pointer is freed by the later
+                         * set_array_string (gwram bump reuse), turning
+                         * tmp1 into a dangling read (UAF). */
+                        {
+                            size_t t1len = strlen(tmp1);
+                            char *t1copy = (char *)gwram_alloc(t1len + 1);
+                            if (t1copy) { memcpy(t1copy, tmp1, t1len + 1); tmp1 = t1copy; }
+                        }
                     } else {
                         tmp1 = va->value.s.ptr ? va->value.s.ptr : "";
                     }
@@ -1191,6 +1200,12 @@ int gwsts_exec_statement(const char *text) {
                             ? biptrg_get_array_string_multi(bn2, idx2)
                             : biptrg_get_array_string(bn2, idx2[0]);
                         if (!tmp2) tmp2 = "";
+                        /* v167 CRITICAL-1: same defensive copy for tmp2 */
+                        {
+                            size_t t2len = strlen(tmp2);
+                            char *t2copy = (char *)gwram_alloc(t2len + 1);
+                            if (t2copy) { memcpy(t2copy, tmp2, t2len + 1); tmp2 = t2copy; }
+                        }
                     } else {
                         tmp2 = vb->value.s.ptr ? vb->value.s.ptr : "";
                     }
@@ -2376,6 +2391,7 @@ delete_done:
                 }
 
                 int then_taken = 0;
+                bool condition_hard_error = false;  /* v167 HIGH-1 */
                 bool use_atoms = split_ok && atom_count > 0;
                 if (use_atoms) {
                     /* eval each atom */
@@ -2473,15 +2489,29 @@ delete_done:
                         }
                     }
                 }
-                if (!use_atoms) {
-                    /* fallback: whole-condition numeric eval */
+                if (!use_atoms && gwdata_get_error() == 0) {
+                    /* fallback: whole-condition numeric eval.
+                     * v167 HIGH-1: when use_atoms bailed on a hard
+                     * error (cv=-3, e.g. OM while evaluating a literal),
+                     * the error is still active and must NOT be cleared
+                     * and re-evaluated — that turned OM into a silent
+                     * "condition false". */
                     gwdata_clear_error();
                     float cond_val = gweval_eval_numeric(cond_expr);
                     then_taken = (cond_val != 0.0f);
+                } else if (!use_atoms) {
+                    /* v167 HIGH-1: hard error (OM) — statement fails,
+                     * error stays set for ON ERROR / run loop */
+                    condition_hard_error = true;
+                    result = ERROR;
                 }
                 #undef GWSIFS_MAX_ATOMS
 
                 /* 4. THEN / ELSE dispatch (v138 MEDIUM-2) */
+                /* v167 HIGH-1: on a hard condition error (OM) the
+                 * statement has already failed (result=ERROR) — the
+                 * dispatch below must NOT overwrite it with SUCCESS */
+                if (!condition_hard_error) {
                 /* helper: pure-numeric THEN/ELSE target = line number jump
                  * (GW-BASIC: IF..THEN <line> is a GOTO) */
                 #define GWSIFS_IS_LINENUM(s_) (s_ != NULL && *s_ != '\0' && \
@@ -2501,6 +2531,7 @@ delete_done:
                 } else {
                     result = SUCCESS;
                 }
+                }  /* v167: end of "no hard error" guard */
                 #undef GWSIFS_IS_LINENUM
                 if (else_stmt) gwram_free(else_stmt);
                 gwram_free(cond_expr);

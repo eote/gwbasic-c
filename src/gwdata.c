@@ -171,12 +171,16 @@ char *gwdata_intern_literal(const char *text, size_t n) {
         g_lit_cache = nc;
         g_lit_cap = new_cap;
     }
+    /* v167 MEDIUM-4: allocate the table text FIRST — if it fails we
+     * return without having consumed any string-heap space (the old
+     * order leaked the heap allocation). */
+    char *key = (char *)malloc(n + 1);
+    if (!key) return NULL;
+    memcpy(key, text, n + 1);
     char *ptr = gwdata_alloc_string(n + 1);
-    if (!ptr) return NULL;
+    if (!ptr) { free(key); return NULL; }
     memcpy(ptr, text, n + 1);
-    g_lit_cache[g_lit_count].text = (char *)malloc(n + 1);
-    if (!g_lit_cache[g_lit_count].text) return NULL;
-    memcpy(g_lit_cache[g_lit_count].text, text, n + 1);
+    g_lit_cache[g_lit_count].text = key;
     g_lit_cache[g_lit_count].ptr = ptr;
     g_lit_count++;
     return ptr;

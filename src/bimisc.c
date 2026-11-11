@@ -67,6 +67,7 @@ void bimisc_new(void) {
     
     /* Reset string heap and program buffer */
     g_state->str_heap.used = 0;
+    gwdata_lit_cache_reset();  /* v167 CRITICAL-2: interned ptrs die with the heap */
     g_state->prog_buf.used = 0;
     
     /* Reset interpreter state */
@@ -115,6 +116,7 @@ void bimisc_clear_with_args(int stack_size, int max_mem) {
     
     /* Reset string heap */
     g_state->str_heap.used = 0;
+    gwdata_lit_cache_reset();  /* v167 CRITICAL-2: interned ptrs die with the heap */
     
     /* Reset RND sequence */
     math2_init();
@@ -147,6 +149,7 @@ void bimisc_run_setup(void) {
     
     /* Reset string heap */
     g_state->str_heap.used = 0;
+    gwdata_lit_cache_reset();  /* v167 CRITICAL-2: interned ptrs die with the heap */
     
     /* Close all files */
     dskcom_close_all();
