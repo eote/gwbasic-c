@@ -1168,6 +1168,7 @@ int gwsts_exec_statement(const char *text) {
                      * (ASM PTRGET); all four combinations supported.
                      * v161 HIGH-2: multi-dimensional via *_multi. */
                     char *tmp1 = NULL, *tmp2 = NULL;
+                    char *tmp1_copy = NULL, *tmp2_copy = NULL;  /* v168 M1 */
                     if (arr1) {
                         if (ni1 > 1) {
                             extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
@@ -1181,11 +1182,14 @@ int gwsts_exec_statement(const char *text) {
                         /* v167 CRITICAL-1: copy immediately — the array
                          * slot pointer is freed by the later
                          * set_array_string (gwram bump reuse), turning
-                         * tmp1 into a dangling read (UAF). */
+                         * tmp1 into a dangling read (UAF).
+                         * v168 MEDIUM-1: track the copy — freed after
+                         * both writes; if alloc fails we keep the raw
+                         * slot pointer (rare OOM edge, no free). */
                         {
                             size_t t1len = strlen(tmp1);
                             char *t1copy = (char *)gwram_alloc(t1len + 1);
-                            if (t1copy) { memcpy(t1copy, tmp1, t1len + 1); tmp1 = t1copy; }
+                            if (t1copy) { memcpy(t1copy, tmp1, t1len + 1); tmp1 = t1copy; tmp1_copy = t1copy; }
                         }
                     } else {
                         tmp1 = va->value.s.ptr ? va->value.s.ptr : "";
@@ -1204,7 +1208,7 @@ int gwsts_exec_statement(const char *text) {
                         {
                             size_t t2len = strlen(tmp2);
                             char *t2copy = (char *)gwram_alloc(t2len + 1);
-                            if (t2copy) { memcpy(t2copy, tmp2, t2len + 1); tmp2 = t2copy; }
+                            if (t2copy) { memcpy(t2copy, tmp2, t2len + 1); tmp2 = t2copy; tmp2_copy = t2copy; }
                         }
                     } else {
                         tmp2 = vb->value.s.ptr ? vb->value.s.ptr : "";
@@ -1236,6 +1240,10 @@ int gwsts_exec_statement(const char *text) {
                             memcpy(vb->value.s.ptr, tmp1, vb->value.s.len + 1);
                         }
                     }
+                    /* v168 MEDIUM-1: release the defensive copies
+                     * (the array slots now own their own copies) */
+                    if (tmp1_copy) gwram_free(tmp1_copy);
+                    if (tmp2_copy) gwram_free(tmp2_copy);
                     if (result != ERROR) result = SUCCESS;
                 } else {
                     /* numeric: v161 HIGH-1 — scalar ↔ array element OK */

@@ -158,7 +158,7 @@ void test_long_literal_loop_heap(void) {
     gwsts_exec_statement("F2 = FRE(0)");
     struct variable *vf2 = gwdata_find_variable("F2");
     TEST_ASSERT(vf2, "F2 set");
-    float drop = vf1->value.f - vf2->value.f;
+    float drop = f1 - vf2->value.f;
     TEST_ASSERT(drop < 200.0f, "long literal heap stable (<200 drop)");
     TEST_PASS("long literal loop heap stable");
 }
@@ -169,8 +169,8 @@ void test_many_distinct_literals(void) {
     /* v166 HIGH-1: >32 distinct literals must all intern (growable) */
     gwsts_exec_statement("F1 = FRE(0)");
     struct variable *vf1 = gwdata_find_variable("F1");
-    float f1 = vf1 ? vf1->value.f : 0.0f;
-    (void)f1;
+    TEST_ASSERT(vf1, "F1 set");   /* v168 M4: no silent negative drop */
+    float f1 = vf1->value.f;
     char stmt[128];
     for (int i = 0; i < 40; i++) {
         snprintf(stmt, sizeof(stmt), "IF C$=\"STR%02d\" THEN N=N+1", i);
@@ -228,4 +228,31 @@ void test_if_oom_propagates(void) {
     TEST_ASSERT_EQ_INT(gwdata_get_error(), 7, "ERR=7 propagates");
     gwdata_clear_error();
     TEST_PASS("if oom propagates");
+}
+
+void test_if_oom_onerror_e2e(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v168 M4: ON ERROR end-to-end — heap-full + fresh big literal
+     * in an IF must land in the handler with ERR=7 */
+    char stmt[256];
+    int err7 = 0;
+    for (int i = 0; i < 200; i++) {
+        snprintf(stmt, sizeof(stmt), "X$ = \"FILL%03d%s\"", i,
+                 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        gwsts_exec_statement(stmt);
+        if (gwdata_get_error() != 0) { err7 = 1; break; }
+    }
+    TEST_ASSERT_EQ_INT(err7, 1, "heap filled");
+    gwdata_clear_error();
+    /* ON ERROR GOTO arms the handler; the IF fails with OM; the run
+     * loop (simulated here) leaves ERR=7 visible */
+    gwsts_exec_statement("ON ERROR GOTO 9000");
+    gwdata_clear_error();
+    int rc = gwsts_exec_statement("IF C$=\"ZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZZZZZBRANDNEWZZZZ\" THEN N=N+1");
+    TEST_ASSERT(rc != 0, "IF fails under OOM");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 7, "ERR=7 for ON ERROR handler");
+    gwdata_clear_error();
+    TEST_PASS("if oom onerror e2e");
 }
