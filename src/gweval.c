@@ -570,6 +570,14 @@ static float parse_factor(parser_t *p) {
             return 0.0f;
         }
         
+        /* v169: ERL variable — the line number of the offending
+         * statement (ASM GWMAIN L472: ERRLIN=CURLIN on error;
+         * GWEVAL L673: ERL reads ERRLIN). Unassigned (no error) → 0,
+         * matching GW-BASIC. */
+        if (strcasecmp_ascii(name, "ERL") == 0) {
+            return (float)gwdata_get_error_line();
+        }
+        
         /* Check for function call - BEFORE array reference check */
         /* Only consume '(' if it's a known function name */
         if (parser_peek(p) == '(') {
@@ -983,10 +991,13 @@ static float parse_factor(parser_t *p) {
             }
         }
         
-        /* Scalar variable */
+        /* Scalar variable — v169: honor type suffixes (% integer,
+         * # double, ! or none single) */
         struct variable *v = gwdata_find_variable(name);
-        if (v && v->type == VT_SINGLE) {
-            return v->value.f;
+        if (v) {
+            if (v->type == VT_SINGLE) return v->value.f;
+            if (v->type == VT_INTEGER) return (float)v->value.i;
+            if (v->type == VT_DOUBLE) return (float)v->value.d;
         }
         
         return 0.0f;

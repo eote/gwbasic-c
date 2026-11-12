@@ -97,6 +97,7 @@ IMPLEMENTED_TESTS=(
     "test_gfx_screen0_resume.bas"
     "test_m4_funcs.bas"
     "test_using.bas"
+    "test_typesuffix.bas"
     "test_onerr_off.bas"
 )
 

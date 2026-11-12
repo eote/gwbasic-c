@@ -2,6 +2,7 @@
 /* Based on GWSTS.ASM */
 
 #include "gwbasic.h"
+#include <math.h>
 #include <io.h>
 #include <stdlib.h>
 #include <string.h>
@@ -965,9 +966,16 @@ int gwsts_exec_statement(const char *text) {
                     while (end > var_name && isspace((unsigned char)*end)) end--;
                     *(end + 1) = '\0';
               
-                    /* Determine type from $ suffix */
-                    if (strlen(var_name) > 0 && var_name[strlen(var_name) - 1] == '$') {
-                        type = VT_STRING;
+                    /* v169: full suffix typing ($ string, % integer,
+                     * # double — ASM PTRGET) */
+                    {
+                        size_t vnl = strlen(var_name);
+                        if (vnl > 0) {
+                            char lastc = var_name[vnl - 1];
+                            if (lastc == '$') type = VT_STRING;
+                            else if (lastc == '%') type = VT_INTEGER;
+                            else if (lastc == '#') type = VT_DOUBLE;
+                        }
                     }
               
                     /* Parse dimensions inside parentheses */
@@ -3149,10 +3157,38 @@ int assign_value(const char *var_ref, const char *expr) {
                     if (base_name) gwram_free(base_name);
                     return ERROR;
                 }
-                struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
-                if (v) {
-                    v->value.f = val;
-                    result = SUCCESS;
+                /* v169 HIGH: type suffix semantics (ASM PTRGET).
+                 * % → 16-bit integer: round-to-nearest, overflow →
+                 * FCERR 6 (ASM FWRTN); # → double; default single. */
+                size_t bn_len = strlen(base_name);
+                char last_ch = bn_len ? base_name[bn_len - 1] : '\0';
+                if (last_ch == '%') {
+                    /* round-half-away-from-zero (GW-BASIC uses the
+                     * MBF rounding of the accumulator) */
+                    float rounded = (val >= 0.0f) ? (float)floor(val + 0.5f)
+                                                  : (float)ceil(val - 0.5f);
+                    if (rounded < -32768.0f || rounded > 32767.0f) {
+                        gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
+                        if (base_name) gwram_free(base_name);
+                        return ERROR;
+                    }
+                    struct variable *v = gwdata_alloc_variable(base_name, VT_INTEGER);
+                    if (v) {
+                        v->value.i = (int32_t)rounded;
+                        result = SUCCESS;
+                    }
+                } else if (last_ch == '#') {
+                    struct variable *v = gwdata_alloc_variable(base_name, VT_DOUBLE);
+                    if (v) {
+                        v->value.d = (double)val;  /* full-precision parse: next batch */
+                        result = SUCCESS;
+                    }
+                } else {
+                    struct variable *v = gwdata_alloc_variable(base_name, VT_SINGLE);
+                    if (v) {
+                        v->value.f = val;
+                        result = SUCCESS;
+                    }
                 }
             }
         }

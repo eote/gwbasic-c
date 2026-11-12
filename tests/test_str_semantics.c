@@ -256,3 +256,66 @@ void test_if_oom_onerror_e2e(void) {
     gwdata_clear_error();
     TEST_PASS("if oom onerror e2e");
 }
+
+void test_type_suffix_integer_scalar(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v169 HIGH: % suffix = 16-bit integer (ASM PTRGET/FWRTN) */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("A% = 5"), 0, "A%=5");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A%"), 5, "A% reads 5");
+    /* round-half-away: 1.9 → 2, -1.5 → -2 */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("A% = 1.9"), 0, "A%=1.9");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A%"), 2, "A% rounds to 2");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("A% = -1.5"), 0, "A%=-1.5");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A%"), -2, "A% rounds to -2");
+    /* overflow → FCERR 6, old value survives */
+    TEST_ASSERT(gwsts_exec_statement("A% = 40000") != 0, "A%=40000 overflows");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 6, "Overflow 6");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A%"), -2, "A% keeps old value");
+    gwdata_clear_error();
+    TEST_ASSERT(gwsts_exec_statement("A% = -40000") != 0, "negative overflow");
+    gwdata_clear_error();
+    TEST_PASS("type suffix integer scalar");
+}
+
+void test_type_suffix_double(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v169 HIGH: # suffix = double storage (ASM PTRGET) */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("B# = 1.5"), 0, "B#=1.5");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("B#"), 1, "B# reads 1.5");
+    struct variable *v = gwdata_find_variable("B#");
+    TEST_ASSERT(v && v->type == VT_DOUBLE, "B# is VT_DOUBLE");
+    TEST_PASS("type suffix double");
+}
+
+void test_type_suffix_array(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v169 HIGH: DIM A%(5) → integer array; elements round + overflow */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("DIM A%(5)"), 0, "DIM A%");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("A%(1) = 3.7"), 0, "A%(1)=3.7");
+    struct variable *v = gwdata_find_variable("A%");
+    TEST_ASSERT(v && v->value.s.ptr, "A% array");
+    array_desc_t *d = (array_desc_t *)v->value.s.ptr;
+    TEST_ASSERT_EQ_INT((int)d->type, VT_INTEGER, "desc type INTEGER");
+    TEST_ASSERT_EQ_INT((int)((int32_t *)d->data)[1], 4, "element rounds to 4");
+    TEST_ASSERT(gwsts_exec_statement("A%(2) = 40000") != 0, "element overflow");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 6, "Overflow 6");
+    gwdata_clear_error();
+    TEST_PASS("type suffix array");
+}
+
+void test_erl_variable(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_set_error(0, 0, 0);   /* v169: reset line too (init keeps stale) */
+    /* v169 (v158 MEDIUM-1): ERL = offending line number (ASM GWMAIN
+     * L472 ERRLIN=CURLIN; GWEVAL L673 ERL reads ERRLIN) */
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("ERL"), 0, "no error → ERL 0");
+    gwsts_exec_statement("ON ERROR GOTO 100");
+    gwsts_exec_statement("X = 1/0");   /* error at current line */
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 11, "division by zero");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("ERL"), gwdata_get_error_line(),
+                       "ERL == error line");
+    TEST_PASS("erl variable");
+}

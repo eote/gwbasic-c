@@ -2,6 +2,7 @@
 /* Based on BIPTRG.ASM */
 
 #include "gwbasic.h"
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -229,8 +230,16 @@ int biptrg_set_array_element_multi(const char *name, const int *indices, float v
     DEBUG_PRINT("biptrg_set_array_element_multi: flat_index=%d, dim_sizes=[%d, %d], val=%f", flat_index, desc->dim_sizes[0], desc->dim_sizes[1], val);
     
     if (desc->type == VT_INTEGER) {
+        /* v169: round + Overflow (ASM FWRTN) */
+        float rounded = (val >= 0.0f) ? (float)floor(val + 0.5f)
+                                      : (float)ceil(val - 0.5f);
+        if (rounded < -32768.0f || rounded > 32767.0f) {
+            extern uint16_t g_curlin;
+            gwdata_set_error(6, g_curlin, 0);
+            return ERROR;
+        }
         int32_t *data = (int32_t *)desc->data;
-        data[flat_index] = (int32_t)val;
+        data[flat_index] = (int32_t)rounded;
     } else if (desc->type == VT_SINGLE) {
         float *data = (float *)desc->data;
         data[flat_index] = val;
@@ -340,8 +349,17 @@ int biptrg_set_array_element(const char *name, int index, float val) {
     DEBUG_PRINT("biptrg_set_array_element: final index=%d", index);
     
     if (desc->type == VT_INTEGER) {
+        /* v169: integer array element = 16-bit with round + Overflow
+         * (ASM FWRTN semantics, same as scalar A% = ...) */
+        float rounded = (val >= 0.0f) ? (float)floor(val + 0.5f)
+                                      : (float)ceil(val - 0.5f);
+        if (rounded < -32768.0f || rounded > 32767.0f) {
+            extern uint16_t g_curlin;
+            gwdata_set_error(6, g_curlin, 0);
+            return ERROR;
+        }
         int32_t *data = (int32_t *)desc->data;
-        data[index] = (int32_t)val;
+        data[index] = (int32_t)rounded;
     } else if (desc->type == VT_SINGLE) {
         float *data = (float *)desc->data;
         data[index] = val;
