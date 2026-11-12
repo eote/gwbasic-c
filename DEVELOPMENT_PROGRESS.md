@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v168 修复轮 — SWAP 副本泄漏释放 + f1 警告清除 + ON ERROR 端到端测试 (4M 处理); 下一步 v169 review |
+| **当前阶段** | v169 开发批 — ERL 变量 + 数值类型后缀 (%/#/!，ASM PTRGET/FWRTN 语义) + 4 单测 + test_typesuffix.bas (87); 下一步 v169 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,37 @@
 
 ---
 
+## 当前轮: v169 开发批 — ERL 变量 + 数值类型后缀 (ASM 对照)
+
+### ASM 依据
+
+- **ERL**: GWMAIN L472 (错误时 `ERRLIN=CURLIN`) + GWEVAL L673
+  (ERL 求值读 `ERRLIN`, INEG2 浮点化) + BIMISC L247 (清错归 0)
+- **类型后缀 (PTRGET)**: 名字尾 `%` → 16 位整数 (FWRTN: 舍入 +
+  溢出 FCERR 6); `#` → double; `!`/无 → single; 数组 DIM 同
+  (biptrg_infer_type_from_name 已支持)
+
+### 实现
+
+| # | 内容 | 文件 |
+|---|------|------|
+| 1 | ERL 变量: gweval 数值保留字分支 (ERR 同族) → gwdata_get_error_line() | gweval.c |
+| 2 | 标量赋值后缀: % 舍入 (±0.5 half-away) + -32768..32767 溢出→6 (VT_INTEGER/value.i); # → VT_DOUBLE/value.d | gwsts.c |
+| 3 | 数值读后缀: VT_INTEGER→value.i / VT_DOUBLE→value.d / SINGLE | gweval.c |
+| 4 | DIM 后缀推断补全 (原只识 $): % → INTEGER, # → DOUBLE | gwsts.c |
+| 5 | 数组元素 % 写: 1D + multi 舍入 + 溢出 6 (ASM FWRTN) | biptrg.c |
+| 6 | 测试 +4 单测 (标量%舍入/溢出/旧值保持、# 类型、数组%、ERL) + test_typesuffix.bas/.expected (87) | tests/ |
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 + 单测 | ✅ **3527/3527 PASS** (+23), 0 警告 |
+| .bas 逐个 | ✅ **87/87** (+test_typesuffix) |
+| 孤儿检测 | ✅ **947 = 947** |
+| 行为 probe | ✅ E 11 L 20 / P 0 (无错误) / A%=1.9→2 / A%=40000→Overflow6 旧值保持 / B#→VT_DOUBLE / DIM A%(5) desc INTEGER / A%(1)=3.7→4 / A%(2)=40000→6 |
+
+---
 ## 当前轮: CODE_REVIEW v159 修复轮 — 2C/8H/8M/5L 全处理 (阻断解除)
 
 ### CRITICAL (reviewer 实证复现)
