@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v169 开发批 — ERL 变量 + 数值类型后缀 (%/#/!，ASM PTRGET/FWRTN 语义) + 4 单测 + test_typesuffix.bas (87); 下一步 v169 review |
+| **当前阶段** | v169 修复轮 — typed SWAP + double 求值链 + FOR 后缀 + CLEAR 错误状态 + ! 别名 + 冒号复合语句 (1C/4H 全处理); 下一步 v170 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,42 @@
 
 ---
 
+## 当前轮: CODE_REVIEW v169 修复轮 — 1C/4H 全处理 (阻断解除)
+
+### CRITICAL (typed SWAP 数据损坏)
+
+- SWAP 数值分支全走 value.f → double 不交换/整数位损坏
+- 修复: biptrg 新增 typed get/set (biptrg_typed_val: i/d 双载荷);
+  SWAP 按 va->type 分 i/f/d; 数组元素 typed 通道 (FWRTN 语义保留)
+
+### HIGH (4 项)
+
+| # | 修复 |
+|---|------|
+| H1 A# 双精度 | gweval 求值链全 double 化 (parse_factor/term/expression); VALTYP 追踪 (字面量#/变量类型); PRINT double→%.15g; **单精度字面量舍入到 float 再转 double** (保 `A!=3.14 = 3.14` 比较语义 — double 化回归修复) |
+| H2 FOR/NEXT 后缀 | 名字收集含 %!\#$; typed alloc (整数 FWRTN/舍入); NEXT 递增/比较类型化; 修 var_type&0x80 永假 (整数循环误走 float); int step 符号 |
+| H3 CLEAR/RUN 错误状态 | gwdata_init + bimisc 三处 (new/clear/run_setup) 清 error_code/line/text + on_error_active/line + in_error_handler (ASM BIMISC CLEAR L245-248) |
+| H4 A! 别名 | gwdata canon_name (剥尾 '!' — 默认后缀); find/alloc 双入口归一化 |
+
+### 额外修复 (本轮)
+
+- **冒号复合语句执行器** (历史遗留 bug): gwmain_exec_compound —
+  引号感知冒号分段 + THEN/ELSE 块吞并行尾 (`IF c THEN s1: s2`
+  的 s2 属分支) — 修 test_cond 等 5 个 .bas 回归
+- ERL 只读 (assign → FCERR); advgrp/call86/gio86/maclng/next86
+  的本地 extern float eval 声明 → double (签名一致)
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 (root+tests) | ✅ 0 警告 |
+| 单测 | ✅ **3550/3550 PASS** (+23) |
+| .bas 逐个 | ✅ **87/87** |
+| 孤儿检测 | ✅ **952 = 952** |
+| reviewer 探针 | ✅ SD=2.5 1.5 / D=1.5 2.5 / MI=3 4 / A# 15位 / FOR I% 1-3 / CLEAR E3=0 0 / ON ERROR 失效 / A=A! 别名 |
+
+---
 ## 当前轮: v169 开发批 — ERL 变量 + 数值类型后缀 (ASM 对照)
 
 ### ASM 依据
