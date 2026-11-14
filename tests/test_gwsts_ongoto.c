@@ -235,7 +235,7 @@ void test_gweval_instr_function(void) {
     }
 
     /* 2-arg: INSTR(A$, ":") = 2 */
-    float r1 = gweval_eval_numeric("INSTR(A$, \":\")");
+    float r1 = (float)gweval_eval_numeric("INSTR(A$, \":\")");
     TEST_ASSERT_EQ_INT((int)r1, 2, "INSTR(A$,':') = 2");
     /* 3-arg: INSTR(2, A$, ":") — from 2, colon at 4? "A:B:C": A(1):(2)B(3):(4)C(5)
        wait — from start=2: colon at 2 itself! */
