@@ -1254,48 +1254,61 @@ int gwsts_exec_statement(const char *text) {
                     if (tmp2_copy) gwram_free(tmp2_copy);
                     if (result != ERROR) result = SUCCESS;
                 } else {
-                    /* numeric: v161 HIGH-1 — scalar ↔ array element OK */
-                    float f1, f2;
+                    /* numeric: v169 CRITICAL-1 — fully typed swap (value.i/f/d by the
+ * variable's type; float-only round-trips corrupted VT_DOUBLE and
+ * reinterpreted VT_INTEGER bits) */
+                    biptrg_typed_val v1t, v2t;
+                    memset(&v1t, 0, sizeof(v1t));
+                    memset(&v2t, 0, sizeof(v2t));
                     if (arr1) {
                         if (ni1 > 1) {
                             extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
                             if (!gwdata_find_variable(bn1))
                                 biptrg_ensure_array_nd(bn1, ni1);
                         }
-                        f1 = (ni1 > 1)
-                            ? biptrg_get_array_element_multi(bn1, idx1)
-                            : biptrg_get_array_element(bn1, idx1[0]);
+                        if (biptrg_get_array_element_typed(bn1, idx1, ni1, &v1t) != SUCCESS) {
+                            result = ERROR;
+                        }
                     } else {
-                        f1 = va->value.f;
+                        v1t.type = va->type;
+                        if (va->type == VT_INTEGER) { v1t.i = va->value.i; v1t.d = (double)va->value.i; }
+                        else if (va->type == VT_DOUBLE) { v1t.d = va->value.d; }
+                        else { v1t.d = va->value.f; }
                     }
-                    if (arr2) {
+                    if (result != ERROR && arr2) {
                         if (ni2 > 1) {
                             extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
                             if (!gwdata_find_variable(bn2))
                                 biptrg_ensure_array_nd(bn2, ni2);
                         }
-                        f2 = (ni2 > 1)
-                            ? biptrg_get_array_element_multi(bn2, idx2)
-                            : biptrg_get_array_element(bn2, idx2[0]);
-                    } else {
-                        f2 = vb->value.f;
+                        if (biptrg_get_array_element_typed(bn2, idx2, ni2, &v2t) != SUCCESS) {
+                            result = ERROR;
+                        }
+                    } else if (result != ERROR) {
+                        v2t.type = vb->type;
+                        if (vb->type == VT_INTEGER) { v2t.i = vb->value.i; v2t.d = (double)vb->value.i; }
+                        else if (vb->type == VT_DOUBLE) { v2t.d = vb->value.d; }
+                        else { v2t.d = vb->value.f; }
                     }
                     /* v162 MEDIUM-5: abort before write on get error */
-                    if (gwdata_get_error() != 0) {
+                    if (result != ERROR && gwdata_get_error() != 0) {
                         result = ERROR;
-                    } else
-                    /* write f2 → slot1, f1 → slot2 */
+                    } else if (result != ERROR) {
+                    /* write value2 → slot1, value1 → slot2 (typed) */
                     if (arr1) {
-                        if (ni1 > 1) result = biptrg_set_array_element_multi(bn1, idx1, f2);
-                        else result = biptrg_set_array_element(bn1, idx1[0], f2);
+                        result = biptrg_set_array_element_typed(bn1, idx1, ni1, &v2t);
                     } else {
-                        va->value.f = f2;
+                        if (va->type == VT_INTEGER) va->value.i = v2t.i;
+                        else if (va->type == VT_DOUBLE) va->value.d = v2t.d;
+                        else va->value.f = (float)v2t.d;
                     }
                     if (arr2) {
-                        if (ni2 > 1) result = biptrg_set_array_element_multi(bn2, idx2, f1);
-                        else result = biptrg_set_array_element(bn2, idx2[0], f1);
+                        result = biptrg_set_array_element_typed(bn2, idx2, ni2, &v1t);
                     } else {
-                        vb->value.f = f1;
+                        if (vb->type == VT_INTEGER) vb->value.i = v1t.i;
+                        else if (vb->type == VT_DOUBLE) vb->value.d = v1t.d;
+                        else vb->value.f = (float)v1t.d;
+                    }
                     }
                     if (result != ERROR) result = SUCCESS;
                 }
@@ -2237,15 +2250,22 @@ delete_done:
                                 gwram_free(trimmed);
                                 return ERROR;
                             } else {
-                                float val = gweval_eval_numeric(trim_start);
+                                double val = gweval_eval_numeric(trim_start);
                                 if (gwdata_get_error() != 0) {
                                     /* v160 HIGH-2: eval raised Overflow
                                      * etc. — abort, propagate, no output */
                                     gwram_free(trimmed);
                                     return ERROR;
                                 }
-                                /* GW-BASIC: positive numbers have leading space */
-                                printf("%s%g", (val >= 0) ? " " : "", val);
+                                /* GW-BASIC: positive numbers have leading
+                                 * space; single prints 7 digits, double
+                                 * (VALTYP 8) prints 16 — v169 HIGH-1 */
+                                extern int gweval_last_valtyp(void);
+                                if (gweval_last_valtyp() == 8) {
+                                    printf("%s%.15g", (val >= 0) ? " " : "", val);
+                                } else {
+                                    printf("%s%g", (val >= 0) ? " " : "", val);
+                                }
                             }
                         }
                         
@@ -3017,6 +3037,17 @@ int assign_value_raw(const char *var_ref, const char *expr) {
     return rc;
 }
 
+/* Case-insensitive string comparison (same as gweval) */
+static int strcasecmp_ascii(const char *a, const char *b) {
+    while (*a && *b) {
+        int ca = tolower((unsigned char)*a);
+        int cb = tolower((unsigned char)*b);
+        if (ca != cb) return ca - cb;
+        a++; b++;
+    }
+    return tolower((unsigned char)*a) - tolower((unsigned char)*b);
+}
+
 int assign_value(const char *var_ref, const char *expr) {
     if (!var_ref || !expr) return ERROR;
     
@@ -3026,6 +3057,15 @@ int assign_value(const char *var_ref, const char *expr) {
     int indices[8];
     int num_indices = 0;
     parse_var_ref(var_ref, &base_name, &array_index, indices, &num_indices);
+    
+    /* v169 MEDIUM-3: ERL is the read-only ERRLIN alias (ASM
+     * GWEVAL L673); assigning it would silently create a dead
+     * ordinary variable. */
+    if (base_name && strcasecmp_ascii(base_name, "ERL") == 0) {
+        gwdata_set_error(5, g_state ? (uint16_t)g_state->current_line : 0, 0);
+        gwram_free(base_name);
+        return ERROR;
+    }
     
     DEBUG_PRINT("assign_value: var_ref='%s', base_name='%s', array_index=%d, num_indices=%d, expr='%s'", 
                 var_ref, base_name ? base_name : "NULL", array_index, num_indices, expr);
@@ -3150,7 +3190,7 @@ int assign_value(const char *var_ref, const char *expr) {
             } else {
                 /* Numeric variable (integer or float) */
                 gwdata_clear_error();  /* stale-error isolation (tests) */
-                float val = gweval_eval_numeric(expr);
+                double val = gweval_eval_numeric(expr);   /* v169: full precision */
                 if (gwdata_get_error() != 0) {
                     /* v161 HIGH-3/LOW-3: evaluation raised Overflow
                      * etc. — do NOT assign; propagate (A stays old) */
@@ -3180,7 +3220,7 @@ int assign_value(const char *var_ref, const char *expr) {
                 } else if (last_ch == '#') {
                     struct variable *v = gwdata_alloc_variable(base_name, VT_DOUBLE);
                     if (v) {
-                        v->value.d = (double)val;  /* full-precision parse: next batch */
+                        v->value.d = val;   /* v169: full-precision double */
                         result = SUCCESS;
                     }
                 } else {

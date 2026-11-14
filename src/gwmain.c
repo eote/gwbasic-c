@@ -112,6 +112,76 @@ static int extract_line_number(const char *line, const char **rest) {
     return num;
 }
 
+/* ===== v169 CRITICAL-1: compound-statement executor =====
+ * GW-BASIC lines hold multiple colon-separated statements
+ * ("A=1: B=2: SWAP A,B"). Execute each segment in order with the
+ * same rc semantics as a single statement: rc > 0 = jump target,
+ * rc == -2 = END, rc < 0 = error. Colons inside string literals
+ * are not separators (GW-BASIC has no escapes; "" is literal
+ * content). Returns the first non-zero rc, or 0 when all segments
+ * succeeded. */
+static int gwmain_exec_compound(const char *text) {
+    const char *p = text;
+    bool if_block = false;   /* v169: inside IF..THEN/ELSE — colons
+                              * after THEN/ELSE belong to the branch,
+                              * not to the enclosing statement list */
+    while (*p) {
+        /* segment bounds: scan for a top-level colon */
+        const char *seg_start = p;
+        const char *seg_end = p;
+        bool in_quote = false;
+        while (*seg_end) {
+            if (*seg_end == '"') in_quote = !in_quote;
+            else if (*seg_end == ':' && !in_quote) break;
+            seg_end++;
+        }
+        /* trim the segment */
+        while (seg_start < seg_end && isspace((unsigned char)*seg_start)) seg_start++;
+        const char *e = seg_end;
+        while (e > seg_start && isspace((unsigned char)e[-1])) e--;
+        if (e > seg_start) {
+            /* v169: a segment containing a top-level THEN or ELSE
+             * swallows the rest of the line (GW-BASIC IF semantics:
+             * statements after THEN/ELSE colons run only inside the
+             * taken branch, not as sibling statements). */
+            if (!if_block) {
+                const char *q = seg_start;
+                bool q_quote = false;
+                while (q < e) {
+                    if (*q == '"') q_quote = !q_quote;
+                    else if (!q_quote) {
+                        if ((q[0]=='T'||q[0]=='t') && (q[1]=='H'||q[1]=='h') &&
+                            (q[2]=='E'||q[2]=='e') && (q[3]=='N'||q[3]=='n') &&
+                            (q+4 >= e || !isalnum((unsigned char)q[4]))) break;
+                        if ((q[0]=='E'||q[0]=='e') && (q[1]=='L'||q[1]=='l') &&
+                            (q[2]=='S'||q[2]=='s') && (q[3]=='E'||q[3]=='e') &&
+                            (q+4 >= e || !isalnum((unsigned char)q[4]))) break;
+                    }
+                    q++;
+                }
+                if (q < e) {
+                    if_block = true;
+                    seg_end = text + strlen(text);   /* swallow to EOL */
+                    e = seg_end;
+                    while (e > seg_start && isspace((unsigned char)e[-1])) e--;
+                }
+            }
+            char seg[MAX_LINE_LEN + 1];
+            size_t len = (size_t)(e - seg_start);
+            if (len > MAX_LINE_LEN) len = MAX_LINE_LEN;
+            memcpy(seg, seg_start, len);
+            seg[len] = '\0';
+            int rc = gwsts_exec_statement(seg);
+            if (rc != 0) return rc;   /* jump / END / error: stop here */
+        }
+        if (if_block) break;   /* the IF segment consumed the line */
+        p = (*seg_end == ':') ? seg_end + 1 : seg_end;
+        /* ": REST" — skip leading whitespace of the next segment */
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
+    return SUCCESS;
+}
+
 /* Main interpreter loop */
 static int run_program_lines(void);
 
@@ -195,8 +265,8 @@ static void run_interpreter(void) {
             continue;
         }
         
-        /* Otherwise execute as direct statement */
-        int rc = gwsts_exec_statement(trimmed);
+        /* Otherwise execute as direct statement(s) (colon compound) */
+        int rc = gwmain_exec_compound(trimmed);
         if (rc != 0) {
             printf("Error executing statement\n");
         }
@@ -233,7 +303,7 @@ static int run_program_lines(void) {
             long link_version = gwlist_get_link_version();
             
             int was_in_handler = gwdata_is_in_error_handler();
-            int rc = gwsts_exec_statement(curr->text);
+            int rc = gwmain_exec_compound(curr->text);
             DEBUG_PRINT("Statement returned %d", rc);
             
             /* Check if an error occurred during expression evaluation (e.g., division by zero) */

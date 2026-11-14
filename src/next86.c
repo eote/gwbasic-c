@@ -10,7 +10,7 @@
 
 /* External references */
 extern void gweval_init(void);
-extern float gweval_eval_numeric(const char *expr);
+extern double gweval_eval_numeric(const char *expr);
 extern void gweval_chrgt2(const char **text);
 extern void gweval_synchr(const char **text, char expected);
 extern void gweval_scan_var(const char **text, int *var_ptr);
@@ -112,10 +112,11 @@ struct for_entry* next86_find_for(const char *var_name) {
 int next86_next(const char **text) {
     g_nxttxt = (WORD)(uintptr_t)*text;
     
-    /* Parse variable name (optional) */
+    /* Parse variable name (optional) — v169 HIGH-2: suffixes too */
     char var_name[41] = {0};
     int var_name_len = 0;
-    while (**text && isalpha((unsigned char)**text) && var_name_len < 40) {
+    while (**text && (isalpha((unsigned char)**text) || **text == '%' ||
+                      **text == '!' || **text == '#' || **text == '$') && var_name_len < 40) {
         var_name[var_name_len++] = **text;
         (*text)++;
     }
@@ -139,12 +140,13 @@ int next86_next(const char **text) {
     /* Set up stack by chopping to FOR entry */
     g_savstk = g_for_sp;  /* Simplified */
     
-    /* Process based on variable type */
-    if (entry->var_type & 0x80) {
-        /* Integer FOR loop */
+    /* Process based on variable type — v169: VT_INTEGER (2) →
+     * integer NEXT; VT_SINGLE/VT_DOUBLE → float/double NEXT
+     * (the old `var_type & 0x80` test never matched VT_INTEGER=2,
+     * so integer loops incremented in float). */
+    if (entry->var_type == VT_INTEGER) {
         return next86_int_next(entry);
     } else {
-        /* Floating point FOR loop */
         return next86_float_next(entry);
     }
 }
@@ -153,8 +155,9 @@ int next86_next(const char **text) {
 int next86_int_next(struct for_entry *entry) {
     struct variable *v = (struct variable*)entry->var_ptr;
     
-    /* Add step to variable */
-    v->value.i += (WORD)entry->step;
+    /* Add step to variable — v169: signed step (negative STEP on
+     * integer loops) */
+    v->value.i += (int32_t)entry->step;
     
     /* Compare with limit */
     int cmp = 0;
@@ -174,9 +177,19 @@ int next86_int_next(struct for_entry *entry) {
     }
 }
 
-/* Floating point NEXT processing */
+/* Floating point NEXT processing — v169 HIGH-2: double-aware
+ * (VT_DOUBLE loop variables increment/compare in double) */
 int next86_float_next(struct for_entry *entry) {
     struct variable *v = (struct variable*)entry->var_ptr;
+    
+    if (entry->var_type == VT_DOUBLE) {
+        v->value.d += entry->step;
+        int cmp2 = entry->step_sign ? (v->value.d <= entry->limit ? 0 : 1)
+                                    : (v->value.d >= entry->limit ? 0 : 1);
+        if (cmp2 == 0) return entry->for_next_line;
+        g_for_sp--;
+        return 0;
+    }
     
     /* Add step to variable */
     v->value.f += entry->step;
@@ -241,10 +254,13 @@ int next86_for(const char **text) {
     /* Skip leading whitespace */
     while (**text && isspace((unsigned char)**text)) (*text)++;
     
-    /* Parse variable name */
+    /* Parse variable name — v169 HIGH-2: type suffixes (%#!$) are
+     * part of the name (ASM PTRGET) */
     char var_name[41] = {0};
     int var_name_len = 0;
-    while (**text && (isalnum((unsigned char)**text) || **text == '_') && var_name_len < 40) {
+    while (**text && (isalnum((unsigned char)**text) || **text == '_' ||
+                      **text == '%' || **text == '!' || **text == '#' ||
+                      **text == '$') && var_name_len < 40) {
         var_name[var_name_len++] = **text;
         (*text)++;
     }
@@ -306,8 +322,7 @@ int next86_for(const char **text) {
         step = gweval_eval_numeric(*text);
     }
     
-    /* Determine variable type */
-    BYTE var_type = 0;  /* Default float */
+    /* Determine variable type (v169: ftype below) */
     /* ASM NT0STP (GWMAIN L1600): STEP 0 → sign forced to 2 — the NEXT
      * termination test (sign(current-final) == sign(step)) can never be
      * met, giving the ANSI-required infinite loop. */
@@ -318,12 +333,33 @@ int next86_for(const char **text) {
         step_sign = (step > 0) ? 1 : 0;
     }
     
-    /* Allocate variable in GW-BASIC variable table */
-    struct variable *v = gwdata_alloc_variable(var_name, VT_SINGLE);
+    /* Allocate variable in GW-BASIC variable table.
+     * v169 HIGH-2: typed FOR — % integer (with FWRTN overflow
+     * semantics on the start value), # double, default single. */
+    var_type_t ftype = VT_SINGLE;
+    {
+        size_t vnl = strlen(var_name);
+        char lastc = vnl ? var_name[vnl - 1] : '\0';
+        if (lastc == '%') ftype = VT_INTEGER;
+        else if (lastc == '#') ftype = VT_DOUBLE;
+    }
+    struct variable *v = gwdata_alloc_variable(var_name, ftype);
     if (!v) {
         return ERROR;
     }
-    v->value.f = start;
+    if (ftype == VT_INTEGER) {
+        float rounded = (start >= 0.0f) ? (float)floor(start + 0.5f)
+                                        : (float)ceil(start - 0.5f);
+        if (rounded < -32768.0f || rounded > 32767.0f) {
+            gwdata_set_error(6, g_curlin, 0);
+            return ERROR;
+        }
+        v->value.i = (int32_t)rounded;
+    } else if (ftype == VT_DOUBLE) {
+        v->value.d = start;
+    } else {
+        v->value.f = start;
+    }
     intptr_t var_ptr = (intptr_t)v;
     
     /* Save line number AFTER the FOR statement for loop continuation */
@@ -338,11 +374,13 @@ int next86_for(const char **text) {
     }
     
     /* Push FOR entry */
-    next86_push_for(0x81, var_ptr, g_nxttxt, step_sign, var_type, 
+    next86_push_for(0x81, var_ptr, g_nxttxt, step_sign, (BYTE)ftype, 
                     step, limit, g_curlin, for_next_line, var_name);
     
-    /* Initialize loop variable */
-    v->value.f = start;
+    /* Initialize loop variable (typed) */
+    if (ftype == VT_INTEGER) v->value.i = (int32_t)start;
+    else if (ftype == VT_DOUBLE) v->value.d = start;
+    else v->value.f = start;
     
     /* v145: first-iteration check (ASM GWMAIN FOR L1617: JMP NEXTS with
      * NXTFLG=0 → IFORIN compares the INITIAL value against the limit;

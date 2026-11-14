@@ -240,7 +240,8 @@ int gwinit_cmderr(const char *message);  /* CMDERR: pre-init error (ASM L432-449
 
 /* GWEVAL module functions */
 void gweval_init(void);
-float gweval_eval_numeric(const char *expr);
+double gweval_eval_numeric(const char *expr);
+int gweval_last_valtyp(void);  /* v169: VALTYP of last eval (4 single / 8 double / 2 int) */
 char *gweval_eval_string(const char *expr);
 void gweval_scan_var(const char **text, int *var_ptr);
 int gweval_frqint(void);
@@ -942,5 +943,18 @@ long gwlist_get_link_version(void);
 struct program_line *gwlist_delete_line(int number);  /* Returns next surviving line (UAF-safe relocation) */
 void gwlist_list(int start, int end);
 struct program_line *gwlist_get_first_line(void);
+
+/* v169 CRITICAL-1: typed numeric value (integer/double precision
+ * preserved through array element access) */
+typedef struct biptrg_typed_val {
+    var_type_t type;    /* VT_INTEGER / VT_SINGLE / VT_DOUBLE */
+    double d;           /* single/double payload */
+    int32_t i;          /* integer payload */
+} biptrg_typed_val;
+
+int biptrg_get_array_element_typed(const char *name, const int *indices,
+                                   int ndims, biptrg_typed_val *out);
+int biptrg_set_array_element_typed(const char *name, const int *indices,
+                                   int ndims, const biptrg_typed_val *val);
 
 #endif /* GWBASIC_H */

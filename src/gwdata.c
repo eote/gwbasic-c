@@ -44,6 +44,16 @@ void gwdata_init(void) {
         g_state->in_direct_mode = true;
         g_state->running = true;
         g_state->exit_code = SUCCESS;
+        /* v169 HIGH-3: CLEAR/RUN reset error state (ASM BIMISC
+         * CLEAR L245-248: ERRLIN=0, ONEFLG=0, ONELIN=0, OLDTXT=0 —
+         * ON ERROR is disarmed and ERL/ERR return to 0) */
+        g_state->error_code = 0;
+        g_state->error_line = 0;
+        g_state->error_text_ptr = 0;
+        g_state->on_error_active = false;
+        g_state->on_error_line = 0;
+        g_state->on_error_text_ptr = 0;
+        g_state->in_error_handler = false;
         return;
     }
     
@@ -63,8 +73,23 @@ void gwdata_init(void) {
     }
 }
 
+/* v169 HIGH-4: trailing '!' is the DEFAULT single-precision suffix —
+ * GW-BASIC treats A! and A as the same variable (ASM PTRGET folds
+ * the default type character). Normalize both lookup and alloc. */
+static void canon_name(const char *in, char *out, size_t outsz) {
+    size_t n = strlen(in);
+    while (n > 0 && in[n - 1] == '!') n--;
+    if (n >= outsz) n = outsz - 1;
+    memcpy(out, in, n);
+    out[n] = '\0';
+}
+
 struct variable *gwdata_alloc_variable(const char *name, var_type_t type) {
     if (!g_state) return NULL;
+    
+    char canon[MAX_VAR_NAME + 1];
+    canon_name(name, canon, sizeof(canon));
+    name = canon;
     
     unsigned int idx = hash_name(name);
     
@@ -106,6 +131,10 @@ struct variable *gwdata_alloc_variable(const char *name, var_type_t type) {
 
 struct variable *gwdata_find_variable(const char *name) {
     if (!g_state) return NULL;
+    
+    char canon[MAX_VAR_NAME + 1];
+    canon_name(name, canon, sizeof(canon));
+    name = canon;
     
     unsigned int idx = hash_name(name);
     struct variable *v = g_state->var_table[idx];

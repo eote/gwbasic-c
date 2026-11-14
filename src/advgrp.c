@@ -20,7 +20,7 @@ extern int g_screen_mode;
 extern unsigned char *g_framebuffer;
 
 /* External references from gweval */
-extern float gweval_eval_numeric(const char *expr);
+extern double gweval_eval_numeric(const char *expr);
 
 /* Graphics state */
 static int g_grpacx = 0;

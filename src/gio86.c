@@ -10,7 +10,7 @@ extern void gwdata_init(void);
 extern int gweval_frqint(void);
 extern void gweval_synchr(const char **text, char expected);
 extern void gweval_scan_var(const char **text, int *var_ptr);
-extern float gweval_eval_numeric(const char *expr);
+extern double gweval_eval_numeric(const char *expr);
 extern void gwlist_add_line(int number, const char *text);
 extern void dskcom_open(const char *filename, int filenum, int mode, int reclen);
 extern void dskcom_close(int filenum);

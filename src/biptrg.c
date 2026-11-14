@@ -254,6 +254,80 @@ int biptrg_set_array_element_multi(const char *name, const int *indices, float v
 }
 
 /* Get numeric array element (multi-dimensional) */
+int biptrg_get_array_element_typed(const char *name, const int *indices,
+                                   int ndims, biptrg_typed_val *out) {
+    if (!name || !indices || !out) return ERROR;
+    struct variable *v = (ndims > 1) ? gwdata_find_variable(name)
+                                     : biptrg_ensure_array(name);
+    if (!v) return ERROR;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
+    if (!desc || desc->magic != ARRAY_MAGIC) return ERROR;
+    out->type = desc->type;
+    float f;
+    if (ndims > 1) {
+        f = biptrg_get_array_element_multi(name, indices);
+    } else {
+        f = biptrg_get_array_element(name, indices[0]);
+    }
+    if (gwdata_get_error() != 0) return ERROR;
+    if (desc->type == VT_INTEGER) {
+        int32_t iv;
+        if (ndims > 1) {
+            int flat = compute_flat_index(desc, indices);
+            iv = ((int32_t *)desc->data)[flat];
+        } else {
+            iv = ((int32_t *)desc->data)[indices[0]];
+        }
+        out->i = iv;
+        out->d = (double)iv;
+    } else {
+        out->d = (desc->type == VT_DOUBLE)
+            ? (ndims > 1
+                ? ((double *)desc->data)[compute_flat_index(desc, indices)]
+                : ((double *)desc->data)[indices[0]])
+            : (double)f;
+        out->i = (int32_t)out->d;
+    }
+    return SUCCESS;
+}
+
+int biptrg_set_array_element_typed(const char *name, const int *indices,
+                                   int ndims, const biptrg_typed_val *val) {
+    if (!name || !indices || !val) return ERROR;
+    struct variable *v = (ndims > 1) ? gwdata_find_variable(name)
+                                     : biptrg_ensure_array(name);
+    if (!v) return ERROR;
+    array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
+    if (!desc || desc->magic != ARRAY_MAGIC) return ERROR;
+    /* v169: FWRTN semantics for integer targets (round + overflow) */
+    double dv = val->d;
+    if (desc->type == VT_INTEGER) {
+        double rounded = (dv >= 0.0) ? floor(dv + 0.5) : ceil(dv - 0.5);
+        if (rounded < -32768.0 || rounded > 32767.0) {
+            extern uint16_t g_curlin;
+            gwdata_set_error(6, g_curlin, 0);
+            return ERROR;
+        }
+        int32_t iv = (int32_t)rounded;
+        if (ndims > 1) {
+            int flat = compute_flat_index(desc, indices);
+            ((int32_t *)desc->data)[flat] = iv;
+        } else {
+            ((int32_t *)desc->data)[indices[0]] = iv;
+        }
+        return SUCCESS;
+    }
+    if (ndims > 1) {
+        int flat = compute_flat_index(desc, indices);
+        if (desc->type == VT_DOUBLE) ((double *)desc->data)[flat] = dv;
+        else ((float *)desc->data)[flat] = (float)dv;
+    } else {
+        if (desc->type == VT_DOUBLE) ((double *)desc->data)[indices[0]] = dv;
+        else ((float *)desc->data)[indices[0]] = (float)dv;
+    }
+    return SUCCESS;
+}
+
 float biptrg_get_array_element_multi(const char *name, const int *indices) {
     if (!name || !indices) return 0.0f;
     

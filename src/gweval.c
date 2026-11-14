@@ -68,8 +68,15 @@ static bool parser_match(parser_t *p, char c) {
 }
 
 /* Forward declarations for recursive functions */
-static float parse_expression(parser_t *p);
+static double parse_expression(parser_t *p);
 static char *parse_string_expression(parser_t *p);
+
+/* v169 HIGH-1: VALTYP (ASM GWEVAL/GWDATA VALTYP) — type of the LAST
+ * evaluated numeric expression: 4 = single, 8 = double, 2 = integer.
+ * PRINT uses it to choose 7 vs 16 digit output; assign uses it to
+ * store single vs double. */
+static int g_valtyp = 4;
+int gweval_last_valtyp(void) { return g_valtyp; }
 
 static char *parse_string_expression(parser_t *p) {
     char *result = NULL;
@@ -441,12 +448,12 @@ after_name:
     return result;
 }
 
-static float parse_factor(parser_t *p) {
+static double parse_factor(parser_t *p) {
     char c = parser_peek(p);
     
     if (c == '(') {
         parser_get(p); /* consume '(' */
-        float result = parse_expression(p);
+        double result = parse_expression(p);
         parser_match(p, ')'); /* consume ')' */
         return result;
     }
@@ -471,7 +478,7 @@ static float parse_factor(parser_t *p) {
             /* Check that it's a whole word (next char is not alphanumeric/underscore) */
             if (p->pos + 3 >= p->len || (!isalnum((unsigned char)p->input[p->pos + 3]) && p->input[p->pos + 3] != '_')) {
                 p->pos += 3;  /* consume "NOT" */
-                float val = parse_factor(p);
+                double val = parse_factor(p);
                 return (val == 0.0f) ? -1.0f : 0.0f;  /* GW-BASIC: NOT 0 = -1, NOT non-zero = 0 */
             }
         }
@@ -511,6 +518,16 @@ static float parse_factor(parser_t *p) {
         /* v160 HIGH-2: constant out of single-precision range →
          * Overflow (6); isfinite guards against atof overflow to inf */
         double dval = atof(buf);
+        /* v169 HIGH-1: '#' literal suffix → DOUBLE precision */
+        bool lit_double = false;
+        if (p->pos < p->len && p->input[p->pos] == '#') {
+            p->pos++;
+            lit_double = true;
+        }
+        g_valtyp = lit_double ? 8 : 4;
+        /* v169: single literals round to float precision (GW-BASIC
+         * MBF single) — `A! = 3.14` must compare equal to `3.14` */
+        if (!lit_double) dval = (double)(float)dval;
         if (dval > 3.402823e38 || (dval != 0.0 && dval < -3.402823e38)) {
             gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
             return 0.0f;
@@ -519,7 +536,7 @@ static float parse_factor(parser_t *p) {
             gwdata_set_error(6, g_state ? (uint16_t)g_state->current_line : 0, 0);
             return 0.0f;
         }
-        return (float)dval;
+        return dval;
     }
     
     /* String literal in numeric context = 0 */
@@ -644,55 +661,55 @@ static float parse_factor(parser_t *p) {
                 
                 /* Math functions: SIN, COS, TAN, ATN, EXP, LOG, SQR, ABS, SGN, RND, INT, FIX */
                 if (strcasecmp_ascii(name, "SIN") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return sinf(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "COS") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return cosf(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "TAN") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return tanf(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "ATN") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return atanf(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "EXP") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return expf(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "LOG") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return logf(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "SQR") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return sqrtf(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "ABS") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return fabsf(arg);
+                        return fabs(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "SGN") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         if (arg > 0) return 1.0f;
                         else if (arg < 0) return -1.0f;
@@ -706,26 +723,26 @@ static float parse_factor(parser_t *p) {
                     }
                 }
                 else if (strcasecmp_ascii(name, "INT") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return floorf(arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "FIX") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return truncf(arg);
                     }
                 }
                 /* TAB/SPC - PRINT functions that return numeric */
                 else if (strcasecmp_ascii(name, "TAB") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return arg;
                     }
                 }
                 else if (strcasecmp_ascii(name, "SPC") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return arg;
                     }
@@ -886,7 +903,7 @@ static float parse_factor(parser_t *p) {
                 }
                 /* FRE(arg) - return free memory (arg: 0 for numeric, non-zero for string) */
                 else if (strcasecmp_ascii(name, "FRE") == 0) {
-                    float arg = parse_expression(p);
+                    double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
                         return (float)bistrs_fre((int)arg);
                     }
@@ -931,7 +948,7 @@ static float parse_factor(parser_t *p) {
             struct variable *fn_var = gwdata_find_fn_def(name);
             if (fn_var && fn_var->is_fn_def && fn_var->fn_text_ptr) {
                 /* Parse argument if present */
-                float arg = 0.0f;
+                double arg = 0.0f;
                 if (parser_peek(p) == '(') {
                     parser_get(p);  /* consume '(' */
                     arg = parse_expression(p);
@@ -992,12 +1009,12 @@ static float parse_factor(parser_t *p) {
         }
         
         /* Scalar variable — v169: honor type suffixes (% integer,
-         * # double, ! or none single) */
+         * # double, ! or none single); VALTYP tracks the widest type */
         struct variable *v = gwdata_find_variable(name);
         if (v) {
-            if (v->type == VT_SINGLE) return v->value.f;
-            if (v->type == VT_INTEGER) return (float)v->value.i;
-            if (v->type == VT_DOUBLE) return (float)v->value.d;
+            if (v->type == VT_SINGLE) { g_valtyp = 4; return v->value.f; }
+            if (v->type == VT_INTEGER) { g_valtyp = 2; return (double)v->value.i; }
+            if (v->type == VT_DOUBLE) { g_valtyp = 8; return v->value.d; }
         }
         
         return 0.0f;
@@ -1007,18 +1024,18 @@ static float parse_factor(parser_t *p) {
     return 0.0f;
 }
 
-static float parse_term(parser_t *p) {
-    float left = parse_factor(p);
+static double parse_term(parser_t *p) {
+    double left = parse_factor(p);
     
     while (true) {
         char c = parser_peek(p);
         if (c == '*') {
             parser_get(p);
-            float right = parse_factor(p);
+            double right = parse_factor(p);
             left *= right;
         } else if (c == '/') {
             parser_get(p);
-            float right = parse_factor(p);
+            double right = parse_factor(p);
             if (right != 0.0f) {
                 left /= right;
             } else {
@@ -1029,12 +1046,12 @@ static float parse_term(parser_t *p) {
             }
         } else if (c == '\\') {
             parser_get(p);
-            float right = parse_factor(p);
+            double right = parse_factor(p);
             if (right != 0.0f) left = (float)((int)left / (int)right);
         } else if (c == '^') {
             parser_get(p);
-            float right = parse_factor(p);
-            left = powf(left, right);
+            double right = parse_factor(p);
+            left = pow(left, right);
         } else {
             break;
         }
@@ -1043,8 +1060,8 @@ static float parse_term(parser_t *p) {
     return left;
 }
 
-static float parse_expression(parser_t *p) {
-    float left = parse_term(p);
+static double parse_expression(parser_t *p) {
+    double left = parse_term(p);
     
     while (true) {
         char c = parser_peek(p);
@@ -1069,7 +1086,7 @@ static float parse_expression(parser_t *p) {
             op[1] = parser_get(p);
         }
         
-        float right = parse_expression(p);
+        double right = parse_expression(p);
         
         if (strcmp(op, "<>") == 0) left = (left != right) ? -1.0f : 0.0f;
         else if (strcmp(op, "<") == 0) left = (left < right) ? -1.0f : 0.0f;
@@ -1079,8 +1096,12 @@ static float parse_expression(parser_t *p) {
         else if (strcmp(op, "=") == 0) left = (left == right) ? -1.0f : 0.0f;
     }
     
-    /* v161 HIGH-3: +/- overflow → Overflow (6), not inf */
-    if (!isfinite(left)) {
+    /* v161 HIGH-3: +/- overflow → Overflow (6), not inf.
+     * v169 HIGH-1: VALTYP-aware range — single-precision results
+     * (no # operand) must stay within float range (GW-BASIC MBF
+     * single max ≈ 3.4e38); double results use the double domain. */
+    if (!isfinite(left) || (g_valtyp != 8 &&
+        (left > 3.402823e38 || left < -3.402823e38))) {
         if (g_state) gwdata_set_error(6, g_state->current_line, 0);
         return 0.0f;
     }
@@ -1091,7 +1112,7 @@ void gweval_init(void) {
     /* No initialization needed */
 }
 
-float gweval_eval_numeric(const char *expr) {
+double gweval_eval_numeric(const char *expr) {
     if (!expr) return 0.0f;
     parser_t parser;
     parser_init(&parser, expr);

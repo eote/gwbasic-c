@@ -319,3 +319,76 @@ void test_erl_variable(void) {
                        "ERL == error line");
     TEST_PASS("erl variable");
 }
+
+void test_typed_swap(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v169 CRITICAL-1: typed SWAP (double/integer precision) */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("C# = 1.5"), 0, "C# init");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("D# = 2.5"), 0, "D# init");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("SWAP C#, D#"), 0, "swap doubles");
+    TEST_ASSERT_EQ_INT((int)(gweval_eval_numeric("C#") * 10), 25, "C# == 2.5");
+    TEST_ASSERT_EQ_INT((int)(gweval_eval_numeric("D#") * 10), 15, "D# == 1.5");
+    /* integer scalar <-> integer array */
+    gwsts_exec_statement("DIM E%(2)");
+    gwsts_exec_statement("E%(1) = 3");
+    gwsts_exec_statement("F% = 4");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("SWAP F%, E%(1)"), 0, "swap int");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("F%"), 3, "F% == 3");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("E%(1)"), 4, "E%(1) == 4");
+    gwdata_clear_error();
+    TEST_PASS("typed swap");
+}
+
+void test_double_precision_chain(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v169 HIGH-1: double precision through literal suffix, storage,
+     * and read-back */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("A# = 1.23456789012345#"), 0,
+                       "assign 1.23456789012345#");
+    struct variable *v = gwdata_find_variable("A#");
+    TEST_ASSERT(v && v->type == VT_DOUBLE, "VT_DOUBLE");
+    TEST_ASSERT(v->value.d > 1.23456789012 && v->value.d < 1.23456789013,
+                "double precision stored");
+    TEST_ASSERT_EQ_INT(gweval_last_valtyp(), 8, "VALTYP double");
+    TEST_PASS("double precision chain");
+}
+
+void test_for_typed(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v169 HIGH-2: FOR with typed variables */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("FOR I% = 1 TO 3"), 0, "FOR I%");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("I%"), 1, "I% starts 1");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("NEXT I%"), 0, "NEXT");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("I%"), 2, "I% == 2");
+    gwdata_clear_error();
+    TEST_PASS("for typed");
+}
+
+void test_clear_resets_error_state(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_set_error(0, 0, 0);
+    /* v169 HIGH-3: CLEAR disarms ON ERROR and resets ERR/ERL
+     * (ASM BIMISC CLEAR L245-248) */
+    gwsts_exec_statement("ON ERROR GOTO 100");
+    gwdata_set_error(11, 20, 0);
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("ERL"), 20, "ERL 20 before");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("CLEAR"), 0, "CLEAR");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("ERL"), 0, "ERL reset");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 0, "ERR reset");
+    TEST_ASSERT(!gwdata_is_on_error_active(), "ON ERROR disarmed");
+    TEST_PASS("clear resets error state");
+}
+
+void test_bang_alias(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v169 HIGH-4: A! and A are the same variable (default suffix) */
+    gwsts_exec_statement("A = 5");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A!"), 5, "A! reads A");
+    gwsts_exec_statement("A! = 7");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 7, "A reads A!");
+    TEST_PASS("bang alias");
+}

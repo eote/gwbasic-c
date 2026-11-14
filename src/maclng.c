@@ -9,7 +9,7 @@
 
 /* External references */
 extern void gweval_init(void);
-extern float gweval_eval_numeric(const char *expr);
+extern double gweval_eval_numeric(const char *expr);
 extern void gweval_synchr(const char **text, char expected);
 extern void gweval_scan_var(const char **text, int *var_ptr);
 extern int gweval_frqint(void);
