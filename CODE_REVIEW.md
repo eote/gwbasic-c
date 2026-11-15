@@ -1,58 +1,70 @@
-# GW-BASIC C Port - Code Review v169
+# GW-BASIC C Port - Code Review v170
 
-**日期**: 2026-11-14
-**审查范围**: `58ec586` → `51a5ad5`（v168 修复轮 `d8e5b57` + v169 开发批 `31ff258`：ERL + 数值类型后缀）
-**测试状态**: 断言 **3527/3527 通过** | 测试函数 **947 = 947**（0 孤儿）| 编译警告 **0** | 已登记 .bas **87/87 通过**
-**总体评分**: **D+（阻断合并）** — **1 CRITICAL**（typed SWAP 数据损坏/不交换）+ **4 HIGH**（A# 单精度、FOR 后缀失败、CLEAR/RUN 错误状态残留、A! 未别名）
+**日期**: 2026-11-15
+**审查范围**: `51a5ad5` → `c092684`（v169 修复轮 `27a6ef8` + 补遗 `c092684`）
+**测试状态**: 断言 **3550/3550 通过** | 测试函数 **952 = 952**（0 孤儿）| 编译警告 **0** | 已登记 .bas **87/87 通过**
+**总体评分**: **D+（阻断合并）** — **1 CRITICAL**（复合执行器执行 REM/撇号注释后的代码）+ **6 HIGH**（IF 分支冒号、VALTYP 顺序、single 语义、double 数学、STR$/double 数组、FOR 整数初值）
 
 ---
 
 ## 一、概述
 
-| 提交 | 内容 |
+`27a6ef8` + `c092684`（13 文件，+461/-92 与 +28/-1）修复 v169：
+
+| 文件 | 变更 |
 |------|------|
-| `d8e5b57` | v168 修复：SWAP 副本 free、f1 警告、40 字面量强断言 + ON ERROR e2e |
-| `31ff258` | v169：ERL 变量、`%` 16 位整数、`#` VT_DOUBLE、DIM/auto-DIM 后缀推断、4 单测 + `test_typesuffix.bas`（87） |
+| `src/gweval.c` | +97/-?：数值求值全 double、`g_valtyp`、`#` 字面量、single 字面量舍入 |
+| `src/biptrg.c` | +74：typed get/set（i/f/d）、混合标量↔数组 |
+| `src/gwsts.c` | +92：typed SWAP、PRINT double、ERL 只读、数组赋值 |
+| `src/next86.c` | +78：FOR/NEXT 后缀变量、typed 初值/递增/比较 |
+| `src/gwmain.c` | +76：冒号复合语句执行器 `gwmain_exec_compound`、THEN/ELSE 行尾吞并 |
+| `src/gwdata.c` / `src/bimisc.c` | +29/+27：CLEAR/RUN/NEW 清零 ERR/ERL/ON ERROR、`A!` canon |
+| `tests` | +5 单测 |
 
 ### 验证结果
 
 | 项 | 结果 |
 |----|------|
-| 构建 | ⚠️ 默认 gcc 经 `/mnt/d` argv0 找不到 `cc1`；用 `CC=D:/myplace/program/mingw64/bin/gcc.exe` 成功 |
-| 单测 | ✅ **3527/3527**，0 失败 |
-| 测试函数/注册 | ✅ **947 = 947**，0 孤儿 |
-| 警告 | ✅ **0**（v168 M2 已修） |
+| 构建 | ✅ `CC=D:/myplace/program/mingw64/bin/gcc.exe`；0 警告 |
+| 单测 | ✅ **3550/3550** |
+| 测试函数/注册 | ✅ **952 = 952**，0 孤儿 |
 | 87 .bas | ✅ **87/87** |
-| `A%` 标量/数组取整与溢出 | ✅ `1.9→2`、auto-DIM `A%(1)=2`、`40000→ERR 6` |
-| ERL 在 handler | ✅ `E1=20 ERR=11`；RESUME 后 `E2=20` |
-| **A# 双精度** | ❌ `1.23456789012345#→1.23457`、`1/3→0.333333` |
-| **FOR I%/A#** | ❌ `Error at line 10`，handler `ERR=0` |
-| **typed SWAP** | ❌ `C#/D#` 不交换；`D#,C#(1)` 丢数组值；`F%,E%(1)` 写坏为 `1.07794e+09 / 0` |
-| **CLEAR/RUN 后 ERL** | ❌ `CLEAR` 后 `E3=20`；第二次 RUN `E0=20`（ASM 清零） |
-| **CLEAR 后 ON ERROR** | ❌ 仍跳旧 handler（输出 `HANDLER`） |
-| **A! 别名** | ❌ `A=5`、`A!=0`、`A!=7` 后 `A=5`（应同名） |
-| v168 SWAP 副本泄漏 | ✅ 两次 set 后 free（代码确认；1000 次循环由提交说明验证） |
+| typed SWAP | ✅ `SD=2.5 1.5`、`MD=1.5 2.5`、`MI=3 4`、`MX=-1 32767` |
+| A! 别名/数组/FOR | ✅ `A=5/A!=5/A2=7/B=2/F=1,2` |
+| ERL CLEAR/RUN/ON ERROR | ✅ `E1=20/E2=20/E3=0`；CLEAR 后错误不再进 HANDLER；第二次 RUN `0 0`；`ERL=5→ERR 5` |
+| FOR 基础 | ✅ `I%=1,2,3`、`A#=1,2,3`、负数 STEP `3,2,1` |
+| `A#` 标量存储/PRINT 变量 | ✅ `D=1.23456789012345`、`T=0.333333333333333`、`ABS` 完整 |
+| **REM/撇号注释** | ❌ `REM COMMENT: PRINT "LEAK1"` → 打印 LEAK1；`' COMMENT: PRINT "LEAK2"` → Error at line 10 |
+| **IF 分支冒号** | ❌ `IF 1 THEN PRINT "T1": PRINT "T2"` → 仅 T1；`ELSE ... E5: E6` → 仅 E5 |
+| **double 直接表达式** | ❌ `PRINT 1#/3 → 0.333333`；`PRINT 1.23456789012345# + 0 → 1.23457` |
+| **single 语义** | ❌ `A#=1/3 → 0.333333333333333`；`IF 0.1+0.2=0.3 → NE` |
+| **double 数学函数** | ❌ `SIN(1#)=0.841470956802368`、`SQR(2#)=1.41421353816986`、`EXP(1#)=2.71828174591064` |
+| **STR$/double 数组** | ❌ `STR$=[ 1.23457]`、`C#(1)=1.23457`、`D#=C#(1)=1.23456788063049` |
+| **FOR 整数初值** | ❌ `FOR I%=1.9 TO 3 → J=1,2,3`（应为 2,3） |
 
-### v168 修复闭环
+### v169 问题闭环
 
-| v168 | 状态 |
+| v169 | 状态 |
 |------|------|
-| MEDIUM-1 SWAP 副本泄漏 | ✅ `tmp1_copy/tmp2_copy` 写回后 `gwram_free` |
-| MEDIUM-2 f1 警告 | ✅ 0 警告 |
-| MEDIUM-4 测试加固 | ✅ 40 字面量强断言、ON ERROR e2e |
+| C1 typed SWAP | ✅ 全部通过（double/整数极值/混合数组） |
+| H1 A# 双精度 | ⚠️ 标量存储/PRINT 变量 full；运算/数组/STR$/数学仍单精度 |
+| H2 FOR 后缀 | ⚠️ 基本 `I%`/`A#`/负 STEP ✅；整数初值截断 ❌ |
+| H3 CLEAR/RUN 错误状态 | ✅ ERL/ON ERROR/RUN/ERL 赋值全部闭环 |
+| H4 A! 别名 | ✅ 标量、数组、FOR 全部别名 |
+| 复合执行器 | ❌ REM/注释、IF 分支冒号（新） |
+| 测试 | ⚠️ +5，但仍未覆盖上述新问题 |
 
 ### 正面确认
 
 | 功能 | 结果 |
 |------|------|
-| `%` 标量：round-half-away + Overflow 6 + 旧值保持 | ✅ 单测/手工 |
-| `DIM A%()` 与 auto-DIM 整数数组 | ✅ 元素取整、溢出 6 |
-| `A%` 基本读写/PRINT | ✅ |
-| ERL 错误行读取（handler） | ✅ |
-| ERL 无错误（全新进程） | ✅ 0 |
-| SWAP 字符串数组（v168） | ✅ `[two][one]` |
-| CLEAR/RUN 后字面量缓存 | ✅ `LIT` 保持 |
-| IF OOM 传播（v168） | ✅ ERR=7 可捕获 |
+| typed SWAP | ✅ 双精度/整数/混合数组全精度 |
+| A! 别名 | ✅ 标量、数组 `B!(1)`、`FOR I!` |
+| ERL 生命周期 | ✅ handler/RESUME/CLEAR/RUN/只读赋值 |
+| FOR 类型后缀 | ✅ `I%`/`A#`/负数 STEP |
+| A# 标量存储 | ✅ 15 位 double 存储与 `PRINT A#` |
+| ABS(double) | ✅ `1.23456789012345` |
+| 3550 单测/87 .bas/0 警告 | ✅ |
 
 ---
 
@@ -62,27 +74,31 @@
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | **typed SWAP 仍按 `value.f` 读写：double 不交换、整数标量×数组写坏** | `src/gwsts.c` | 1274-1298 |
+| 1 | **复合执行器不识别 REM/撇号注释：注释后的代码会被执行或报错** | `src/gwmain.c` | 115-185 |
 
-**详情:** SWAP 数值分支对所有标量都读取/写入 `va->value.f`，不区分 VT_INTEGER / VT_DOUBLE：
-
-```c
-f1 = va->value.f;                 /* VT_INTEGER / VT_DOUBLE 被当 float 低 4 字节 */
-...
-va->value.f = f2;                 /* 写 union 低 4 字节，double 高 4 字节保留 */
-```
-
-实测：
+**详情:** `gwmain_exec_compound` 只按引号跳过 `:`，不识别 `REM`/`'` 注释：
 
 ```basic
-10 C#=1.5: D#=2.5: SWAP C#,D#: PRINT "SD=";C#;D#          → SD= 1.5 2.5（未交换）
-20 DIM C#(2): C#(1)=1.5: D#=2.5: SWAP D#,C#(1)
-30 PRINT "D=";D#;C#(1)                                     → D= 2.5 0（数组值丢失）
-40 DIM E%(2): E%(1)=3: F%=4: SWAP F%,E%(1)
-50 PRINT "MI=";F%;E%(1)                                     → MI= 1.07794e+09 0（数据损坏）
+10 REM COMMENT: PRINT "LEAK1"
+20 PRINT "DONE"
 ```
 
-`SWAP A%,B%`（1/2、-1/2）碰巧通过，是因小整数位模式经 float 往返未变；这不保证其他整数（如 32767）或 OOM/FPU 模式。**修复**: 按 `t1` 选 `value.i/f/d` 或整 union `memcpy`；数组元素用返回 double/int 的类型化 get/set，不能统一转 float。
+实测打印 `LEAK1`（REM 后的 PRINT 被执行），随后才 DONE。另一形式：
+
+```basic
+10 ' COMMENT: PRINT "LEAK2"
+20 PRINT "DONE"
+```
+
+实测 **Error at line 10**（合法的撇号注释行直接失败）。同理：
+
+```basic
+10 PRINT "A": REM TRAP: PRINT "LEAK3"
+```
+
+会在 A 之后执行 LEAK3。注释中的代码可能包含 PRINT/OPEN/GOTO 等任意副作用，属行为/数据破坏级回归。
+
+**修复:** 段首（跳过空白）为 `REM` 或 `'` 时，直接吞到行尾、不拆冒号；`DATA` 也需核对是否同样延伸到行尾。补 `REM/撇号 + 冒号`、`PRINT: REM: PRINT`、IF 内 REM 用例。
 
 ---
 
@@ -90,51 +106,72 @@ va->value.f = f2;                 /* 写 union 低 4 字节，double 高 4 字�
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | **`A#` 只有 VT_DOUBLE 标签，求值/读取仍是 float 单精度** | `src/gweval.c` / `src/gwsts.c` / `src/biptrg.c` | 991、3180、433 |
-| 2 | **FOR/NEXT 不接受后缀变量；`FOR I%` 直接失败且 ERR=0** | `src/next86.c` | 117-122、246-251、322-345 |
-| 3 | **CLEAR/RUN 未按 ASM 重置错误状态：ERL 残留、ON ERROR 仍激活** | `src/gwdata.c` | 25-60 |
-| 4 | **`A!` 未与 `A` 别名（GW-BASIC `!` 为默认单精度后缀）** | `src/gwsts.c` | 3157-3190 |
+| 1 | **IF THEN/ELSE 分支的冒号语句只执行第一条** | `src/gwsts.c` | 2546-2570 |
+| 2 | **`g_valtyp` 取“最后因子”，不是表达式最宽类型；double 直接表达式打印 7 位** | `src/gweval.c` / `src/gwsts.c` | 78、527、1015-1017 / 2250 |
+| 3 | **single 运算未按单精度舍入：`A#=1/3` 变全 double，`0.1+0.2=0.3` 变 NE** | `src/gweval.c` | 1024-1090 |
+| 4 | **double 数学函数仍用 `sinf/cosf/tanf/atanf/expf/logf/sqrtf/floorf/truncf`** | `src/gweval.c` | 661-760 |
+| 5 | **STR$ 与普通 double 数组仍走 float：`1.234...#` 变 `1.23457`** | `src/bistrs.c` / `src/gweval.c` / `src/gwsts.c` | 3124、993 |
+| 6 | **FOR 整数初值最终被截断：`FOR I%=1.9` 从 1 开始（应 2）** | `src/next86.c` | 357、381 |
 
-**HIGH-1 详情:** 赋值 `A#` 存 `(double)val`，但 `val` 来自 `gweval_eval_numeric()`（float）；读 `A#` 又返回 `(float)v->value.d`；数组 get 对 VT_DOUBLE 也 `return (float)data[index]`：
-
-```basic
-10 A#=1.23456789012345#
-20 PRINT "D=";A#          → D= 1.23457
-30 B#=1/3: PRINT "T=";B#   → T= 0.333333
-```
-
-`test_type_suffix_double` 只断言 `(int)1.5==1` 与 `type==VT_DOUBLE`，float 存入 double 同样通过，未验证精度。**修复**: 要么实现 double 求值链（parse/assign/print/array get 全 double），要么明确 `#` 仅类型标签、暂不支持双精度并修正文档/测试。
-
-**HIGH-2 详情:** `next86_for` 变量名只接受 `alnum/_`（`NEXT` 仅 alpha），`%/#/!` 使解析在 `%` 处停下并返回 ERROR，且不 set_error：
+**HIGH-1 详情:** `gwsts` 的 IF dispatch 直接执行 `then_stmt`/`else_stmt` 单条语句，不再做冒号拆分：
 
 ```basic
-10 ON ERROR GOTO 100
-20 FOR I%=1 TO 3
-30 PRINT "I=";I%
-40 NEXT I%
-100 PRINT "ERR=";ERR
+10 IF 1 THEN PRINT "T1": PRINT "T2"       → 仅 T1
+20 IF 0 THEN PRINT "F1": PRINT "F2"       → 无（false 正确）
+30 IF 1 THEN PRINT "T3" ELSE PRINT "E3": PRINT "E4"  → 仅 T3
+40 IF 0 THEN PRINT "T5" ELSE PRINT "E5": PRINT "E6"  → 仅 E5
 ```
 
-实测 `ERR= 0`，无 I 输出；`FOR A#` 同样。即使解析修好，`next86` 仍用 `VT_SINGLE`/`value.f` 做 start/limit/step/compare，typed 循环值仍错。**修复**: 变量名允许 `$%#!`；按后缀取类型并用 `i/f/d`；语法错误设 SNERR/类型错误码。
+GW-BASIC 中 THEN/ELSE 后冒号语句属于同一分支，应 T1+T2、E5+E6。`gwmain_exec_compound` 只吞并行尾，最终仍交给 `gwsts_exec_statement(then_stmt)`，后者不会执行第二条。**修复:** THEN/ELSE 分支调用共享的 compound 执行器（注意 THEN 行号跳转分支），补真假分支多语句用例。
 
-**HIGH-3 详情:** ASM `CLEAR`/`RUN`（`BIMISC.ASM:245-248`）清零 `ERRLIN`、`ONEFLG`、`ONELIN`、`OLDTXT`；C 侧 `gwdata_init()` 只重置变量/current_line/堆，不动 error 状态：
-
-- `ON ERROR` → `A=1/0` → handler `ERL=20`；`CLEAR` 后 `PRINT ERL` 仍 **20**（应 0）；
-- 第二次 `RUN` 开始 `PRINT ERR;ERL` → `E0=0 20`（ERL 残留）；
-- `10 ON ERROR GOTO 100 / 20 CLEAR / 30 A=1/0` → **仍跳 HANDLER**（ASM 中 CLEAR 已关 ON ERROR，应报未处理错误）。
-
-**修复**: 在 `gwdata_init()` 清零 `error_code/error_line/error_text_ptr/on_error_line`（以及 old-text/handler 状态）；补 CLEAR/RUN 后 `ERL/ERR/ON ERROR/RESUME` 用例。
-
-**HIGH-4 详情:** GW-BASIC 中 `A!` 与 `A` 是同一变量（`!` 为默认 single 后缀）：
+**HIGH-2 详情:** `g_valtyp` 在 factor 中赋值，但 term/expression 不提升；最后一个因子决定 PRINT 精度：
 
 ```basic
-10 A=5: PRINT "A=";A        → 5
-20 PRINT "ABANG=";A!        → 0（应 5）
-30 A!=7
-40 PRINT "A2=";A            → 5（应 7）
+PRINT 1#/3                    → 0.333333（应 15 位）
+PRINT 1.23456789012345# + 0   → 1.23457
+PRINT 0 + 1.23456789012345#   → 1.23456789012345（顺序依赖）
+A#=1.23456789012345#: PRINT A# → 完整（变量路径设 valtyp 8）
 ```
 
-`assign_value`/DIM/parse 只对 `$/%/#` 建类型，`!` 保留在名字里，形成独立变量；`A!(1)` 数组同样不与 `A(1)` 别名。**修复**: lookup/alloc/DIM/SWAP/FOR 统一把尾随 `!` 归一化为无后缀。
+数组读取/数学函数/ERR/ERL/RND/FRE 等也不设置/复位 valtyp，会沿用上一表达式的类型。**修复:** 按“最宽类型”提升（2<4<8），在每个 expression 入口复位，数组/函数返回时设置，PRINT 再消费。
+
+**HIGH-3 详情:** 求值全用 double，没有在 single 表达式结果处 round 到 float：
+
+```basic
+A#=1/3                 → 0.333333333333333（GW-BASIC single 应为 0.333333343）
+IF 0.1+0.2=0.3 THEN    → NE（GW-BASIC single 为 EQ）
+```
+
+`A#=1/3` 两个操作数都是默认 single，运算结果应先按 single 舍入再存 double；当前把 float 字面量 widen 后做 double 运算。**修复:** 用 VALTYP=4 时对每步/最终结果 round 到 float（或实现 MBF single 语义），double 仅在 valtyp 8 时保留。
+
+**HIGH-4 详情:** 参数已 double，但函数仍单精度：
+
+```
+SIN(1#) = 0.841470956802368   （double 0.841470984807897）
+SQR(2#) = 1.41421353816986    （double 1.414213562373095）
+EXP(1#) = 2.71828174591064    （double 2.718281828459045）
+```
+
+`ABS` 已用 `fabs`（✅），其余 SIN/COS/TAN/ATN/EXP/LOG/SQR/INT/FIX 仍是 `sinf/sqrtf/...`。**修复:** 按 valtyp 选择 double 版本，或在 double 入参时统一调用 double 数学。
+
+**HIGH-5 详情:** `STR$`/数组未接 double：
+
+```
+STR$(1.23456789012345#) = " 1.23457"
+DIM C#(2): C#(1)=1.23456789012345#
+PRINT C#(1)              = 1.23457
+D#=C#(1)                 = 1.23456788063049（double of float）
+```
+
+`gweval.c:993/1006` 数组读取仍返回 float；`gwsts.c:3124/3136` 赋值仍 `float val`；`biptrg_get_array_element` VT_DOUBLE 返回 float。**修复:** 普通数组访问改用 typed get/set（或返回 double）；`STR$` 按 valtyp 8 用 `%.15g/16g`。
+
+**HIGH-6 详情:** `next86_for` 先 round 得到 `rounded`（line357）并做范围检查，但末尾又 `v->value.i = (int32_t)start`（line381）直接截断：
+
+```
+FOR I%=1.9 TO 3 → J=1,2,3（GW-BASIC 应按 CINT 从 2 开始）
+```
+
+**修复:** 保存并使用 `rounded`；负数同样按 round-half-away；补 `1.9/-1.9` 用例。
 
 ---
 
@@ -142,18 +179,18 @@ va->value.f = f2;                 /* 写 union 低 4 字节，double 高 4 字�
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | 测试盲区：double 只验类型标签；ERL 测试手工重置行号；无 FOR/SWAP/A!/CLEAR/RUN 用例 | `tests/test_str_semantics.c` | 281、309 |
-| 2 | VT_DOUBLE 数组 get 返回 float（精度必然丢失） | `src/biptrg.c` | 433-437 |
-| 3 | ERL 被硬编码为只读：`ERL=...` 创建无用变量；ASM 中 ERL 指向 ERRLIN | `src/gweval.c` / `src/gwsts.c` | 573-578 |
-| 4 | `test_typesuffix.bas` 的 `SHOULD NOT PRINT` 实际会打印（RESUME NEXT 到 line120） | `tests/bas/test_typesuffix.*` | .bas:12 / expected:6 |
+| 1 | 测试盲区：double 仅验存储/valtyp；FOR 仅 start=1；无 REM/IF 分支、PRINT 顺序、single、math、STR$/数组、FOR 1.9 用例 | `tests/test_str_semantics.c` | 323-400 |
+| 2 | `biptrg_set_array_element_typed` 直接写 `data[index]`，无 bounds/rank 检查 | `src/biptrg.c` | 294-365 |
+| 3 | `g_valtyp` 未覆盖数组读取/多数函数；`%.15g` 与 GW-BASIC double 16 位仍可能差 1 位 | `src/gweval.c` / `src/gwsts.c` | 78、993 / 2250 |
+| 4 | `test_typesuffix.bas` 的 `SHOULD NOT PRINT` 实际会打印 | `tests/bas/test_typesuffix.*` | .bas:12 / expected:6 |
 
-**MEDIUM-1:** `test_type_suffix_double` 只验证 `(int)1.5` 和 `VT_DOUBLE`；`test_erl_variable` 用 `gwdata_set_error(0,0,0)` 手工清行号，掩盖 `gwdata_init` 残留；缺少 typed FOR、typed SWAP、A!、CLEAR 后 ON ERROR、第二次 RUN ERL、auto-DIM 精度测试。**这是本轮 1C/4H 全部漏检的直接原因。**
+**MEDIUM-1:** `test_double_precision_chain` 只断言 `A#` 存储值与 `VALTYP==8`；不测 `PRINT 1#/3`、`A#=1/3`、`0.1+0.2=0.3`、`SIN/SQR`、`STR$`、`C#(1)`。`test_for_typed` 只用 start=1，无 1.9/负数。`test_bang_alias` 只标量（手工数组/FOR 已通过）。**复合执行器完全没有单测**，REM/IF 回归因此漏网。
 
-**MEDIUM-2:** `biptrg_get_array_element()/..._multi()` 的 VT_DOUBLE 分支 `return (float)data[index]`；即使存储是 double，读到 float 已丢精度。
+**MEDIUM-2:** typed set 在 ndims==1 直接 `((double*)data)[indices[0]]`，未校验 index<size/dimensions；当前 SWAP 先 get（会校验），但公共 API 被其他调用时存在越界写风险。
 
-**MEDIUM-3:** `parse_factor` 对 `ERL` 特判读取 `gwdata_get_error_line()`，但赋值路径仍创建名为 `ERL` 的普通变量；`ERL=5` 不会改错误行，且不报错。ASM 中 `ERL` 描述符指向 `ERRLIN`，应确认是否允许赋值/应拒绝。
+**MEDIUM-3:** `g_valtyp` 未在数组读取、`ABS`/`SIN`/`SQR`/`FRE`/`RND`/`ERL` 等结果处设置；PRINT 的 `%.15g` 与 GW-BASIC double 16 位格式可能差末位。
 
-**MEDIUM-4:** 期望值与标签矛盾：程序 line110 溢出 → handler → `RESUME NEXT` 到 line120，确实打印 `SHOULD NOT PRINT`；测试通过但标签误导（若意图不打印应 `RESUME 130`）。
+**MEDIUM-4:** 程序 line110 溢出 → handler → `RESUME NEXT` 到 line120，确实打印 `SHOULD NOT PRINT`；测试通过但标签误导。
 
 ---
 
@@ -161,12 +198,12 @@ va->value.f = f2;                 /* 写 union 低 4 字节，double 高 4 字�
 
 | # | 描述 |
 |---|------|
-| 1 | 整数标量 SWAP 依赖 float 位往返（32767/NaN 位型不保证）；应类型化 |
-| 2 | SWAP 副本 alloc 失败时回退原槽指针，OOM 边缘仍可能 UAF |
-| 3 | `next86_for` 解析失败返回 ERROR 但不设错误码（诊断困难） |
-| 4 | `ERL` 残留只修 read 不修生命周期；error_text/OLDTXT 同样残留 |
-| 5 | `A!` 数组/DIM/SWAP 同样未别名 |
-| 6 | 默认 gcc 经 `/mnt/d` argv0 找不到 `cc1`，需 `CC=D:/...` 构建；环境问题 |
+| 1 | `gwmain_exec_compound` 的 `if_block` 只要段内出现 THEN/ELSE 就吞行尾，未区分 REM/DATA/字符串（字符串已跳过，REM 未） |
+| 2 | `DATA ...: ...` 是否应延伸到行尾未核对；当前会被拆分 |
+| 3 | `g_valtyp`/`%.15g` 与 GW-BASIC 16 位格式差异 |
+| 4 | `VAL`/`RND`/`FRE` 等函数 valtyp 可能沿用上一表达式 |
+| 5 | `FOR I% STEP 0.5` 整数步长转换未验证（可能 0 → 无限循环） |
+| 6 | 默认 gcc 经 `/mnt/d` argv0 找不到 `cc1`，需 `CC=D:/...` 构建（环境） |
 
 ---
 
@@ -174,66 +211,70 @@ va->value.f = f2;                 /* 写 union 低 4 字节，double 高 4 字�
 
 | 决策 | 评价 |
 |------|------|
-| `%` 标量：round + Overflow6 | ✅ 正确；旧值保持 |
-| DIM/auto-DIM 后缀推断 + 元素 FWRTN | ✅ 数值数组基本可用 |
-| `#` = VT_DOUBLE | ❌ 仅类型标签，求值仍 float（HIGH-1） |
-| ERL 特判读取 error_line | ✅ handler 内正确；❌ CLEAR/RUN 生命周期（HIGH-3） |
-| typed SWAP | ❌ 仍 `value.f`，double/混合数据损坏（CRITICAL-1） |
-| FOR/NEXT | ❌ 不接受后缀、仍 `value.f`（HIGH-2） |
-| `!` 后缀 | ❌ 未归一化别名（HIGH-4） |
-| 测试 | ❌ 只覆盖标签/类型，未覆盖精度/跨语句/生命周期 |
+| typed SWAP（i/f/d + typed array get/set） | ✅ 修复彻底；4 组用例正确 |
+| A! canon 归一化 | ✅ 标量/数组/FOR 均别名 |
+| gwdata_init/bimisc 清错误状态 | ✅ ERL/ON ERROR/RUN 全部正确 |
+| FOR/NEXT 后缀类型 | ⚠️ 基本可用；整数初值末端截断 |
+| 求值全 double + VALTYP | ❌ VALTYP 只记最后因子；single 未 round；math/数组/STR$ 未接 |
+| 冒号复合执行器 | ❌ 无词法层，REM/`'` 被拆；IF 分支只执行第一条 |
+| 测试 +5 | ⚠️ 覆盖 typed SWAP/A# 存储/FOR 基础/ERL/A!，但漏掉新执行器与 double 语义 |
 
-**类型后缀只加在 assign/parse/DIM/array set 四个入口，未贯穿 FOR/NEXT、SWAP、`!` 别名与 double 求值链**，这是本轮回归的根因。
+**根因**: 类型/精度改造横跨 evaluator、PRINT、STR$、array、FOR、SWAP，但只完成了部分入口；复合执行器用字符串扫描替代词法分析，无法处理 REM/注释与分支语句列表。
 
 ---
 
 ## 四、改进建议
 
 ### 短期（阻断合并）
-1. **CRITICAL-1**：SWAP 类型化：`i/f/d`/union memcpy；数组 get/set 返回对应类型；补 `C#/D#`、`D#/C#(1)`、`F%/E%(1)`、32767/-1 整数用例。
-2. **HIGH-1**：实现 double 求值链或撤回 `#` 双精度声明；测试 `1.23456789012345#` 与 `1/3` 的 15+ 位输出。
-3. **HIGH-2**：FOR/NEXT 变量名允许 `%#!`，按类型读写；补 `FOR I%`/`FOR A#`/`STEP` 用例；错误设码。
-4. **HIGH-3**：`gwdata_init` 清零 error_code/error_line/error_text_ptr/on_error_line/OLDTXT；补 CLEAR/RUN 后 `ERL/ERR/ON ERROR/RESUME` 用例。
-5. **HIGH-4**：lookup/alloc/DIM/SWAP/FOR 统一把尾随 `!` 归一化；补 `A/A!` 与 `A()/A!()` 用例。
+1. **CRITICAL-1**：复合执行器识别 `REM`/`'`（段首）并吞到 EOL；补 REM/撇号/PRINT:REM:PRINT/IF 内 REM 用例；核对 DATA。
+2. **HIGH-1**：IF THEN/ELSE 分支执行 compound 语句列表（共享 helper），保持 THEN 行号跳转；补 T1+T2、E5+E6、F1/F2 用例。
+3. **HIGH-2/3**：VALTYP 取最宽并在 expression 入口复位；single 结果 round 到 float；补 `1#/3`、`double+0`、`0.1+0.2=0.3`、`A#=1/3`。
+4. **HIGH-4**：math 函数按 double 调用；补 SIN/SQR/EXP 精度断言。
+5. **HIGH-5**：double 数组普通 get/set 改 typed；STR$ 输出 double 16 位。
+6. **HIGH-6**：FOR 整数初值使用已 round 的 `rounded`；补 1.9/-1.9。
 
 ### 中期
-6. `biptrg` double getter 返回 double（或 typed value union）；消除 float 中间层。
-7. ERL 按 ASM 变量表实现（读写 ERRLIN 或明确只读）。
-8. 测试 `test_type_suffix_double` 改断言精度；`test_erl_variable` 用干净 init，不手工清行号；`test_typesuffix` 修正 SHOULD NOT PRINT 标签。
+7. typed set 增加 bounds/rank 校验；补 OOB 用例。
+8. g_valtyp 覆盖数组/函数/ERR/ERL/RND/FRE；`%.15g` 与 ASM 16 位格式核对。
+9. `test_typesuffix` 修正 SHOULD NOT PRINT 标签并加 ERL。
+10. 复合语句执行器改为 tokenizer/词法驱动，不靠字符串扫描。
 
 ### 长期
-9. 建立“类型后缀矩阵”测试：变量/数组/循环/SWAP/函数参数/PRINT USING 各类型组合。
-10. ASAN/UBSAN + 长循环；CI 零失败/零警告。
+11. 类型矩阵测试：变量/数组/循环/SWAP/函数/PRINT USING × i/f/d；single/double 比较语义。
+12. ASAN/UBSAN + fuzz（注释冒号、IF 分支、double 数组、OOM）。
 
 ---
 
 ## 五、总结
 
-**总体评价**: v168 的 MEDIUM 修复到位（SWAP 副本释放、0 警告、测试加固），v169 的 `%` 整数与 ERL handler 读取也真实可用；但类型后缀只接入了一半入口：typed SWAP 直接损坏数据，`A#` 只有 double 标签没有 double 精度，FOR/NEXT 遇到后缀变量失败且 ERR=0，CLEAR/RUN 未清 ERL/ON ERROR，`A!` 未与 `A` 别名。3527 个单测全绿，但恰好避开了这些组合。
+**总体评价**: v169 的 1C/4H 中，typed SWAP、A!/ERL 生命周期、CLEAR/RUN 状态、FOR 基础后缀已真实修复；`A#` 标量存储与 `PRINT A#` 也能到 15 位，ABS 为 double。但 double 求值链只完成“存储”，VALTYP/single 舍入/math/STR$/数组仍缺失；新引入的冒号复合执行器使 REM/撇号注释代码被执行或报错，IF THEN/ELSE 分支的冒号语句只执行第一条。3550/3550 与 87/87 全绿，但测试恰好没有覆盖这些语义。
 
-**关键发现**: **1 CRITICAL / 4 HIGH / 4 MEDIUM / 6 LOW**；3527 单测、87/87 .bas、0 警告。
-**建议**: **阻断合并**。优先修 typed SWAP、double 精度、FOR 后缀、CLEAR/RUN 错误状态与 `!` 别名，再扩展类型矩阵测试。
+**关键发现**: **1 CRITICAL / 6 HIGH / 4 MEDIUM / 6 LOW**；3550 单测、87/87 .bas、0 警告。
+**建议**: **阻断合并**。先修复注释/IF 分支执行器与 double 的 VALTYP/single/math/STR$/数组/FOR 初值，再扩展类型矩阵与复合语句测试。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v168 | v169 | 变化 |
+| 指标 | v169 | v170 | 变化 |
 |------|------|------|------|
-| 断言 / 通过 | 3500 / 3500 | **3527 / 3527** | +27 |
-| 测试函数 | 942 | **947** | +5 |
+| 断言 / 通过 | 3527 / 3527 | **3550 / 3550** | +23 |
+| 测试函数 | 947 | **952** | +5 |
 | 孤儿数 | 0 | **0** | 保持 |
-| 警告 | 1 | **0** | ✅ 清零 |
-| 86/87 .bas | 86/86 | **87/87** | +1 |
-| v168 SWAP 副本泄漏 | 未释放 | **已 free** | ✅ |
-| `%` 标量/数组 | 无 | **round + Overflow6** | ✅ |
-| ERL handler | 0 | **20（正确）** | ✅ |
-| ERL CLEAR/RUN | — | **残留 20** | ❌ HIGH |
-| A# 精度 | single | **仍 single（1.23457）** | ❌ HIGH |
-| FOR 后缀 | 无 | **ERR=0/失败** | ❌ HIGH |
-| A! 别名 | 无 | **独立变量** | ❌ HIGH |
-| typed SWAP | 无 | **数据损坏/不交换** | ❌ CRITICAL |
-| 10k 字符串数组/长串 | 通过 | **通过** | 保持 |
-| CRITICAL / HIGH | 0 / 1（既有） | **1 / 4** | ❌ 阻断 |
+| 警告 | 0 | **0** | 保持 |
+| 87 .bas | 87/87 | **87/87** | 保持 |
+| typed SWAP | 数据损坏 | **SD/MD/MI/MX 全对** | ✅ 闭环 |
+| A! 别名 | 独立变量 | **标量/数组/FOR 别名** | ✅ 闭环 |
+| ERL CLEAR/RUN | 残留 20 | **E3=0、RUN 0 0、ON ERROR 关闭** | ✅ 闭环 |
+| FOR 后缀 | ERR=0 | **I%/A#/负 STEP 正确** | ⚠️ 初值 1.9 截断 |
+| A# 标量存储 | single | **D/T 15 位、PRINT 变量 full** | ⚠️ 部分 |
+| A# 直接表达式 | single | **P/Q 仍 7 位** | ❌ HIGH |
+| single 语义 | double | **`0.1+0.2=0.3` NE、`A#=1/3` full** | ❌ HIGH |
+| math double | float | **仍 float** | ❌ HIGH |
+| STR$/double 数组 | float | **仍 1.23457** | ❌ HIGH |
+| FOR 初值 | — | **1.9→1（应 2）** | ❌ HIGH |
+| REM/注释 | 未测 | **LEAK1/Error at line 10** | ❌ 新 CRITICAL |
+| IF 分支冒号 | 未测 | **T2/E6 丢失** | ❌ 新 HIGH |
+| CRITICAL / HIGH | 1 / 4 | **1 / 6** | 阻断 |
 
-**注释**: 单测/87 .bas 使用 `CC=D:/myplace/program/mingw64/bin/gcc.exe` 构建。类型/ERL/SWAP 为独立进程手工探针；`%` 与 ERL handler 为正面结果。仅更新本报告，未改源码。
+**注释**: 单测/87 .bas 使用 `CC=D:/myplace/program/mingw64/bin/gcc.exe` 构建。SWAP/A!/ERL/FOR/double/复合语句均为独立进程手工探针。仅更新本报告，未改源码。
