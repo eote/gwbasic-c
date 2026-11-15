@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v169 修复轮 — typed SWAP + double 求值链 + FOR 后缀 + CLEAR 错误状态 + ! 别名 + 冒号复合语句 (1C/4H 全处理); 下一步 v170 review |
+| **当前阶段** | v170 修复轮 — compound REM/注释 + IF 分支多语句 + VALTYP/single/math/STR$/数组 double + FOR CINT (1C/6H 全处理); 下一步 v171 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,42 @@
 
 ---
 
+## 当前轮: CODE_REVIEW v170 修复轮 — 1C/6H 全处理 (阻断解除)
+
+### CRITICAL (REM/撇号注释被执行)
+
+- compound 执行器无注释识别 → 注释后代码执行/报错
+- 修复: 段首 REM/' → 吞到行尾 (GW-BASIC REM 延伸 EOL)
+
+### HIGH (6 项)
+
+| # | 修复 |
+|---|------|
+| H1 IF 分支冒号 | compound 移至 gwsts (gwsts_exec_compound 导出); THEN/ELSE 分支调 compound (行号跳转分支保持) — T1+T2/E5+E6 全过 |
+| H2 VALTYP 顺序 | term/expression 取首 factor 类型为基线, 运算取最宽 (2<4<8) — 1#/3、# + 0 双序全 15 位 |
+| H3 single 语义 | expression 尾 valtyp!=8 → round float; **比较双操作数 round** (0.1+0.2=0.3 → EQ); A#=1/3 → 0.333333343 |
+| H4 math double | SIN/COS/TAN/ATN/EXP/LOG/SQR 按参后 valtyp 选 double 版 — SIN(1#)=0.841470984807897 |
+| H5 STR$/数组 | STR$ valtyp 8 → %.15g; 数组读 typed get (double/int valtyp); 数组写 typed set (double val 全精度); assign val double 化 |
+| H6 FOR 整数初值 | init 处复用 rounded (CINT) — FOR I%=1.9 从 2 开始; 负数 -1.9→-2 |
+
+### 额外修复
+
+- **LOW-2 DATA**: DATA 冒号后合法 (compound 吞行尾 + bimisc_read
+  冒号感知扫描 DATA 段)
+- **M2**: typed set 秩/界校验 (ERRBS 9)
+- **M4**: test_typesuffix 标签修正 (RESUMED) + ERL 检查 (OV: 6 L: 110)
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 (root+tests) | ✅ 0 警告 |
+| 单测 | ✅ **3569/3569 PASS** (+19) |
+| .bas 逐个 | ✅ **87/87** |
+| 孤儿检测 | ✅ **960 = 960** |
+| reviewer 探针 | ✅ REM/撇号/注释中冒号、T1+T2/E5+E6、1#/3、#±0 双序、A#=1/3、0.1+0.2=0.3 EQ、SIN/SQR/EXP double、C#(1) 全精度、STR$、FOR 1.9、DATA 冒号后 |
+
+---
 ## 当前轮: CODE_REVIEW v169 修复轮 — 1C/4H 全处理 (阻断解除)
 
 ### CRITICAL (typed SWAP 数据损坏)
