@@ -392,3 +392,104 @@ void test_bang_alias(void) {
     TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 7, "A reads A!");
     TEST_PASS("bang alias");
 }
+
+void test_rem_comment_compound(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v170 CRITICAL-1: REM/' comments are not executed, colons
+     * inside them are not separators */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("REM HIDDEN: PRINT \"X\""), 0,
+                       "REM line swallowed");
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("' HIDDEN: PRINT \"Y\""), 0,
+                       "apostrophe line swallowed");
+    gwdata_clear_error();
+    TEST_PASS("rem comment compound");
+}
+
+void test_if_branch_compound(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gioscn_screen(1);
+    gwdata_clear_error();
+    /* v170 HIGH-1: THEN/ELSE branches run full colon lists */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("IF 1 THEN A = 1: B = 2"), 0, "then multi");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 1, "A==1");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("B"), 2, "B==2");
+    gwsts_exec_compound("C = 0: D = 0");
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("IF 0 THEN C = 5: C = C + 1 ELSE D = 9: D = D + 1"), 0,
+                       "else multi");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("C"), 0, "C untouched");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("D"), 10, "D==10");
+    gwdata_clear_error();
+    TEST_PASS("if branch compound");
+}
+
+void test_double_expr_valtyp(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v170 HIGH-2: VALTYP is the widest type in the expression */
+    TEST_ASSERT(gweval_eval_numeric("1#/3") > 0.33333333333 &&
+                gweval_eval_numeric("1#/3") < 0.33333333334, "1#/3 double");
+    TEST_ASSERT_EQ_INT(gweval_last_valtyp(), 8, "valtyp 8 after 1#/3");
+    gweval_eval_numeric("0 + 1.23456789012345#");
+    TEST_ASSERT_EQ_INT(gweval_last_valtyp(), 8, "valtyp order-independent");
+    gwdata_clear_error();
+    TEST_PASS("double expr valtyp");
+}
+
+void test_single_rounding(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v170 HIGH-3: single results round to float precision */
+    gwsts_exec_statement("A# = 1/3");
+    struct variable *v = gwdata_find_variable("A#");
+    TEST_ASSERT(v && v->type == VT_DOUBLE, "VT_DOUBLE");
+    TEST_ASSERT(v->value.d > 0.33333334 && v->value.d < 0.333333344,
+                "single-rounded 1/3 stored in double");
+    TEST_ASSERT(gweval_eval_numeric("0.1+0.2=0.3") == -1.0, "0.1+0.2=0.3 EQ");
+    gwdata_clear_error();
+    TEST_PASS("single rounding");
+}
+
+void test_math_double(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v170 HIGH-4: double input → double math */
+    TEST_ASSERT(gweval_eval_numeric("SIN(1#)") > 0.8414709847 &&
+                gweval_eval_numeric("SIN(1#)") < 0.8414709849, "SIN(1#) double");
+    TEST_ASSERT(gweval_eval_numeric("SQR(2#)") > 1.4142135623 &&
+                gweval_eval_numeric("SQR(2#)") < 1.4142135625, "SQR(2#) double");
+    gwdata_clear_error();
+    TEST_PASS("math double");
+}
+
+void test_double_array_str(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v170 HIGH-5: double arrays store/read full precision */
+    gwsts_exec_statement("DIM C#(2)");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("C#(1)=1.23456789012345#"), 0, "store");
+    TEST_ASSERT(gweval_eval_numeric("C#(1)") > 1.23456789012 &&
+                gweval_eval_numeric("C#(1)") < 1.23456789013, "full-precision read");
+    gwdata_clear_error();
+    TEST_PASS("double array str");
+}
+
+void test_for_int_rounded_start(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v170 HIGH-6: FOR integer start rounds (CINT), not truncates */
+    gwsts_exec_statement("FOR I% = 1.9 TO 3");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("I%"), 2, "start rounds to 2");
+    gwdata_clear_error();
+    TEST_PASS("for int rounded start");
+}
+
+void test_typed_set_bounds(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v170 MEDIUM-2: typed set validates rank/bounds */
+    gwsts_exec_statement("DIM D#(2,2)");
+    TEST_ASSERT(gwsts_exec_statement("D#(1)=5") != 0, "rank mismatch errors");
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 9, "ERRBS 9");
+    gwdata_clear_error();
+    TEST_PASS("typed set bounds");
+}

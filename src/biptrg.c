@@ -299,6 +299,19 @@ int biptrg_set_array_element_typed(const char *name, const int *indices,
     if (!v) return ERROR;
     array_desc_t *desc = (array_desc_t *)v->value.s.ptr;
     if (!desc || desc->magic != ARRAY_MAGIC) return ERROR;
+    /* v170 MEDIUM-2: rank + bounds validation (public API hardening) */
+    if (ndims != (int)desc->dimensions) {
+        extern uint16_t g_curlin;
+        gwdata_set_error(9, g_curlin, 0);
+        return ERROR;
+    }
+    for (int di = 0; di < ndims; di++) {
+        if (indices[di] < 0 || indices[di] >= (int)desc->dim_sizes[di]) {
+            extern uint16_t g_curlin;
+            gwdata_set_error(9, g_curlin, 0);
+            return ERROR;
+        }
+    }
     /* v169: FWRTN semantics for integer targets (round + overflow) */
     double dv = val->d;
     if (desc->type == VT_INTEGER) {

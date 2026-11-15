@@ -551,9 +551,38 @@ int bimisc_read(const char **text, int var_count, char **var_names) {
                 continue;
             }
             
-            /* Check if this line is a DATA statement */
+            /* Check if this line is a DATA statement — v170 LOW-2:
+             * DATA is legal after a colon (GW-BASIC DATSCN scans
+             * statement by statement), so find the first top-level
+             * DATA segment instead of requiring line start. */
             char *trimmed = line_text;
             while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+            {
+                char *data_seg = NULL;
+                const char *scan = line_text;
+                bool s2q = false;
+                while (*scan) {
+                    if (*scan == '"') s2q = !s2q;
+                    else if (!s2q && *scan == ':') {
+                        const char *nxt = scan + 1;
+                        while (*nxt && isspace((unsigned char)*nxt)) nxt++;
+                        if (strncasecmp(nxt, "DATA", 4) == 0 &&
+                            (nxt[4] == ' ' || nxt[4] == '\t' || nxt[4] == '\0')) {
+                            data_seg = (char *)nxt;
+                            break;
+                        }
+                    }
+                    scan++;
+                }
+                if (!data_seg &&
+                    !(strncasecmp(trimmed, "DATA", 4) == 0 &&
+                      (trimmed[4] == ' ' || trimmed[4] == '\t' || trimmed[4] == '\0'))) {
+                    g_state->data_ptr = g_state->data_ptr->next;
+                    g_state->data_index = 0;
+                    continue;
+                }
+                if (data_seg) trimmed = data_seg;
+            }
             
             if (strncasecmp(trimmed, "DATA", 4) == 0 && 
                 (trimmed[4] == ' ' || trimmed[4] == '\t' || trimmed[4] == '\0')) {

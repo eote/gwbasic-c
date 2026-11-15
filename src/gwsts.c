@@ -838,6 +838,103 @@ static int gwsts_print_using(const char *rest, int *trailing_sep_out) {
     return SUCCESS;
 }
 
+/* ===== v169/v170: compound-statement executor (shared by
+ * gwmain line execution and gwsts IF THEN/ELSE dispatch) =====
+ * GW-BASIC lines hold multiple colon-separated statements
+ * ("A=1: B=2: SWAP A,B"). Execute each segment in order with the
+ * same rc semantics as a single statement: rc > 0 = jump target,
+ * rc == -2 = END, rc < 0 = error. Colons inside string literals
+ * are not separators (GW-BASIC has no escapes; "" is literal
+ * content). Returns the first non-zero rc, or 0 when all segments
+ * succeeded. */
+int gwsts_exec_compound(const char *text) {
+    const char *p = text;
+    const char *e = NULL;   /* trimmed segment end */
+    bool if_block = false;   /* v169: inside IF..THEN/ELSE — colons
+                              * after THEN/ELSE belong to the branch,
+                              * not to the enclosing statement list */
+    while (*p) {
+        /* segment bounds: scan for a top-level colon */
+        const char *seg_start = p;
+        const char *seg_end = p;
+        bool in_quote = false;
+        while (*seg_end) {
+            if (*seg_end == '"') in_quote = !in_quote;
+            else if (*seg_end == ':' && !in_quote) break;
+            seg_end++;
+        }
+        /* trim the segment */
+        while (seg_start < seg_end && isspace((unsigned char)*seg_start)) seg_start++;
+        /* v170 CRITICAL-1: REM or ' at segment start = comment — the
+         * rest of the LINE is comment (GW-BASIC REM extends to EOL,
+         * colons inside are not separators). Swallow to EOL without
+         * executing anything. */
+        if (seg_start < seg_end &&
+            ((*seg_start == '\'') ||
+             ((seg_end - seg_start >= 3) &&
+              (seg_start[0]=='R'||seg_start[0]=='r') &&
+              (seg_start[1]=='E'||seg_start[1]=='e') &&
+              (seg_start[2]=='M'||seg_start[2]=='m') &&
+              (seg_end - seg_start == 3 ||
+               !isalnum((unsigned char)seg_start[3]))))) {
+            break;   /* nothing else on this line executes */
+        }
+        /* v170 LOW-2: DATA extends to end of line (ASM DATSCN) —
+         * colons after DATA are part of the data, not separators */
+        if (e - seg_start >= 4 &&
+            (seg_start[0]=='D'||seg_start[0]=='d') &&
+            (seg_start[1]=='A'||seg_start[1]=='a') &&
+            (seg_start[2]=='T'||seg_start[2]=='t') &&
+            (seg_start[3]=='A'||seg_start[3]=='a') &&
+            (e - seg_start == 4 || seg_start[4] == ' ')) {
+            seg_end = text + strlen(text);   /* swallow to EOL */
+        }
+        /* v170: trimmed segment end (recomputed every segment) */
+        e = seg_end;
+        while (e > seg_start && isspace((unsigned char)e[-1])) e--;
+        if (e > seg_start) {
+            /* v169: a segment containing a top-level THEN or ELSE
+             * swallows the rest of the line (GW-BASIC IF semantics:
+             * statements after THEN/ELSE colons run only inside the
+             * taken branch, not as sibling statements). */
+            if (!if_block) {
+                const char *q = seg_start;
+                bool q_quote = false;
+                while (q < e) {
+                    if (*q == '"') q_quote = !q_quote;
+                    else if (!q_quote) {
+                        if ((q[0]=='T'||q[0]=='t') && (q[1]=='H'||q[1]=='h') &&
+                            (q[2]=='E'||q[2]=='e') && (q[3]=='N'||q[3]=='n') &&
+                            (q+4 >= e || !isalnum((unsigned char)q[4]))) break;
+                        if ((q[0]=='E'||q[0]=='e') && (q[1]=='L'||q[1]=='l') &&
+                            (q[2]=='S'||q[2]=='s') && (q[3]=='E'||q[3]=='e') &&
+                            (q+4 >= e || !isalnum((unsigned char)q[4]))) break;
+                    }
+                    q++;
+                }
+                if (q < e) {
+                    if_block = true;
+                    seg_end = text + strlen(text);   /* swallow to EOL */
+                    e = seg_end;
+                    while (e > seg_start && isspace((unsigned char)e[-1])) e--;
+                }
+            }
+            char seg[MAX_LINE_LEN + 1];
+            size_t len = (size_t)(e - seg_start);
+            if (len > MAX_LINE_LEN) len = MAX_LINE_LEN;
+            memcpy(seg, seg_start, len);
+            seg[len] = '\0';
+            int rc = gwsts_exec_statement(seg);
+            if (rc != 0) return rc;   /* jump / END / error: stop here */
+        }
+        if (if_block) break;   /* the IF segment consumed the line */
+        p = (*seg_end == ':') ? seg_end + 1 : seg_end;
+        /* ": REST" — skip leading whitespace of the next segment */
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
+    return SUCCESS;
+}
+
 int gwsts_exec_statement(const char *text) {
     if (!text) return ERROR;
     
@@ -2556,13 +2653,16 @@ delete_done:
                     if (GWSIFS_IS_LINENUM(then_stmt)) {
                         result = atoi(then_stmt);   /* jump target (>0) */
                     } else {
-                        result = gwsts_exec_statement(then_stmt);
+                        /* v170 HIGH-1: THEN branch may hold multiple
+                         * colon-separated statements (GW-BASIC: they
+                         * belong to the branch) */
+                        result = gwsts_exec_compound(then_stmt);
                     }
                 } else if (else_stmt) {
                     if (GWSIFS_IS_LINENUM(else_stmt)) {
                         result = atoi(else_stmt);   /* jump target (>0) */
                     } else {
-                        result = gwsts_exec_statement(else_stmt);
+                        result = gwsts_exec_compound(else_stmt);
                     }
                 } else {
                     result = SUCCESS;
@@ -3115,13 +3215,23 @@ int assign_value(const char *var_ref, const char *expr) {
             } else {
                 /* Numeric array: use multi or single interface */
                 gwdata_clear_error();  /* stale-error isolation (tests) */
-                float val = gweval_eval_numeric(expr);
+                double val = gweval_eval_numeric(expr);   /* v170: full precision */
                 if (gwdata_get_error() != 0) {
                     /* v162 MEDIUM-3: evaluation raised Overflow etc. —
                      * do NOT write 0 into the element */
                     result = ERROR;
                 } else if (num_indices == 1) {
-                    result = biptrg_set_array_element(base_name, indices[0], val);
+                    /* v170 HIGH-5: typed set — VT_DOUBLE arrays store
+                     * the full-precision value (was float-truncated) */
+                    struct variable *av = gwdata_find_variable(base_name);
+                    if (av && av->type == VT_DOUBLE) {
+                        biptrg_typed_val tv;
+                        tv.type = VT_DOUBLE; tv.i = 0; tv.d = (double)val;
+                        int tidx[1] = { indices[0] };
+                        result = biptrg_set_array_element_typed(base_name, tidx, 1, &tv);
+                    } else {
+                        result = biptrg_set_array_element(base_name, indices[0], val);
+                    }
                 } else {
                     /* v162 HIGH-2: auto-DIM per dimension (GW-BASIC
                      * uses 10 per dimension for undeclared arrays) */

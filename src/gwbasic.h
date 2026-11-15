@@ -255,6 +255,7 @@ float gweval_call_fn(const char *fn_name, float arg);
 /* GWSTS module functions - Statement Execution */
 void gwsts_init(void);
 int gwsts_exec_statement(const char *stmt);
+int gwsts_exec_compound(const char *text);  /* v170: colon-compound + REM + IF-block */
 long gwsts_last_line_start(void);  /* v161 MEDIUM-3 */
 
 /* GWSTS internal - file operations */

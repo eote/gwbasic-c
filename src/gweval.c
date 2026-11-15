@@ -203,9 +203,16 @@ static char *parse_string_expression(parser_t *p) {
                 }
             }
             else if (strcasecmp_ascii(name, "STR") == 0 || strcasecmp_ascii(name, "STR$") == 0) {
-                /* STR$(num) */
-                float arg = parse_expression(p);
+                /* STR$(num) — v170 HIGH-5: double operand prints 15
+                 * digits (GW-BASIC VALTYP-aware) */
+                double arg = parse_expression(p);
                 if (parser_match(p, ')')) {
+                    if (g_valtyp == 8) {
+                        char *result2 = (char *)gwram_alloc(48);
+                        if (!result2) return NULL;
+                        sprintf(result2, "%s%.15g", (arg >= 0) ? " " : "", arg);
+                        return result2;
+                    }
                     return bistrs_str(arg);
                 }
             }
@@ -663,43 +670,44 @@ static double parse_factor(parser_t *p) {
                 if (strcasecmp_ascii(name, "SIN") == 0) {
                     double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return sinf(arg);
+                        /* v170 HIGH-4: double input → double math */
+                        return (g_valtyp == 8) ? sin(arg) : (double)sinf((float)arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "COS") == 0) {
                     double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return cosf(arg);
+                        return (g_valtyp == 8) ? cos(arg) : (double)cosf((float)arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "TAN") == 0) {
                     double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return tanf(arg);
+                        return (g_valtyp == 8) ? tan(arg) : (double)tanf((float)arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "ATN") == 0) {
                     double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return atanf(arg);
+                        return (g_valtyp == 8) ? atan(arg) : (double)atanf((float)arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "EXP") == 0) {
                     double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return expf(arg);
+                        return (g_valtyp == 8) ? exp(arg) : (double)expf((float)arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "LOG") == 0) {
                     double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return logf(arg);
+                        return (g_valtyp == 8) ? log(arg) : (double)logf((float)arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "SQR") == 0) {
                     double arg = parse_expression(p);
                     if (parser_match(p, ')')) {
-                        return sqrtf(arg);
+                        return (g_valtyp == 8) ? sqrt(arg) : (double)sqrtf((float)arg);
                     }
                 }
                 else if (strcasecmp_ascii(name, "ABS") == 0) {
@@ -990,6 +998,17 @@ static double parse_factor(parser_t *p) {
             
             if (parser_match(p, ')')) {
                 if (num_indices == 1) {
+                    /* v170 HIGH-5: typed read — VT_DOUBLE arrays
+                     * return full precision (was float-truncated) */
+                    biptrg_typed_val tv;
+                    int tv_idx[1] = { (int)indices[0] };
+                    if (biptrg_get_array_element_typed(name, tv_idx, 1, &tv) == 0) {
+                        if (tv.type == VT_DOUBLE) { g_valtyp = 8; return tv.d; }
+                        if (tv.type == VT_INTEGER) { g_valtyp = 2; return (double)tv.i; }
+                        g_valtyp = 4;
+                        return tv.d;
+                    }
+                    if (gwdata_get_error() != 0) return 0.0f;
                     return biptrg_get_array_element(name, (int)indices[0]);
                 } else if (num_indices > 1) {
                     int int_indices[8];
@@ -1002,6 +1021,15 @@ static double parse_factor(parser_t *p) {
                      * arrays (ERRBS 9 on mismatch) */
                     extern struct variable *biptrg_ensure_array_nd(const char *name, int ndims);
                     biptrg_ensure_array_nd(name, num_indices);
+                    if (gwdata_get_error() != 0) return 0.0f;
+                    /* v170 HIGH-5: typed multi read (double precision) */
+                    biptrg_typed_val tmv;
+                    if (biptrg_get_array_element_typed(name, int_indices, num_indices, &tmv) == 0) {
+                        if (tmv.type == VT_DOUBLE) { g_valtyp = 8; return tmv.d; }
+                        if (tmv.type == VT_INTEGER) { g_valtyp = 2; return (double)tmv.i; }
+                        g_valtyp = 4;
+                        return tmv.d;
+                    }
                     if (gwdata_get_error() != 0) return 0.0f;
                     return biptrg_get_array_element_multi(name, int_indices);
                 }
@@ -1026,16 +1054,19 @@ static double parse_factor(parser_t *p) {
 
 static double parse_term(parser_t *p) {
     double left = parse_factor(p);
+    int lt = g_valtyp;              /* v170: type of the FIRST factor */
     
     while (true) {
         char c = parser_peek(p);
         if (c == '*') {
             parser_get(p);
             double right = parse_factor(p);
+            if (g_valtyp < lt) g_valtyp = lt;   /* widen */
             left *= right;
         } else if (c == '/') {
             parser_get(p);
             double right = parse_factor(p);
+            if (g_valtyp < lt) g_valtyp = lt;
             if (right != 0.0f) {
                 left /= right;
             } else {
@@ -1047,10 +1078,13 @@ static double parse_term(parser_t *p) {
         } else if (c == '\\') {
             parser_get(p);
             double right = parse_factor(p);
-            if (right != 0.0f) left = (float)((int)left / (int)right);
+            g_valtyp = 2;   /* integer division */
+            if (g_valtyp < lt) g_valtyp = lt;
+            if (right != 0.0f) left = (double)((int)left / (int)right);
         } else if (c == '^') {
             parser_get(p);
             double right = parse_factor(p);
+            if (g_valtyp < lt) g_valtyp = lt;
             left = pow(left, right);
         } else {
             break;
@@ -1062,15 +1096,18 @@ static double parse_term(parser_t *p) {
 
 static double parse_expression(parser_t *p) {
     double left = parse_term(p);
+    int lt = g_valtyp;              /* v170: type after first term */
     
     while (true) {
         char c = parser_peek(p);
         if (c == '+') {
             parser_get(p);
             left += parse_term(p);
+            if (g_valtyp < lt) g_valtyp = lt;   /* widen */
         } else if (c == '-') {
             parser_get(p);
             left -= parse_term(p);
+            if (g_valtyp < lt) g_valtyp = lt;
         } else {
             break;
         }
@@ -1086,7 +1123,15 @@ static double parse_expression(parser_t *p) {
             op[1] = parser_get(p);
         }
         
+        int lt_cmp = g_valtyp;   /* v170: operand type before rhs */
         double right = parse_expression(p);
+        if (g_valtyp < lt_cmp) g_valtyp = lt_cmp;
+        /* v170 HIGH-3: single comparison rounds BOTH operands
+         * (GW-BASIC single compare: 0.1+0.2 = 0.3 is EQ) */
+        if (g_valtyp != 8) {
+            left = (double)(float)left;
+            right = (double)(float)right;
+        }
         
         if (strcmp(op, "<>") == 0) left = (left != right) ? -1.0f : 0.0f;
         else if (strcmp(op, "<") == 0) left = (left < right) ? -1.0f : 0.0f;
@@ -1105,6 +1150,10 @@ static double parse_expression(parser_t *p) {
         if (g_state) gwdata_set_error(6, g_state->current_line, 0);
         return 0.0f;
     }
+    /* v170 HIGH-3: single-precision results round to float (GW-BASIC
+     * computes single ops in MBF single; widening to double without
+     * rounding breaks `0.1+0.2=0.3` and `A#=1/3` single semantics) */
+    if (g_valtyp != 8) left = (double)(float)left;
     return left;
 }
 

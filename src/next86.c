@@ -377,8 +377,17 @@ int next86_for(const char **text) {
     next86_push_for(0x81, var_ptr, g_nxttxt, step_sign, (BYTE)ftype, 
                     step, limit, g_curlin, for_next_line, var_name);
     
-    /* Initialize loop variable (typed) */
-    if (ftype == VT_INTEGER) v->value.i = (int32_t)start;
+    /* Initialize loop variable (typed) — v170 HIGH-6: integer start
+     * re-uses the rounded value (CINT semantics), not truncation */
+    if (ftype == VT_INTEGER) {
+        float rounded2 = (start >= 0.0f) ? (float)floor(start + 0.5f)
+                                         : (float)ceil(start - 0.5f);
+        if (rounded2 < -32768.0f || rounded2 > 32767.0f) {
+            gwdata_set_error(6, g_curlin, 0);
+            return ERROR;
+        }
+        v->value.i = (int32_t)rounded2;
+    }
     else if (ftype == VT_DOUBLE) v->value.d = start;
     else v->value.f = start;
     
