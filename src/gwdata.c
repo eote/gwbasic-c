@@ -50,6 +50,9 @@ void gwdata_init(void) {
         g_state->error_code = 0;
         g_state->error_line = 0;
         g_state->error_text_ptr = 0;
+        g_state->error_seg_index = -1;
+        g_state->current_seg_index = 0;
+        g_state->resume_seg_skip = 0;
         g_state->on_error_active = false;
         g_state->on_error_line = 0;
         g_state->on_error_text_ptr = 0;
@@ -59,6 +62,7 @@ void gwdata_init(void) {
     
     g_state = (struct _runtime_state *)calloc(1, sizeof(struct _runtime_state));
     if (!g_state) return;
+    g_state->error_seg_index = -1;   /* v171: -1 = no failing segment */
     
     g_state->running = true;
     g_state->exit_code = SUCCESS;

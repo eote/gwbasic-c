@@ -239,7 +239,6 @@ static void using_emit_number(double val, int int_digits, int frac_digits,
     double abs_val = round(fabs(val) * round_factor) / round_factor;
 
     long long int_part = (long long)abs_val;
-    double frac_part = abs_val - (double)int_part;
 
     /* integer digits with optional comma grouping */
     char int_str[48];
@@ -343,12 +342,16 @@ static void using_emit_number(double val, int int_digits, int frac_digits,
 
     if (frac_digits > 0) {
         using_out_char('.');
+        /* v171 MEDIUM-5: extract fraction digits via %.16f of the
+         * ROUNDED value — repeated ×10 subtraction loses precision
+         * at deep fractions (1.23456789012345 with 12 frac digits
+         * printed ...122 instead of ...123). */
+        char fbuf[64];
+        snprintf(fbuf, sizeof(fbuf), "%.*f", frac_digits, abs_val);
+        const char *fdot = strchr(fbuf, '.');
+        const char *fdigs = fdot ? fdot + 1 : fbuf;
         for (int i = 0; i < frac_digits; i++) {
-            frac_part *= 10.0;
-            int digit = (int)(frac_part + 1e-9);
-            if (digit > 9) digit = 9;
-            using_out_char((char)('0' + digit));
-            frac_part -= digit;
+            using_out_char(fdigs[i] ? fdigs[i] : '0');
         }
     }
 
