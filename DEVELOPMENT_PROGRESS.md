@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v170 修复轮 — compound REM/注释 + IF 分支多语句 + VALTYP/single/math/STR$/数组 double + FOR CINT (1C/6H 全处理); 下一步 v171 review |
+| **当前阶段** | v171 修复轮 — compound 行余指针 (单行FOR/GOSUB tail/RESUME NEXT) + THEN 行号 + 2D double + DATA/REM/D字面量/USING (3H/7M 全处理); 下一步 v172 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,45 @@
 
 ---
 
+## 当前轮: CODE_REVIEW v171 修复轮 — 3H/7M 全处理 (阻断解除)
+
+### HIGH (3 项 — 行余指针架构修复)
+
+| # | 修复 |
+|---|------|
+| H1 行余指针 | 三条语句补齐"本行剩余"语义: **单行 FOR** (next86 body_text + NEXT 返回 -3 → compound 从 body 重执行; compound 对 FOR 段吞行尾); **GOSUB tail** (compound 截行余存 gosub_entry.tail → RETURN 后执行 tail); **RESUME NEXT 段索引** (compound 记录 current_seg/error_seg, RESUME NEXT 重入出错行跳过已执行段) |
+| H2 THEN 行号 | GWSIFS_IS_LINENUM 只判**首 token** 全数字 (ASM DOCOND: THEN <lincon>=GOTO, 行余被跳转丢弃) — `THEN 200: PRINT "NO"` 直接跳行 |
+| H3 2D double | assign multi-dim 分支 typed set (VT_DOUBLE/INTEGER 全精度) — `E#(1,2)=1.23...#` 15 位 |
+
+### MEDIUM (7 项)
+
+| # | 修复 |
+|---|------|
+| M1 | READ 扫描跳过 REM/' 段 (注释内 DATA 不是数据) |
+| M2 | parse_data_value 止于 0 引号层冒号 (ASM TERMINATES ON ':') + 空值@冒号 → Out of DATA (无幻影项) |
+| M3 | D 指数 → double 字面量 (valtyp 8) — `1.23456789012345D0` 全精度 |
+| M4 | 删除 DATA 死分支 (消除 e 的 UB 读取); DATA 语义 = 冒号截断 |
+| M5 | PRINT USING 分数位改 snprintf("%.Nf") 提取 (重复×10 累乘丢精度修复) |
+| M6 | PRINT double `%.15g` → `%.16g` (GW-BASIC 16 位) |
+| M7 | +6 单测 (单行FOR/GOSUB tail/THEN行号/2D double/D字面量/DATA) |
+
+### 附带修复
+
+- **STEP 后跳数字** (next86_for 的 text 停在 step 数字上, 被误认
+  为行内 body → 多行 FOR WITH STEP 报错)
+- v170 遗留 memory 更新补记 (v171 摘要随本提交)
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 (root+tests) | ✅ 0 警告 |
+| 单测 | ✅ **3583/3583 PASS** (+14) |
+| .bas 逐个 | ✅ **87/87** |
+| 孤儿检测 | ✅ **966 = 966** |
+| reviewer 探针 | ✅ 单行FOR (I=1,2,3) / GOSUB tail (SUB→BACK) / RESUME NEXT (H 11→AFTER-ERR) / THEN 200: tail (JUMPED) / 2D E# 全精度 / REM内DATA→Out of Data / DATA 3,4: PRINT 无幻影 / D 字面量 15 位 / USING 12 位 / 1#/3 16 位 / 0.1+0.2=0.3 EQ / FOR STEP 回归 |
+
+---
 ## 当前轮: CODE_REVIEW v170 修复轮 — 1C/6H 全处理 (阻断解除)
 
 ### CRITICAL (REM/撇号注释被执行)
