@@ -53,6 +53,7 @@ void next86_init(void) {
         g_for_stack[i].limit = 0.0f;
         g_for_stack[i].for_line = 0;
         g_for_stack[i].for_next_line = 0;
+        g_for_stack[i].body_text = NULL;
     }
 }
 
@@ -168,7 +169,8 @@ int next86_int_next(struct for_entry *entry) {
     }
     
     if (cmp == 0) {
-        /* Loop continues - return FOR next line number to continue from */
+        /* v171 HIGH-1: same-line FOR resumes at the body text */
+        if (entry->body_text) return -3;
         return entry->for_next_line;
     } else {
         /* Loop done - pop FOR entry */
@@ -186,7 +188,10 @@ int next86_float_next(struct for_entry *entry) {
         v->value.d += entry->step;
         int cmp2 = entry->step_sign ? (v->value.d <= entry->limit ? 0 : 1)
                                     : (v->value.d >= entry->limit ? 0 : 1);
-        if (cmp2 == 0) return entry->for_next_line;
+        if (cmp2 == 0) {
+            if (entry->body_text) return -3;   /* v171: same-line */
+            return entry->for_next_line;
+        }
         g_for_sp--;
         return 0;
     }
@@ -203,7 +208,8 @@ int next86_float_next(struct for_entry *entry) {
     }
     
     if (cmp == 0) {
-        /* Loop continues - return FOR next line number to continue from */
+        /* v171 HIGH-1: same-line FOR resumes at the body text */
+        if (entry->body_text) return -3;
         return entry->for_next_line;
     } else {
         /* Loop done - pop FOR entry */
@@ -320,6 +326,9 @@ int next86_for(const char **text) {
         
         /* Parse step value */
         step = gweval_eval_numeric(*text);
+        /* v171: skip the step digits (text was left pointing at
+         * them, which the same-line body check mistook for a body) */
+        while (**text && (isdigit((unsigned char)**text) || **text == '.' || **text == '-' || **text == '+')) (*text)++;
     }
     
     /* Determine variable type (v169: ftype below) */
@@ -376,6 +385,21 @@ int next86_for(const char **text) {
     /* Push FOR entry */
     next86_push_for(0x81, var_ptr, g_nxttxt, step_sign, (BYTE)ftype, 
                     step, limit, g_curlin, for_next_line, var_name);
+    /* v171 HIGH-1: same-line body — statements after FOR on this
+     * line (up to and including NEXT) run each iteration (ASM
+     * saves the text pointer; NEXT jumps back into the line). */
+    {
+        const char *body = *text;
+        while (*body && isspace((unsigned char)*body)) body++;
+        /* same-line body only exists after a colon separator */
+        if (*body == ':' && g_for_sp > 0) {
+            body++;
+            while (*body && isspace((unsigned char)*body)) body++;
+            if (*body) {
+                g_for_stack[g_for_sp - 1].body_text = body;
+            }
+        }
+    }
     
     /* Initialize loop variable (typed) — v170 HIGH-6: integer start
      * re-uses the rounded value (CINT semantics), not truncation */
@@ -423,6 +447,15 @@ int next86_for(const char **text) {
     return 0;
 }
 
+/* v171 HIGH-1: text pointer where the current (top) FOR body
+ * resumes — valid only after NEXT returned -3 */
+const char *next86_current_body(void) {
+    if (g_for_sp > 0 && g_for_stack[g_for_sp - 1].body_text) {
+        return g_for_stack[g_for_sp - 1].body_text;
+    }
+    return NULL;
+}
+
 /* Get FOR stack depth */
 int next86_get_for_depth(void) {
     return g_for_sp;
@@ -444,6 +477,10 @@ void next86_clear_for_stack(void) {
 struct gosub_entry {
     WORD line;          /* Line number of GOSUB */
     WORD text_ptr;      /* Text pointer to return to */
+    /* v171 HIGH-1: statements after GOSUB on the same line run AFTER
+     * RETURN (ASM NEWSTT resumes at the saved text pointer) */
+    char tail[256];
+    bool has_tail;
 };
 
 static struct gosub_entry g_gosub_stack[MAX_GOSUB_DEPTH];
@@ -452,6 +489,30 @@ static int g_gosub_sp = 0;
 /* v148 MEDIUM-1: GOSUB stack reset (GW-BASIC RUN clears the GOSUB stack) */
 void next86_clear_gosub_stack(void) {
     g_gosub_sp = 0;
+}
+
+/* v171 HIGH-1: set the same-line remainder for the MOST RECENTLY
+ * pushed GOSUB entry (called right after next86_gosub_to_line) */
+void next86_gosub_set_tail(const char *tail) {
+    if (g_gosub_sp > 0 && tail) {
+        struct gosub_entry *e = &g_gosub_stack[g_gosub_sp - 1];
+        strncpy(e->tail, tail, sizeof(e->tail) - 1);
+        e->tail[sizeof(e->tail) - 1] = '\0';
+        e->has_tail = (e->tail[0] != '\0');
+    }
+}
+
+/* v171 HIGH-1: fetch + clear the tail of the entry RETURN is about
+ * to pop (top of stack) */
+const char *next86_gosub_take_tail(void) {
+    if (g_gosub_sp > 0) {
+        struct gosub_entry *e = &g_gosub_stack[g_gosub_sp - 1];
+        if (e->has_tail) {
+            e->has_tail = false;
+            return e->tail;
+        }
+    }
+    return NULL;
 }
 
 int next86_get_gosub_depth(void) {

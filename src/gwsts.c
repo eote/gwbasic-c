@@ -853,7 +853,27 @@ int gwsts_exec_compound(const char *text) {
     bool if_block = false;   /* v169: inside IF..THEN/ELSE — colons
                               * after THEN/ELSE belong to the branch,
                               * not to the enclosing statement list */
+    int seg_index = 0;
+    /* v171 HIGH-1: RESUME NEXT re-enters the ERROR line at the
+     * statement AFTER the failing one (ASM OLDTXT resume) */
+    int skip_segs = g_state ? g_state->resume_seg_skip : 0;
+    if (g_state) g_state->resume_seg_skip = 0;
     while (*p) {
+        if (skip_segs > 0) {
+            /* advance past the skipped segment */
+            const char *q = p;
+            bool qq = false;
+            while (*q) {
+                if (*q == '"') qq = !qq;
+                else if (!qq && *q == ':') break;
+                q++;
+            }
+            p = (*q == ':') ? q + 1 : q;
+            while (*p && isspace((unsigned char)*p)) p++;
+            skip_segs--;
+            seg_index++;
+            continue;
+        }
         /* segment bounds: scan for a top-level colon */
         const char *seg_start = p;
         const char *seg_end = p;
@@ -879,16 +899,10 @@ int gwsts_exec_compound(const char *text) {
                !isalnum((unsigned char)seg_start[3]))))) {
             break;   /* nothing else on this line executes */
         }
-        /* v170 LOW-2: DATA extends to end of line (ASM DATSCN) —
-         * colons after DATA are part of the data, not separators */
-        if (e - seg_start >= 4 &&
-            (seg_start[0]=='D'||seg_start[0]=='d') &&
-            (seg_start[1]=='A'||seg_start[1]=='a') &&
-            (seg_start[2]=='T'||seg_start[2]=='t') &&
-            (seg_start[3]=='A'||seg_start[3]=='a') &&
-            (e - seg_start == 4 || seg_start[4] == ' ')) {
-            seg_end = text + strlen(text);   /* swallow to EOL */
-        }
+        /* v171 MEDIUM-4: DATA does NOT extend past a colon (ASM
+         * DATA: "TERMINATES ON ':'" — quotes matched). The dead
+         * v170 branch (which read `e` before assignment — UB) is
+         * removed; DATA ends at the colon like any statement. */
         /* v170: trimmed segment end (recomputed every segment) */
         e = seg_end;
         while (e > seg_start && isspace((unsigned char)e[-1])) e--;
@@ -919,15 +933,73 @@ int gwsts_exec_compound(const char *text) {
                     while (e > seg_start && isspace((unsigned char)e[-1])) e--;
                 }
             }
+            /* v171 HIGH-1: single-line FOR — `FOR I=1 TO 3: body:
+             * NEXT I` is ONE construct (ASM FOR saves the text
+             * pointer into the line). Swallow the rest of the line
+             * so the FOR header sees its body and NEXT. */
+            if ((strncasecmp(seg_start, "FOR", 3) == 0 &&
+                 (e - seg_start == 3 || seg_start[3] == ' ' || seg_start[3] == '\t'))) {
+                seg_end = text + strlen(text);   /* swallow to EOL */
+                e = seg_end;
+                while (e > seg_start && isspace((unsigned char)e[-1])) e--;
+            }
+            /* v171 HIGH-1: GOSUB on a compound line — the rest of
+             * the line runs AFTER RETURN (ASM resumes at the saved
+             * text pointer). Stash it on the GOSUB entry. */
+            if ((strncasecmp(seg_start, "GOSUB", 5) == 0 &&
+                 (e - seg_start == 5 || seg_start[5] == ' ' || seg_start[5] == '\t'))) {
+                const char *tp = seg_end;
+                if (*tp == ':') tp++;
+                while (*tp && isspace((unsigned char)*tp)) tp++;
+                char seg[MAX_LINE_LEN + 1];
+                size_t len = (size_t)(e - seg_start);
+                if (len > MAX_LINE_LEN) len = MAX_LINE_LEN;
+                memcpy(seg, seg_start, len);
+                seg[len] = '\0';
+                int rc = gwsts_exec_statement(seg);
+                /* stash AFTER exec — the GOSUB entry now exists
+                 * (rc > 0 = jump to the subroutine body; the tail
+                 * still belongs to the entry just pushed) */
+                if (*tp) {
+                    extern void next86_gosub_set_tail(const char *tail);
+                    next86_gosub_set_tail(tp);
+                }
+                if (rc != 0) return rc;
+                return SUCCESS;   /* rest of line deferred to RETURN */
+            }
             char seg[MAX_LINE_LEN + 1];
             size_t len = (size_t)(e - seg_start);
             if (len > MAX_LINE_LEN) len = MAX_LINE_LEN;
             memcpy(seg, seg_start, len);
             seg[len] = '\0';
+            /* v171 HIGH-1 (RESUME NEXT): track the segment about to
+             * execute; if an error fires in it on the ERROR line,
+             * pin it as the failing segment. Handler lines (their
+             * g_state->current_line differs from error_line) never
+             * clobber the pin. */
+            if (g_state) g_state->current_seg_index = seg_index;
             int rc = gwsts_exec_statement(seg);
+            if (g_state && gwdata_get_error() != 0 &&
+                (int)g_state->error_line == (int)g_state->current_line &&
+                g_state->error_seg_index < 0) {
+                g_state->error_seg_index = g_state->current_seg_index;
+            }
+            /* v171 HIGH-1: same-line FOR — NEXT returned -3, resume
+             * at the body text pointer (statements after FOR) */
+            if (rc == -3) {
+                extern const char *next86_current_body(void);
+                const char *body = next86_current_body();
+                if (body) {
+                    p = body;   /* restart the body segments */
+                    if_block = false;
+                    continue;
+                }
+                rc = 0;   /* no body: fall through as success */
+            }
             if (rc != 0) return rc;   /* jump / END / error: stop here */
         }
         if (if_block) break;   /* the IF segment consumed the line */
+        seg_index++;
         p = (*seg_end == ':') ? seg_end + 1 : seg_end;
         /* ": REST" — skip leading whitespace of the next segment */
         while (*p && isspace((unsigned char)*p)) p++;
@@ -1732,6 +1804,15 @@ int gwsts_exec_statement(const char *text) {
         extern int next86_for(const char **text);
         const char *text_ptr = trimmed + 4;  /* Skip "FOR " */
         result = next86_for(&text_ptr);
+        /* v171 HIGH-1: single-line FOR — the header consumed its
+         * body text; run the body now (its NEXT drives the loop
+         * via the -3 resume inside the compound executor) */
+        if (result == 0) {
+            extern const char *next86_current_body(void);
+            if (next86_current_body()) {
+                result = gwsts_exec_compound(next86_current_body());
+            }
+        }
     }
     /* NEXT statement: NEXT [var] */
     else if (starts_with(trimmed, "NEXT")) {
@@ -1755,8 +1836,20 @@ int gwsts_exec_statement(const char *text) {
     /* RETURN statement */
     else if (starts_with(trimmed, "RETURN")) {
         extern int next86_return(const char **text);
+        extern const char *next86_gosub_take_tail(void);
         const char *text_ptr = trimmed + 6;  /* Skip "RETURN" */
+        const char *tail = next86_gosub_take_tail();   /* BEFORE pop */
         result = next86_return(&text_ptr);
+        /* v171 HIGH-1: statements after GOSUB on the same line run
+         * after RETURN (ASM resumes at the saved text pointer) */
+        if (result > 0 || result == 0) {
+            if (tail) {
+                int trc = gwsts_exec_compound(tail);
+                if (trc != 0) {
+                    result = trc;   /* tail jumped/ended/errored */
+                }
+            }
+        }
     }
     /* END statement */
     else if (starts_with(trimmed, "END")) {
@@ -2359,7 +2452,7 @@ delete_done:
                                  * (VALTYP 8) prints 16 — v169 HIGH-1 */
                                 extern int gweval_last_valtyp(void);
                                 if (gweval_last_valtyp() == 8) {
-                                    printf("%s%.15g", (val >= 0) ? " " : "", val);
+                                    printf("%s%.16g", (val >= 0) ? " " : "", val);
                                 } else {
                                     printf("%s%g", (val >= 0) ? " " : "", val);
                                 }
@@ -2647,8 +2740,12 @@ delete_done:
                 if (!condition_hard_error) {
                 /* helper: pure-numeric THEN/ELSE target = line number jump
                  * (GW-BASIC: IF..THEN <line> is a GOTO) */
+                /* v171 HIGH-2: only the FIRST token decides (ASM
+                 * DOCOND CHRGTR: THEN <lincon> = GOTO, the rest of
+                 * the line is discarded by the jump). */
                 #define GWSIFS_IS_LINENUM(s_) (s_ != NULL && *s_ != '\0' && \
-                    strspn(s_, "0123456789") == strlen(s_))
+                    strspn(s_, "0123456789") > 0 && \
+                    !isdigit((unsigned char)s_[strspn(s_, "0123456789")]))
                 if (then_taken) {
                     if (GWSIFS_IS_LINENUM(then_stmt)) {
                         result = atoi(then_stmt);   /* jump target (>0) */
@@ -2815,7 +2912,17 @@ delete_done:
                 extern struct program_line *gwlist_get_first_line(void);
                 extern struct program_line *gwlist_find_line(int number);
                 struct program_line *curr = gwlist_find_line(err_line);
-                if (curr && curr->next) {
+                /* v171 HIGH-1: the failing statement may have been a
+                 * mid-line segment — resume at the NEXT segment of
+                 * the SAME line (ASM OLDTXT resume) */
+                if (g_state && g_state->error_seg_index > 0 && curr) {
+                    gwdata_clear_error();
+                    gwdata_exit_error_handler();
+                    g_state->resume_seg_skip = g_state->error_seg_index + 1;
+                    g_state->error_seg_index = -1;   /* consumed */
+                    result = err_line;   /* re-enter the same line */
+                }
+                else if (curr && curr->next) {
                     gwdata_clear_error();
                     gwdata_exit_error_handler();
                     result = curr->next->number;  /* Jump to next line */
@@ -3242,8 +3349,21 @@ int assign_value(const char *var_ref, const char *expr) {
                         biptrg_ensure_array_nd(base_name, num_indices);  /* v163: rank check → ERRBS */
                     if (gwdata_get_error() != 0) {
                         result = ERROR;   /* rank mismatch — no write */
-                    } else
-                    result = biptrg_set_array_element_multi(base_name, indices, val);
+                    } else {
+                        /* v171 HIGH-3: multi-dim typed set — VT_DOUBLE
+                         * arrays store full precision (was float) */
+                        struct variable *av = gwdata_find_variable(base_name);
+                        if (av && (av->type == VT_DOUBLE || av->type == VT_INTEGER)) {
+                            biptrg_typed_val tv;
+                            tv.type = av->type; tv.i = 0;
+                            tv.d = (av->type == VT_INTEGER) ? (double)(int32_t)val : val;
+                            result = biptrg_set_array_element_typed(base_name, indices,
+                                                                    num_indices, &tv);
+                        } else {
+                            result = biptrg_set_array_element_multi(base_name, indices,
+                                                                    (float)val);
+                        }
+                    }
                 }
             }
         } else {

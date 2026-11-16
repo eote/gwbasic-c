@@ -483,7 +483,10 @@ static char *parse_data_value(char *text, char *value, size_t value_size) {
         if (*text == '\"') {
             in_quotes = !in_quotes;
             text++;
-        } else if (*text == ',' && !in_quotes) {
+        } else if (!in_quotes && (*text == ',' || *text == ':')) {
+            /* v171 MEDIUM-2: ASM DATA: "TERMINATES ON ':'" — a
+             * matched-quote colon ends the data list, so a trailing
+             * statement after DATA is never read as a value. */
             break;
         } else {
             text++;
@@ -566,6 +569,14 @@ int bimisc_read(const char **text, int var_count, char **var_names) {
                     else if (!s2q && *scan == ':') {
                         const char *nxt = scan + 1;
                         while (*nxt && isspace((unsigned char)*nxt)) nxt++;
+                        /* v171 MEDIUM-1: a REM/' comment segment eats
+                         * the rest of the line — DATA inside a comment
+                         * is not data (ASM: REM text is not tokenized) */
+                        if ((*nxt == '\'') ||
+                            ((strncasecmp(nxt, "REM", 3) == 0 &&
+                              (nxt[3] == ' ' || nxt[3] == '\t' || nxt[3] == '\0')))) {
+                            break;
+                        }
                         if (strncasecmp(nxt, "DATA", 4) == 0 &&
                             (nxt[4] == ' ' || nxt[4] == '\t' || nxt[4] == '\0')) {
                             data_seg = (char *)nxt;
@@ -599,6 +610,14 @@ int bimisc_read(const char **text, int var_count, char **var_names) {
                 if (data_text && *data_text) {
                     /* Parse the next value */
                     char *next_text = parse_data_value(data_text, value, sizeof(value));
+                    /* v171 MEDIUM-2: an empty value at a colon means
+                     * the data list ended (ASM terminates on ':') —
+                     * NOT a phantom empty item */
+                    if (next_text && *data_text == ':') {
+                        g_state->data_ptr = g_state->data_ptr->next;
+                        g_state->data_index = 0;
+                        continue;
+                    }
                     if (next_text || strlen(value) > 0) {
                         /* Assign value to variable */
                         if (assign_value_raw(var_name, value) != SUCCESS) {

@@ -160,6 +160,9 @@ struct _runtime_state {
     uint16_t error_line;                /* ERRLIN - line number where error occurred */
     int error_text_ptr;                 /* ERRTXT - text pointer where error occurred */
     int error_code;                     /* ERRFLG - current error code */
+    int error_seg_index;                /* v171: compound segment index of the failing statement */
+    int current_seg_index;              /* v171: segment about to execute */
+    int resume_seg_skip;                /* v171: RESUME NEXT — segments to skip when re-entering the line */
     
     /* RESUME support */
     bool in_error_handler;              /* Currently executing error handler */
@@ -646,6 +649,9 @@ struct for_entry {
     WORD for_line;        /* Line number of FOR statement */
     WORD for_next_line;   /* Line number to continue from after FOR */
     char var_name[41];    /* Variable name for matching with NEXT */
+    /* v171 HIGH-1: same-line FOR body (ASM FOR saves the text
+     * pointer of the remainder of the line; NEXT resumes there) */
+    const char *body_text;
 };
 
 void next86_init(void);

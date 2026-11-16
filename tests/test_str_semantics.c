@@ -493,3 +493,80 @@ void test_typed_set_bounds(void) {
     gwdata_clear_error();
     TEST_PASS("typed set bounds");
 }
+
+void test_single_line_for(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v171 HIGH-1: single-line FOR — body runs each iteration */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("FOR I=1 TO 3: A = A + I: NEXT I"), 0,
+                       "single-line FOR");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 6, "A == 1+2+3");
+    gwdata_clear_error();
+    TEST_PASS("single-line FOR");
+}
+
+void test_gosub_same_line_tail(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v171 HIGH-1: tail stash/take unit (line-based integration
+     * needs a subroutine line; covered by .bas probe) */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 900: B = B + 10"), -2,
+                       "missing target line → rc -2 (line not found)");
+    gwdata_clear_error();
+    TEST_PASS("gosub same-line tail stash");
+}
+
+void test_then_linenum_trailing(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v171 HIGH-2: THEN <line> jumps; trailing stmts discarded */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("IF 1 THEN 890: C = 99"), 890,
+                       "THEN 200 jumps, C=99 discarded");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("C"), 0, "C untouched");
+    gwdata_clear_error();
+    TEST_PASS("THEN linenum + trailing");
+}
+
+void test_2d_double_array(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v171 HIGH-3: 2D double arrays store full precision */
+    gwsts_exec_statement("DIM E#(2,2)");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("E#(1,2)=1.23456789012345#"), 0, "store 2D");
+    TEST_ASSERT(gweval_eval_numeric("E#(1,2)") > 1.23456789012 &&
+                gweval_eval_numeric("E#(1,2)") < 1.23456789013, "full precision read");
+    gwdata_clear_error();
+    TEST_PASS("2D double array");
+}
+
+void test_d_exponent_literal(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v171 MEDIUM-3: D exponent = double literal */
+    gwsts_exec_statement("A# = 1.23456789012345D0");
+    struct variable *v = gwdata_find_variable("A#");
+    TEST_ASSERT(v && v->type == VT_DOUBLE, "VT_DOUBLE");
+    TEST_ASSERT(v->value.d > 1.23456789012 && v->value.d < 1.23456789013,
+                "D literal full precision");
+    TEST_ASSERT(gweval_eval_numeric("2.5D2") == 250.0, "2.5D2 == 250");
+    gwdata_clear_error();
+    TEST_PASS("D exponent literal");
+}
+
+void test_data_phantom_and_comment(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v171 MEDIUM-1/2: REM segments yield no data; DATA ends at
+     * a colon (no phantom items) */
+    gwsts_exec_statement("REM x: DATA 5");
+    TEST_ASSERT(gwsts_exec_statement("READ Q") != 0, "REM DATA not read");
+    gwdata_clear_error();
+    /* DATA is read from PROGRAM LINES (gwlist) — add one */
+    gwlist_add_line(950, "DATA 3,4: PRINT");
+    gwsts_exec_statement("RESTORE");   /* fresh data pointer */
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("READ A"), 0, "A=3");
+    TEST_ASSERT_EQ_INT(gwsts_exec_statement("READ B"), 0, "B=4");
+    TEST_ASSERT(gwsts_exec_statement("READ C") != 0, "no phantom C");
+    gwdata_clear_error();
+    TEST_PASS("data phantom + comment");
+}

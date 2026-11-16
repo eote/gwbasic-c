@@ -497,6 +497,7 @@ static double parse_factor(parser_t *p) {
         isdigit((unsigned char)p->input[p->pos + 1]))) {
         char buf[64];
         size_t i = 0;
+        bool d_exp = false;   /* v171 MEDIUM-3: D exponent = double */
         while (p->pos < p->len && (isdigit((unsigned char)p->input[p->pos]) || p->input[p->pos] == '.') && i < sizeof(buf) - 1) {
             buf[i++] = p->input[p->pos++];
         }
@@ -509,6 +510,11 @@ static double parse_factor(parser_t *p) {
             size_t q = p->pos + 1;
             if (q < p->len && (p->input[q] == '+' || p->input[q] == '-')) q++;
             if (q < p->len && isdigit((unsigned char)p->input[q])) {
+                /* v171 MEDIUM-3: 'D' exponent = double literal
+                 * (GW-BASIC BASCOM: 1.234D0 ≡ 1.234#) */
+                if (p->input[p->pos] == 'D' || p->input[p->pos] == 'd') {
+                    d_exp = true;
+                }
                 buf[i++] = 'E';  /* normalize D → E for atof */
                 p->pos++;
                 if (p->pos < p->len && (p->input[p->pos] == '+' || p->input[p->pos] == '-')) {
@@ -526,7 +532,7 @@ static double parse_factor(parser_t *p) {
          * Overflow (6); isfinite guards against atof overflow to inf */
         double dval = atof(buf);
         /* v169 HIGH-1: '#' literal suffix → DOUBLE precision */
-        bool lit_double = false;
+        bool lit_double = d_exp;   /* v171: D exponent implies double */
         if (p->pos < p->len && p->input[p->pos] == '#') {
             p->pos++;
             lit_double = true;
