@@ -276,6 +276,30 @@ static int run_program_lines(void) {
                     /* END - stop execution gracefully */
                     return SUCCESS;
                 }
+                /* v172 HIGH-1: -3 = FOR loop continuation. NEXT (possibly
+                 * on a DIFFERENT line) says "run the body again" — the
+                 * body starts at the text after the FOR header on the
+                 * FOR line, so re-enter that line and skip its first
+                 * segment (the FOR header). */
+                if (rc == -3) {
+                    extern int next86_current_for_line(void);
+                    int for_line = next86_current_for_line();
+                    if (for_line > 0) {
+                        if (g_state) {
+                            g_state->resume_seg_skip = 1;   /* skip FOR header */
+                            g_state->error_seg_index = -1;
+                        }
+                        g_curlin = (WORD)for_line;
+                        g_state->current_line = for_line;
+                        line_num = for_line;
+                        saved_next = curr->next;   /* liveness snapshot */
+                        link_version = gwlist_get_link_version();
+                        curr = gwlist_find_line((WORD)for_line);
+                        continue;
+                    }
+                    /* no FOR line — treat as success */
+                    rc = 0;
+                }
                 /* Error occurred (from statement execution).
                  * Liveness by pointer identity (RENUM-safe). */
                 if (gwlist_is_alive(curr)) {

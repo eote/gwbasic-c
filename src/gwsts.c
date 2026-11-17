@@ -984,18 +984,13 @@ int gwsts_exec_compound(const char *text) {
                 g_state->error_seg_index < 0) {
                 g_state->error_seg_index = g_state->current_seg_index;
             }
-            /* v171 HIGH-1: same-line FOR — NEXT returned -3, resume
-             * at the body text pointer (statements after FOR) */
-            if (rc == -3) {
-                extern const char *next86_current_body(void);
-                const char *body = next86_current_body();
-                if (body) {
-                    p = body;   /* restart the body segments */
-                    if_block = false;
-                    continue;
-                }
-                rc = 0;   /* no body: fall through as success */
-            }
+            /* v172 HIGH-1: -3 (FOR continuation) propagates to the
+             * line runner, which re-enters the FOR line and skips
+             * its header segment. The single-line-FOR case closes
+             * its loop INSIDE the FOR dispatch (body compound); a
+             * -3 reaching this executor means the NEXT lives on a
+             * different line. */
+            if (rc == -3) return -3;
             if (rc != 0) return rc;   /* jump / END / error: stop here */
         }
         if (if_block) break;   /* the IF segment consumed the line */
@@ -1845,6 +1840,10 @@ int gwsts_exec_statement(const char *text) {
         if (result > 0 || result == 0) {
             if (tail) {
                 int trc = gwsts_exec_compound(tail);
+                /* v172 MEDIUM-3: tail finished — nested GOSUBs return
+                 * normally again */
+                extern void next86_tail_host_clear(void);
+                next86_tail_host_clear();
                 if (trc != 0) {
                     result = trc;   /* tail jumped/ended/errored */
                 }
@@ -2915,7 +2914,10 @@ delete_done:
                 /* v171 HIGH-1: the failing statement may have been a
                  * mid-line segment — resume at the NEXT segment of
                  * the SAME line (ASM OLDTXT resume) */
-                if (g_state && g_state->error_seg_index > 0 && curr) {
+                /* v172 HIGH-2: segment 0 can fail too (>= 0); the
+                 * same-line re-entry skips error_seg_index+1 = 1
+                 * segment, i.e. the failed one itself. */
+                if (g_state && g_state->error_seg_index >= 0 && curr) {
                     gwdata_clear_error();
                     gwdata_exit_error_handler();
                     g_state->resume_seg_skip = g_state->error_seg_index + 1;

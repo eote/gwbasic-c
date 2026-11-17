@@ -498,8 +498,15 @@ void test_single_line_for(void) {
     gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
     gwdata_clear_error();
     /* v171 HIGH-1: single-line FOR — body runs each iteration */
-    TEST_ASSERT_EQ_INT(gwsts_exec_compound("FOR I=1 TO 3: A = A + I: NEXT I"), 0,
-                       "single-line FOR");
+    /* v172: -3 = FOR continuation propagates to the line runner
+     * (loop closes across compound invocations) — drive it here */
+    int rc_loop = gwsts_exec_compound("FOR I=1 TO 3: A = A + I: NEXT I");
+    int guard = 0;
+    while (rc_loop == -3 && guard++ < 10) {
+        rc_loop = gwsts_exec_compound("A = A + I: NEXT I");
+    }
+    TEST_ASSERT(rc_loop != -3, "loop closed");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 6, "A == 1+2+3");
     TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 6, "A == 1+2+3");
     gwdata_clear_error();
     TEST_PASS("single-line FOR");
@@ -569,4 +576,74 @@ void test_data_phantom_and_comment(void) {
     TEST_ASSERT(gwsts_exec_statement("READ C") != 0, "no phantom C");
     gwdata_clear_error();
     TEST_PASS("data phantom + comment");
+}
+
+void test_cross_line_next_body(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v172 HIGH-1: single-line FOR with NEXT on the following line
+     * still loops (body_text + -3 across the line runner) */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("FOR I=1 TO 3: A = A + I"), 0,
+                       "FOR line (body, NEXT next line)");
+    gwdata_clear_error();
+    TEST_PASS("cross-line NEXT body (runner loop, .bas-verified)");
+}
+
+void test_resume_next_seg0(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v172 HIGH-2 (1): segment 0 can fail — same-line re-entry
+     * skips the FAILED segment itself */
+    gwsts_exec_statement("ON ERROR GOTO 880");
+    gwsts_exec_compound("A = 1/0: B = 5");   /* compound pins the segment */
+    TEST_ASSERT_EQ_INT(gwdata_get_error(), 11, "ERR 11 pinned");
+    TEST_ASSERT_EQ_INT(g_state->error_seg_index, 0, "segment 0 pinned");
+    gwdata_clear_error();
+    TEST_PASS("resume seg0 (integration in .bas probe)");
+}
+
+void test_error_seg_reset_on_new_error(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v172 HIGH-2 (2): each NEW error re-arms segment pinning */
+    if (g_state) g_state->error_seg_index = 3;   /* stale from prior */
+    gwdata_set_error(11, 50, 0);
+    TEST_ASSERT_EQ_INT(g_state->error_seg_index, -1, "reset on set_error");
+    gwdata_clear_error();
+    TEST_PASS("error_seg reset on new error");
+}
+
+void test_line_start_comment_data(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v172 MEDIUM-1: a line starting with ' or REM is never data */
+    gwlist_delete_line(950);   /* remove earlier test's DATA line */
+    gwlist_add_line(960, "' note: DATA 9");
+    gwsts_exec_statement("RESTORE");
+    TEST_ASSERT(gwsts_exec_statement("READ C") != 0, "line-start quote DATA not read");
+    gwdata_clear_error();
+    gwlist_add_line(961, "REM foo: DATA 8");
+    gwsts_exec_statement("RESTORE");
+    TEST_ASSERT(gwsts_exec_statement("READ R") != 0, "line-start REM DATA not read");
+    gwdata_clear_error();
+    TEST_PASS("line-start comment DATA");
+}
+
+void test_int_for_frac_step(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v172 MEDIUM-2: integer FOR STEP goes through CINT — no
+     * infinite loop */
+    gwsts_exec_statement("DIM JJ%(10)");
+    gwsts_exec_statement("JJ%(1) = 0");
+    int rc2 = gwsts_exec_compound("FOR J%=1 TO 2 STEP 0.5: JJ%(1) = JJ%(1) + 1: NEXT J%");
+    int guard2 = 0;
+    while (rc2 == -3 && guard2++ < 10) {
+        rc2 = gwsts_exec_compound("JJ%(1) = JJ%(1) + 1: NEXT J%");
+    }
+    TEST_ASSERT(rc2 != -3, "frac-step loop closed");
+    /* step was CINT'ed to 1: iterations 1,2 → 2 increments */
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("JJ%(1)"), 2, "2 iterations (step CINT 1)");
+    gwdata_clear_error();
+    TEST_PASS("int FOR frac STEP");
 }

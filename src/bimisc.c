@@ -560,6 +560,17 @@ int bimisc_read(const char **text, int var_count, char **var_names) {
              * DATA segment instead of requiring line start. */
             char *trimmed = line_text;
             while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+            /* v172 MEDIUM-1: a line-STARTING comment (' or REM+word
+             * boundary) is not data at all — its embedded ": DATA"
+             * is comment text (ASM: REM content is not tokenized) */
+            if ((*trimmed == '\'') ||
+                (strncasecmp(trimmed, "REM", 3) == 0 &&
+                 (trimmed[3] == ' ' || trimmed[3] == '\t' || trimmed[3] == '\0' ||
+                  trimmed[3] == ':'))) {
+                g_state->data_ptr = g_state->data_ptr->next;
+                g_state->data_index = 0;
+                continue;
+            }
             {
                 char *data_seg = NULL;
                 const char *scan = line_text;

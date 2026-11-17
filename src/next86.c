@@ -22,6 +22,11 @@ extern struct variable *gwdata_alloc_variable(const char *name, var_type_t type)
 struct for_entry g_for_stack[MAX_FOR_DEPTH];
 int g_for_sp = 0;  /* Stack pointer */
 
+/* v172 MEDIUM-3: while a GOSUB tail is executing, a GOSUB issued
+ * inside it returns to the tail host's continuation line (the
+ * line RETURN was heading to), not to the RETURN statement line. */
+static WORD g_tail_host_return = 0;   /* 0 = no tail executing */
+
 /* State variables */
 BYTE g_nxtflg = 0;      /* NXTFLG - FOR using NEXT code */
 WORD g_fvalsv = 0;      /* FVALSV - saved initial value */
@@ -169,7 +174,10 @@ int next86_int_next(struct for_entry *entry) {
     }
     
     if (cmp == 0) {
-        /* v171 HIGH-1: same-line FOR resumes at the body text */
+        /* v171/v172: -3 = resume at the FOR body text pointer.
+         * Compound handles the same-line case directly; the line
+         * runner re-enters the FOR line (skipping the header) for
+         * the cross-line case. */
         if (entry->body_text) return -3;
         return entry->for_next_line;
     } else {
@@ -189,7 +197,7 @@ int next86_float_next(struct for_entry *entry) {
         int cmp2 = entry->step_sign ? (v->value.d <= entry->limit ? 0 : 1)
                                     : (v->value.d >= entry->limit ? 0 : 1);
         if (cmp2 == 0) {
-            if (entry->body_text) return -3;   /* v171: same-line */
+            if (entry->body_text) return -3;
             return entry->for_next_line;
         }
         g_for_sp--;
@@ -208,7 +216,6 @@ int next86_float_next(struct for_entry *entry) {
     }
     
     if (cmp == 0) {
-        /* v171 HIGH-1: same-line FOR resumes at the body text */
         if (entry->body_text) return -3;
         return entry->for_next_line;
     } else {
@@ -326,6 +333,18 @@ int next86_for(const char **text) {
         
         /* Parse step value */
         step = gweval_eval_numeric(*text);
+        /* v172 MEDIUM-2: integer loop variables take the STEP through
+         * CINT (ASM GETINT forces an integer pair) — a fractional
+         * step on an integer variable would otherwise truncate to a
+         * constant value every iteration (infinite loop). */
+        {
+            size_t vnl = strlen(var_name);
+            char lastc = vnl ? var_name[vnl - 1] : '\0';
+            if (lastc == '%') {
+                step = (step >= 0.0f) ? (float)floor(step + 0.5f)
+                                      : (float)ceil(step - 0.5f);
+            }
+        }
         /* v171: skip the step digits (text was left pointing at
          * them, which the same-line body check mistook for a body) */
         while (**text && (isdigit((unsigned char)**text) || **text == '.' || **text == '-' || **text == '+')) (*text)++;
@@ -456,6 +475,18 @@ const char *next86_current_body(void) {
     return NULL;
 }
 
+/* v172 HIGH-1: line number of the current (top) FOR — the line
+ * runner re-enters it on -3 (cross-line NEXT) */
+int next86_current_for_line(void) {
+    if (g_for_sp > 0) return (int)g_for_stack[g_for_sp - 1].for_line;
+    return 0;
+}
+
+/* v172 MEDIUM-3: clear the tail-host marker when a tail finishes */
+void next86_tail_host_clear(void) {
+    g_tail_host_return = 0;
+}
+
 /* Get FOR stack depth */
 int next86_get_for_depth(void) {
     return g_for_sp;
@@ -509,6 +540,9 @@ const char *next86_gosub_take_tail(void) {
         struct gosub_entry *e = &g_gosub_stack[g_gosub_sp - 1];
         if (e->has_tail) {
             e->has_tail = false;
+            /* v172 MEDIUM-3: remember where RETURN was heading so a
+             * GOSUB nested inside the tail returns there */
+            g_tail_host_return = e->text_ptr;   /* RETURN target */
             return e->tail;
         }
     }
@@ -576,6 +610,13 @@ int next86_gosub_to_line(int line_num) {
     }
     if (curr && curr->next) {
         return_line = curr->next->number;
+    }
+    
+    /* v172 MEDIUM-3: a GOSUB issued while a tail is executing
+     * returns to the tail host's continuation line — the RETURN
+     * statement line itself has no GOSUB of its own. */
+    if (g_tail_host_return > 0) {
+        return_line = g_tail_host_return;
     }
     
     g_gosub_stack[g_gosub_sp].line = g_curlin;

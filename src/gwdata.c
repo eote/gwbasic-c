@@ -233,6 +233,11 @@ void gwdata_set_error(int code, uint16_t line, int text_ptr) {
     g_state->error_code = code;
     g_state->error_line = line;
     g_state->error_text_ptr = text_ptr;
+    /* v172 HIGH-2: a NEW error re-arms segment pinning — the previous
+     * error's failing-segment index (possibly consumed or left over
+     * from a handler that exited via plain RESUME/GOTO) must not
+     * leak into this error's RESUME NEXT. */
+    g_state->error_seg_index = -1;
     /* Note: on_error_active should only be set by ON ERROR GOTO statement (via gwdata_set_on_error_goto) */
 }
 
