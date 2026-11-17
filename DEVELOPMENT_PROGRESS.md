@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v171 修复轮 — compound 行余指针 (单行FOR/GOSUB tail/RESUME NEXT) + THEN 行号 + 2D double + DATA/REM/D字面量/USING (3H/7M 全处理); 下一步 v172 review |
+| **当前阶段** | v172 修复轮 — 跨行 NEXT (-3 归属/runner 重入) + error_seg 生命周期 + 行首注释 DATA + 整数 STEP CINT + 嵌套 GOSUB tail (2H/3M 全处理); 下一步 v173 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,34 @@
 
 ---
 
+## 当前轮: CODE_REVIEW v172 修复轮 — 2H/3M 全处理 (阻断解除)
+
+### HIGH (2 项 — 段/体指针生命周期边界)
+
+| # | 修复 |
+|---|------|
+| H1 跨行 NEXT 回归 | **-3 归属重设计**: NEXT 返回 -3 恢复原判据 (body_text 非空); compound 的 -3 consumer 改**透传**; **runner** 新增 rc==-3 → 重入 FOR 行 (next86_current_for_line) + `resume_seg_skip=1` 跳过 FOR 头段 → **单行 FOR 循环在 FOR 分派内的 body compound 闭合; 跨行 FOR 循环在 runner 闭合** — `FOR I=1 TO 3: PRINT F;I;` + 下一行 NEXT → F 1F 2F 3DONE ✓ |
+| H2 error_seg_index 生命周期 | (1) `gwdata_set_error` **复位 error_seg_index=-1** (新错误重臂 — handler 经 RESUME/GOTO 退出后的残留不再污染下一错误); (2) RESUME NEXT 段恢复判据 `>0` → **`>=0`** (段0 错误也同行恢复) — 段0 探针 `B=1/0: PRINT "SEG2"` → H 11/SEG2/LINE30 ✓; 残留探针 → S2-SHOULD-PRINT/LINE60 ✓ |
+
+### MEDIUM (3 项)
+
+| # | 修复 |
+|---|------|
+| M1 | bimisc_read 行入口: 行首 `'` 或 REM+词边界 → **整行跳过** (行首注释内 DATA 不再泄漏; 字符串内 "X: DATA 7" 引号跟踪不受影响) |
+| M2 | 整数 FOR 的 STEP 解析时 **CINT 取整** (ASM GETINT) — `FOR J%=1 TO 2 STEP 0.5` 死循环根除 (0.5→1); `STEP 1.5`→2 |
+| M3 | 嵌套 GOSUB tail: **g_tail_host_return** 全局宿主续点 — tail 执行期间其内部 GOSUB 的 return_line = 宿主 RETURN 的目标行 (非 RETURN 语句行); take 时设置 / tail compound 完成后清除 — `GOSUB 100: B1=1: GOSUB 200: B3=3` (100 内嵌 300) → S1 S3 S2 L20 1 3 ✓ |
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 (root+tests) | ✅ 0 警告 |
+| 单测 | ✅ **3592/3592 PASS** (+9) |
+| .bas 逐个 | ✅ **87/87** |
+| 孤儿检测 | ✅ **971 = 971** |
+| reviewer 探针 | ✅ 跨行 NEXT (F 1F 2F 3) / 单行 FOR (I=1,2,3) / 段0 RESUME (SEG2/LINE30) / 残留 (S2/LINE60) / 行首注释 DATA ×2 / STEP 0.5+1.5 / 嵌套 GOSUB tail / 简单 GOSUB 回归 |
+
+---
 ## 当前轮: CODE_REVIEW v171 修复轮 — 3H/7M 全处理 (阻断解除)
 
 ### HIGH (3 项 — 行余指针架构修复)
