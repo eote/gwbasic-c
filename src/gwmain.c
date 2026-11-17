@@ -283,10 +283,15 @@ static int run_program_lines(void) {
                  * segment (the FOR header). */
                 if (rc == -3) {
                     extern int next86_current_for_line(void);
+                    extern int next86_current_for_seg(void);
                     int for_line = next86_current_for_line();
+                    int for_seg = next86_current_for_seg();
                     if (for_line > 0) {
                         if (g_state) {
-                            g_state->resume_seg_skip = 1;   /* skip FOR header */
+                            /* v173 HIGH-1: skip every segment up to and
+                             * including the FOR header (prefix segments
+                             * must not re-execute) */
+                            g_state->resume_seg_skip = for_seg + 1;
                             g_state->error_seg_index = -1;
                         }
                         g_curlin = (WORD)for_line;

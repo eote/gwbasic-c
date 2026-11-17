@@ -59,6 +59,7 @@ void next86_init(void) {
         g_for_stack[i].for_line = 0;
         g_for_stack[i].for_next_line = 0;
         g_for_stack[i].body_text = NULL;
+        g_for_stack[i].for_seg_index = 0;
     }
 }
 
@@ -336,7 +337,12 @@ int next86_for(const char **text) {
         /* v172 MEDIUM-2: integer loop variables take the STEP through
          * CINT (ASM GETINT forces an integer pair) — a fractional
          * step on an integer variable would otherwise truncate to a
-         * constant value every iteration (infinite loop). */
+         * constant value every iteration (infinite loop).
+         * v173 MEDIUM-2 (semantics note): a step that CINTs to 0
+         * (e.g. STEP 0.49) falls into the ASM NT0STP path below
+         * (step_sign=2 = deliberate infinite loop, matching GW-BASIC
+         * "STEP 0 never terminates"). Confirmed against ASM GWMAIN
+         * FOR L1600; not a bug. */
         {
             size_t vnl = strlen(var_name);
             char lastc = vnl ? var_name[vnl - 1] : '\0';
@@ -418,6 +424,13 @@ int next86_for(const char **text) {
                 g_for_stack[g_for_sp - 1].body_text = body;
             }
         }
+        /* v173 HIGH-1: remember which compound segment the FOR header
+         * occupies (the executor set current_seg_index before calling
+         * us) so the runner re-enters AFTER the header, not after
+         * segment 1. */
+        if (g_for_sp > 0 && g_state) {
+            g_for_stack[g_for_sp - 1].for_seg_index = g_state->current_seg_index;
+        }
     }
     
     /* Initialize loop variable (typed) — v170 HIGH-6: integer start
@@ -479,6 +492,13 @@ const char *next86_current_body(void) {
  * runner re-enters it on -3 (cross-line NEXT) */
 int next86_current_for_line(void) {
     if (g_for_sp > 0) return (int)g_for_stack[g_for_sp - 1].for_line;
+    return 0;
+}
+
+/* v173 HIGH-1: compound segment index of the current (top) FOR
+ * header — the runner skips for_seg+1 segments on re-entry */
+int next86_current_for_seg(void) {
+    if (g_for_sp > 0) return g_for_stack[g_for_sp - 1].for_seg_index;
     return 0;
 }
 

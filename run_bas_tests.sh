@@ -98,6 +98,8 @@ IMPLEMENTED_TESTS=(
     "test_m4_funcs.bas"
     "test_using.bas"
     "test_typesuffix.bas"
+    "test_for_prefix_seg.bas"
+    "test_gosub_nested_tail.bas"
     "test_onerr_off.bas"
 )
 

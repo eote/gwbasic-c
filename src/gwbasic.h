@@ -652,6 +652,11 @@ struct for_entry {
     /* v171 HIGH-1: same-line FOR body (ASM FOR saves the text
      * pointer of the remainder of the line; NEXT resumes there) */
     const char *body_text;
+    /* v173 HIGH-1: compound segment index of the FOR header — the
+     * line runner skips for_seg_index+1 segments when re-entering
+     * the FOR line (prefix segments before the FOR must not
+     * re-execute). */
+    int for_seg_index;
 };
 
 void next86_init(void);

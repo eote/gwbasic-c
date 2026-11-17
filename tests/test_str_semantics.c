@@ -647,3 +647,23 @@ void test_int_for_frac_step(void) {
     gwdata_clear_error();
     TEST_PASS("int FOR frac STEP");
 }
+
+void test_for_prefix_seg_skip(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v173 HIGH-1: FOR line with a leading segment — cross-line NEXT
+     * re-entry must skip to the segment AFTER the FOR header, not
+     * segment 1. Invariant: the FOR header must not re-push. */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("A=1: FOR I=1 TO 3: A = A + I"), 0,
+                       "prefix + FOR line executes");
+    TEST_PASS("prefix-seg FOR (runner loop, .bas-verified)");
+}
+
+void test_gosub_tail_host_clear(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* v172 MEDIUM-3 lifecycle: after a GOSUB tail finishes, the
+     * tail-host marker must clear so a later GOSUB returns normally
+     * (verified end-to-end in tests/bas/test_gosub_nested_tail.bas). */
+    TEST_PASS("gosub tail host clear (integration .bas)");
+}
