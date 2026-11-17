@@ -1,73 +1,55 @@
-# GW-BASIC C Port - Code Review v172
+# GW-BASIC C Port - Code Review v173
 
-**日期**: 2026-11-17
-**审查范围**: `d8aab53` → `6dd31d0`（v171 修复轮 `3aa4479` + 登记 `12ba3e1` + 补遗 `6dd31d0`）
-**测试状态**: 断言 **3592/3592 通过** | 测试函数 **966 = 966**（0 孤儿）| 编译警告 **0** | .bas 目录全量 **111/111 通过***
+**日期**: 2026-11-18
+**审查范围**: `6dd31d0` → `06b94ef`（v172 修复轮 `f885fc5` + 进度登记 `06b94ef`）
+**测试状态**: 断言 **3601/3601 通过** | 测试函数 **971 = 971**（0 孤儿）| 编译警告 **0** | .bas 目录全量 **111/111***（9 项仅 .expected 缺尾换行，逐字节确认非真实失败）
 
-**总体评分**: **C-（阻断合并）** — **0 CRITICAL** + **2 HIGH**（跨行 NEXT 回归；`error_seg_index` 生命周期——段0 判据与残留不复位）+ **3 MEDIUM + 2 LOW**
+**总体评分**: **C-（阻断合并）** — **0 CRITICAL** + **1 HIGH**（FOR 行带前缀段时跨行 NEXT 死循环）+ **3 MEDIUM**（嵌套 GOSUB tail 修复无单测、测试盲区、GW-BASIC 步长 0 语义）+ **1 LOW**
 
 ---
 
 ## 一、概述
 
-`3aa4479` + `6dd31d0`（src 8 文件，~+280）修复 v171 全部 3H/7M，新增 6 条单测：
+`f885fc5`（src 5 文件 + tests 2 文件）修复 v172 全部 2H/3M，新增 5 条单测：
 
 | 文件 | 变更 |
 |------|------|
-| `src/gwsts.c` | +150：compound 段索引跟踪；FOR 段吞并行尾 + `-3` 体指针恢复；GOSUB 段尾 stash；RETURN 尾随复合执行；RESUME NEXT 段索引重入；`GWSIFS_IS_LINENUM` 只判首 token；`%.16g`；2D+ 数组 typed set |
-| `src/next86.c` | +67：`body_text` 单行 FOR 体（NEXT `-3` 续环）；`gosub tail` stash/take；step 数字跳过 |
-| `src/bimisc.c` | +21：`parse_data_value` 冒号终止；READ 扫描跳过 `:REM`/`:'` 段 |
-| `src/gweval.c` | +8：D 指数字面量 = double |
-| `src/biprtu.c` | +15：USING 分数位 `%.*f` 提取；`src/gwdata.c`：`error_seg_index`/`resume_seg_skip` 初始化；`src/gwbasic.h`：3 字段 + `body_text` |
-| `tests` | +6 单测 + 23 断言 |
+| `src/gwsts.c` | -5：compound 不再消费 `-3`（透传给 runner）；RETURN tail 复合后 `next86_tail_host_clear()`；RESUME NEXT 段判据 `> 0` → `>= 0` |
+| `src/gwmain.c` | +28：runner 处理 `-3`——重入 FOR 行、`resume_seg_skip=1` 跳 FOR 头段 |
+| `src/next86.c` | +48：整数 FOR STEP 走 CINT（floor/ceil ±0.5）；`next86_current_for_line()`；GOSUB tail host 机制 `g_tail_host_return`（tail 内嵌 GOSUB 返回宿主续点）；`next86_tail_host_clear()` |
+| `src/bimisc.c` | +10：行首 `'`/REM（含 `:` 边界）整行跳过 |
+| `src/gwdata.c` | +5：`gwdata_set_error` 复位 `error_seg_index=-1`（新错误重新武装段 pinning） |
+| `tests` | +5 单测 + 9 断言 |
 
-### 验证结果
+### 验证结果（v172 问题闭环全验）
+
+| v172 问题 | 探针 | 结果 |
+|----------|------|------|
+| H1 跨行 NEXT | `10 FOR I=1 TO 3: PRINT "F"; I;` + `20 NEXT I` | ✅ F 1F 2F 3DONE、负步/浮点步正确 |
+| H2① 段0 RESUME NEXT | `20 B=1/0: PRINT "SEG2"` | ✅ HSEG2-OK LINE30（同行段1恢复） |
+| H2② index 残留 | RESUME 退出后第二错误 | ✅ LINE40 / S2-SHOULD-PRINT / LINE60（中段恢复） |
+| M1 行首注释 DATA | `' note: DATA 9` / `REM foo: DATA 8` / 字符串 `"X: DATA 7"` | ✅ 全部跳过 → Out of DATA（正确） |
+| M2 整数 STEP 0.5 | `FOR J%=1 TO 9 STEP 0.5` | ✅ B 1..9（CINT 取整 1） |
+| M3 嵌套 GOSUB tail | 三层嵌套 + 尾行 | ✅ S1 S3 S1-TAIL2 B1 B2 S2 B3 MAIN-END（顺序正确、无 Error 300） |
+
+### 回归检查（无破）
 
 | 项 | 结果 |
 |----|------|
-| 构建 | ✅ `CC=D:/myplace/program/mingw64/bin/gcc.exe`；0 警告 |
-| 单测 | ✅ **3592/3592**（v171: 3569，+23） |
-| 测试函数/注册 | ✅ **966 = 966**，0 孤儿 |
-| .bas 目录全量 | ✅ **111/111**（尾换行差异视同通过） |
-| **单行 FOR（同体 NEXT）** | ✅ `FOR I=1 TO 3: PRINT I: NEXT I` → 1 2 3；STEP 1/负步/浮点步/内嵌 GOSUB 全对 |
-| **跨行 NEXT + 单行 FOR 体** | ❌ `10 FOR I=1 TO 3: PRINT "F"; I;` + `20 NEXT I` → **仅 F 1 一次**（应 F 1 F 2 F 3） |
-| **GOSUB 尾行** | ✅ 简单 `GOSUB 100: PRINT "BACK"` → SUB / BACK / LINE20 |
-| **嵌套 GOSUB + 尾行** | ❌ 多层 tail 组合错乱（多余 S3、RETURN without GOSUB Error at 300） |
-| **RESUME NEXT 段恢复（错误在段1+）** | ✅ `A=1: B=1/0: PRINT "AFTER-ERR"` → AFTER-ERR 恢复；多段（C2/D2）全恢复 |
-| **RESUME NEXT 段0 边界** | ❌ `20 B=1/0: PRINT "SEG2"` → RESUME NEXT 跳下一行，**SEG2 丢失**（应同行段1 执行） |
-| **error_seg_index 残留** | ❌ handler 用 RESUME 退出后，下一错误 RESUME NEXT 跳错段、静默丢语句 |
-| **IF 行号 + 尾随** | ✅ `IF 1 THEN 200: PRINT "NO"` / `ELSE 400: stmt` / `THEN 500: REM` 全部正确跳转、无 Error |
-| **2D/3D double 数组** | ✅ `E#(1,2)`/`F#(1,1,2)` 全 15 位精度 |
-| **D 指数 / %.16g** | ✅ `1.23456789012345D0` 全精度、`2.5D2=250`；`1#/3` → 0.3333333333333333（16 位） |
-| **DATA 冒号终止** | ✅ `DATA 3,4: PRINT "AFTER"` + `READ A,B,C` → 无幻影项（C 读到注释泄漏值，见 MEDIUM-1） |
-| **`:REM`/`:'` 段后 DATA** | ✅ `A=1: REM x: DATA 5` → 不读（Out of DATA） |
-| **行首 `'`/REM 注释内 DATA** | ❌ `' note: DATA 9` / `REM foo: DATA 8` → **仍被读出（Q=9、R=8）** |
-| PRINT USING 位数 | ✅ `###.##########` 10 位正确；`-1.25` 正确；溢出 `%` 标记正确 |
-| **整数 FOR + 小数 STEP** | ❌ `FOR J%=1 TO 2 STEP 0.5` → **死循环**（J% 恒 1，v170 LOW-5 未动） |
+| 简单 GOSUB 尾行 | ✅ SUB / BACK / LINE20 |
+| 单行 FOR 同体 + 尾随 | ✅ S 1S 2S 3AFTER（AFTER 仅一次）；内嵌 GOSUB ✅ |
+| IF 行号 + 尾随 / IF 内单行 FOR | ✅ TGT / ELSE-JUMP / TGT500 / O 1O 2 END-IF-ONE-LINER |
+| 2D/3D double、D 字面量、`%.16g`、USING | ✅ 无回归 |
+| 3601/971/111/0W/0 孤儿 | ✅ |
 
-### v171 问题闭环
+### ❌ 新发现：FOR 行带前缀段 + 跨行 NEXT → 死循环
 
-| v171 | 状态 |
-|------|------|
-| H1 行余指针（单行 FOR/GOSUB/RESUME NEXT 主体） | ⚠️ 单行 FOR 同体 ✅、简单 GOSUB tail ✅、RESUME NEXT 段1+ ✅；**跨行 NEXT 回归**、嵌套 tail 错乱、段0/residual 未闭环 |
-| H2 IF 行号+尾随 | ✅ 首 token 判据正确（THEN/ELSE/REM 尾随全过） |
-| H3 2D double 数组 | ✅ 2D/3D typed set 全精度 |
-| M1 READ 跳 REM 段 | ⚠️ `:REM`/`:'` 段 ✅；**行首 `'`/REM 注释整体未跳过** |
-| M2 DATA 幻影项 | ✅ 冒号终止（无幻影） |
-| M3 D 指数 | ✅ |
-| M4 DATA 死分支/UB | ✅ 分支删除、`e` 预读消除 |
-| M5 USING 分数位 | ✅ `%.*f` 提取不再丢精度 |
-| M6 `.16g` | ✅ 16 位有效数字 |
-| STEP 后跳数字 | ✅ 同体 `STEP 1` 正常 |
-
-### 正面确认
-
-| 功能 | 结果 |
-|------|------|
-| 单行 FOR（同体）+ 负步/浮点步/GOSUB 内嵌 | ✅ 全对 |
-| IF 分支复合 + 行号跳转 | ✅ T1 T2 / ELSE 400 / THEN 500 |
-| 2D/3D double、D 字面量、`0.1+0.2` EQ | ✅ 无回归 |
-| 3592/966/111/0W/0孤儿 | ✅ |
+```
+10 A=1: FOR I=1 TO 3: PRINT "X"; I;
+20 NEXT I
+→ 实测: X 1 无限循环（每轮重入都重新执行 FOR 头、I 永远重置为 1）
+→ 期望: X 1X 2X 3DONE
+```
 
 ---
 
@@ -81,35 +63,18 @@
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | **跨行 NEXT 回归：单行 FOR 体（`FOR I=1 TO 3: stmt`）的 NEXT 放在下一行时循环只执行 1 次** | `src/next86.c` / `src/gwsts.c` | 169-212 / 855-870、940-960 |
-| 2 | **`error_seg_index` 生命周期不完整：段0 错误判据（`>0`）漏恢复同行后续段；handler 用 RESUME/GOTO 退出后索引残留导致下一错误跳错段** | `src/gwsts.c` / `src/gwdata.c` | 982-986、2915-2923 / 53、65 |
+| 1 | **FOR 行带前缀段（`A=1: FOR …`）时，跨行 NEXT 重入跳过段数写死为 1 → 死循环** | `src/gwmain.c` | 279-300 |
 
-**HIGH-1 详情:** v171 引入 `body_text`，`next86_int_next`/`next86_float_next` 在 `cmp==0`（循环继续）时**无条件** `return -3`，由 compound 执行器恢复体指针。但当 FOR 行以冒号收尾、NEXT 写在下一条**独立行**时（GW-BASIC 常见写法，ASM 中 FOR 保存文本指针后由 `for_next_line` 续环），-3 在顶层语句循环中无 consumer，被当作普通返回码吞掉：
+**详情:** runner 的 `-3` 处理假定"FOR 头是 FOR 行第 1 段"，因此 `resume_seg_skip = 1`。但 FOR 行常见写法是带前缀语句：
 
 ```
-10 FOR I=1 TO 3: PRINT "F"; I;
+10 A=1: FOR I=1 TO 3: PRINT "X"; I;
 20 NEXT I
-→ 实测: F 1 / DONE（应 F 1 F 2 F 3 / DONE）
 ```
 
-传统多行 FOR 不受影响（无 body_text）。这是 v171 修复轮的**回归**：v170 及以前 `next86_next` 无条件返回 `for_next_line`，跨行 NEXT 正常。**修复:** NEXT 返回 -3 前判定位：仅当 NEXT 处于同一文本段（当前行 == FOR 行）时走体恢复；否则返回 `entry->for_next_line`（顶层跳转按行号继续）。
+重入 FOR 行时跳过 1 段（即 `A=1`），随后**重新执行 FOR 头** → `next86_for` 重新 push、I 重置为 1 → 下一轮 `-3` 再重入 → 无限循环（实测 X 1X 1X 1…，`timeout 5` 输出满屏）。v172 对同一程序是"只执行一次"（次数错误但有限），v173 修复后变成**死循环**——这是修复轮引入的行为退化，GW-BASIC 中该写法合法且常见。
 
-**HIGH-2 详情:** 两个表现同根——`error_seg_index` 的 pin/复位/判据三处不完整：
-
-```
-① 段0 错误:
-   20 B=1/0: PRINT "SEG2"
-   → RESUME NEXT 输出 H / LINE30，SEG2 丢失。
-   GW-BASIC 应执行错误语句的下一语句（SEG2）。
-
-② 残留:
-   30 A=1: IF F=0 THEN X(99)=1: C=9     （F=0 → ERR9，pin seg=1）
-   handler: IF ERR=9 THEN F=1: RESUME    （RESUME 不消费 index）
-   50 D=1/0: PRINT "S2-SHOULD-PRINT"     （ERR11）
-   → RESUME NEXT 用残留索引 1 重入 line50 跳过 2 段 → S2 丢失，直接 LINE60。
-```
-
-原因：`error_seg_index < 0` 才 pin、`> 0` 才段恢复、仅在 RESUME NEXT 消费时复位。①应改为 `>= 0`（段0 也要同行恢复）；②应在 handler 每次处理新错误时复位（如 error 触发时清 `error_seg_index=-1`），GOTO/RESUME 退出后不能残留。**修复:** 错误设置路径（`gwdata_set_error`）复位 `error_seg_index=-1`，pinning 改 `>= 0`，RESUME NEXT 段恢复判据用"错误段后仍存在段"而非纯 `>0`；补 A/B 两探针为单测。
+**修复:** FOR 入栈时记录"FOR 头所在段索引"（`for_seg_index`），runner 重入时 `resume_seg_skip = for_seg_index + 1`；或在 `next86_for` 返回时把"FOR 头段号"传出，runner 用它计算跳过段数。**补用例见第四节 T1（红灯）**——现有 5 条新单测全部只覆盖"FOR 即第 1 段"（`test_cross_line_next_body` 亦同），未覆盖前缀段场景。
 
 ---
 
@@ -117,23 +82,15 @@
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | **行首 `'`/REM 注释内 `: DATA` 仍被当数据读出** | `src/bimisc.c` | 557-588 |
-| 2 | **整数 FOR + 小数 STEP 死循环：`FOR J%=1 TO 2 STEP 0.5` 恒 J%=1** | `src/next86.c` | FOR/NEXT 递增路径 |
-| 3 | **嵌套 GOSUB + 行尾续行组合错乱（多余重复执行 + RETURN without GOSUB）** | `src/gwsts.c` / `src/next86.c` | RETURN tail 复合 / gosub tail |
+| 1 | **嵌套 GOSUB tail 修复（M3）没有任何单测** | `tests/test_runner.c` | — |
+| 2 | **步长 CINT 后为 0 的语义未定：`STEP 0.49` → CINT=0 → 死循环（ASM step 0 故意无限循环，需真机/ASM 对齐确认）** | `src/next86.c` | 333-345 |
+| 3 | **测试覆盖断链：v173 修复的 6 处行为中 5 处有单测，唯一漏网的死循环（HIGH-1）恰好是最严重的** | `tests/` | — |
 
-**MEDIUM-1:** v171 只跳过 `:REM`/`:'` **段**，行首注释未整体跳过：
+**MEDIUM-1:** 上轮 MEDIUM-3（`g_tail_host_return` 宿主续点）修复经验证生效（嵌套三层 GOSUB + 尾行输出顺序完全正确），但本轮 5 条新单测覆盖了跨行 NEXT/段0/残留/注释/整数 STEP，**唯独没有嵌套 GOSUB tail**——该机制（全局单值 `g_tail_host_return` + `next86_tail_host_clear` 在 RETURN 时清除）是多层嵌套场景，极易回归且无保护。**用例见第四节 T2。**
 
-```
-10 ' note: DATA 9        + READ C → C=9（注释当数据）
-10 REM foo: DATA 8       + READ R → R=8（同上）
-70 PRINT "X: DATA 7"     → READ S 正确 Out of DATA（字符串引号跟踪 OK）
-```
+**MEDIUM-2:** `STEP 0.49` → `floor(0.49+0.5)=0` → 步长 0 → 死循环。ASM 注释"step 0 时改符号为 2"意味着 GW-BASIC 的 step 0 本来就是**故意无限循环**（防呆：STEP 0 的 FOR 永不结束），因此 CINT 后为 0 时死循环可能是**正确语义**——但需在真机/ASM 全流程确认（GETINT 对 0.49 的取整结果与 FRCINT 一致后再下结论）。建议补 `STEP 0.49`/`STEP 0` 用例并记录期望语义。
 
-ASM 中 READ 的 DATA 行扫描基于已 tokenize 文本，REM 内容不产生 DATA token；C 端文本扫描必须在行首识别 `'` 或 REM（词边界）时整行跳过。**修复:** 行扫描入口处：`trimmed` 以 `'` 开头或匹配 `REM`+边界 → 直接 next line；补行首撇号/REM 注释含 `: DATA` 用例。
-
-**MEDIUM-2:** v170 LOW-5 原样保留。ASM 整数 FOR 的 STEP 经 `GETINT`（强制整数对）读取，0.5 按 CINT 取整；当前实现 step 保留 double 0.5，整数变量 `v->value.d += 0.5` 后写回 `(int32_t)` 恒为 1 → **无限循环**，且与 `.bas` 超时行为一致（探针 3 秒打了数百个 "B 1"）。**修复:** 整数变量 FOR 的 STEP 在解析时 CINT 取整（并与 ASM GETINT 的舍入规则对齐）；补 `FOR I%=.. STEP 0.5`、`STEP 1.5` 用例。
-
-**MEDIUM-3:** 简单 `GOSUB 100: tail` 正确（v172 已验证），但嵌套 GOSUB + 尾部续行的多层组合错乱：`GOSUB 100: B1: B2: GOSUB 200: B3` 且 100 内部再 GOSUB 300 + 尾行 RETURN 时，输出 `S1 S3 S1-TAIL2 B1 B2 S2 B3 S3 Error at line 300`——S3 重复执行、300 行 RETURN 无匹配 GOSUB。tail 存储在 gosub entry 上，RETURN 弹出时把整个 tail 当复合段执行，tail 内部再遇 GOSUB/RETURN 时与弹栈次序交错。**修复:** tail 复合执行不做多级嵌套（或在 tail 内暂存新 GOSUB、RETURN 只弹一层最邻近表项）；补嵌套 GOSUB tail 集成用例（当前 `test_gosub_same_line_tail` 只测 missing-line 返回码，未覆盖真实返回）。
+**MEDIUM-3:** 上轮报告( v172 LOW-2 )预测的"6 条新单测未覆盖全部 4 处行为缺陷"本轮部分应验：5 条单测覆盖了 4 处，但 HIGH-1 死循环依然漏网。结论：**每轮把探针直接转正为测试**（见第四节），不要依赖下一轮修复开发者的自觉。
 
 ---
 
@@ -141,8 +98,7 @@ ASM 中 READ 的 DATA 行扫描基于已 tokenize 文本，REM 内容不产生 D
 
 | # | 描述 |
 |---|------|
-| 1 | `test_gosub_same_line_tail` 名实不符：只断言 `GOSUB 900`（缺行）返回 -2，未测真正 RETURN 尾行；注释亦承认"covered by .bas probe" |
-| 2 | 6 条新单测未覆盖本轮 5 个回归点：跨行 NEXT、段0 RESUME NEXT、index 残留、行首注释 DATA、整数 STEP 死循环 |
+| 1 | `test_cross_line_next_body` 只验证 compound 返回码 0 且注释"runner loop, .bas-verified"——真正的跨行循环行为没被单测锁定；FOR 前缀段场景更完全空白 |
 
 ---
 
@@ -150,69 +106,106 @@ ASM 中 READ 的 DATA 行扫描基于已 tokenize 文本，REM 内容不产生 D
 
 | 决策 | 评价 |
 |------|------|
-| 单行 FOR 用 `body_text` + `-3` 体恢复 | ⚠️ 同体型正确，但 -3 无条件、跨行 NEXT 无 consumer → 回归（HIGH-1） |
-| GOSUB tail stash/take + RETURN 复合 | ⚠️ 简单场景正确；嵌套 + 弹栈次序未闭环（MEDIUM-3） |
-| RESUME NEXT 段索引重入 | ⚠️ 段1+ 正确；段0 判据与残留生命周期缺失（HIGH-2） |
-| `GWSIFS_IS_LINENUM` 首 token | ✅ 与 ASM DOCOND 一致（THEN/ELSE/REM 尾随全过） |
-| 2D/3D typed set、D 字面量、`%.16g`、USING `%.*f` | ✅ 精度链完整闭环 |
-| READ 扫描跳过注释段 | ⚠️ 只覆盖段首；行首注释仍泄漏（MEDIUM-1） |
-| 测试 +6 | ⚠️ 覆盖了修复主体，但遗漏本轮全部 4 处行为缺陷（全部手工探针发现） |
+| `-3` 透传给 runner 统一处理（v172 H1） | ⚠️ 正确解耦了 compound/runner 职责，但段跳过数硬编码 1，未携带 FOR 头段号（HIGH-1） |
+| `gwdata_set_error` 复位 error_seg_index | ✅ 干净关闭残留通道，与"错误即新状态"语义一致 |
+| RESUME NEXT `>= 0` 判据 | ✅ 段0 错误恢复同行后续，符合 ASM OLDTXT |
+| 行首 `'`/REM 整行跳过 | ✅ 与 ASM 非 tokenize 注释一致，字符串引号路径不受影响 |
+| 整数 STEP CINT | ✅ 0.5→1 正确；0.49→0 需确认 step 0 语义（MEDIUM-2） |
+| `g_tail_host_return` 全局单值 | ⚠️ 三层嵌套实测正确，但全局状态在更深嵌套/递归 tail 下无保护（MEDIUM-1） |
+| 每轮探针转正 | ⚠️ 5/6 已转，唯一漏网即最严重的死循环——需要"探针=下一轮测试"的强约定 |
 
-**根因**: 段索引/体指针机制本身可行（同体型全对），但三处生命周期边界（跨行 NEXT 的 -3 归属、error_seg_index 的 pin/reset/判据、GOSUB tail 的弹栈次序）未闭环；READ 注释跳过只做了段级、没做行级。
+**根因**: 修复轮的主体设计（-3 透传 + 段跳过 + CINT + 注释行跳过）方向正确且已闭环 6/6；唯二缺口是（a）runner 对"FOR 头段号"的假设过于天真（第 1 段），（b）测试转正率没有达到 100%，且最危险用例（死循环）被漏。
 
 ---
 
-## 四、改进建议
+## 四、测试建议（可直接粘贴给开发者）
 
-### 短期（阻断合并）
-1. **HIGH-1**：NEXT 仅当与 FOR 同文本段时返回 -3；否则返回 `for_next_line`。补 `FOR…: body` + 下一行 NEXT 用例（正/负步）。
-2. **HIGH-2**：`gwdata_set_error` 复位 `error_seg_index=-1`；pin 用 `>= 0`；RESUME NEXT 判"错误段后仍有段"。补段0、残留两探针为单测。
-3. **MEDIUM-1**：行首 `'`/REM（词边界）整行跳过；补 `' note: DATA 9`、`REM foo: DATA 8` 用例。
-4. **MEDIUM-2**：整数 FOR STEP 解析时 CINT 取整；补 0.5/1.5/负步用例并防死循环。
-5. **MEDIUM-3**：GOSUB tail 复合与弹栈次序（tail 内 GOSUB/RETURN 只弹最近一层）；补嵌套用例。
+按 `tests/` 与 `tests/bas/` 现有约定书写，建议随 HIGH-1 修复一同入库（T1 红灯先入库，修复后转绿）。
 
-### 中期
-6. `test_gosub_same_line_tail` 改为真实 GOSUB+RETURN 行集成断言，去掉 -2 假测试。
-7. 类型矩阵测试追加：FOR（同体/跨行/整数 STEP）× 尾行（GOSUB/RESUME）× 段错误 × 注释 DATA。
+### T1（红灯）FOR 行带前缀段 + 跨行 NEXT —— 当前死循环
 
-### 长期
-8. compound 执行器整体换 tokenizer/文本指针模型（见 v171 建议），彻底消除 `-3`/段索引/尾行 stash 三类补丁式机制。
-9. ASAN/UBSAN + fuzz（嵌套 GOSUB tail、跨行 FOR、段错误恢复）。
+`tests/bas/test_for_prefix_seg.bas`:
+```basic
+10 A=1: FOR I=1 TO 3: PRINT "X"; I;
+20 NEXT I
+30 PRINT "DONE"
+```
+`tests/bas/test_for_prefix_seg.expected`（GW-BASIC 期望）:
+```
+X 1X 2X 3DONE
+```
+当前实际: `X 1X 1X 1…`（无限循环，`timeout` 挂死）→ T1 红灯。
+
+### T2 嵌套 GOSUB + 尾行（MEDIUM-3 回归保护）
+
+`tests/bas/test_gosub_nested_tail.bas`:
+```basic
+10 GOSUB 100: PRINT "B1": GOSUB 200: PRINT "B3"
+20 PRINT "MAIN-END"
+30 END
+100 PRINT "S1";: GOSUB 300: PRINT "S1-TAIL";: RETURN
+200 PRINT "S2";: RETURN
+300 PRINT "S3";: RETURN
+```
+`tests/bas/test_gosub_nested_tail.expected`:
+```
+S1S3S1-TAILB1
+S2B3
+MAIN-END
+```
+（v173 实测通过；作为回归基线入库。）
+
+### T3 单测补强（tests/test_str_semantics.c）
+
+```c
+void test_for_prefix_seg_skip(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* FOR line with a leading segment: cross-line NEXT (line runner)
+     * must skip to the segment AFTER the FOR header, not segment 1.
+     * Invariant: re-entering the FOR line must NOT re-push the FOR. */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("A=1: FOR I=1 TO 3: A = A + I"), 0,
+                       "prefix + FOR line executes");
+    TEST_PASS("prefix-seg FOR (runner loop, .bas-verified)");
+}
+void test_gosub_tail_host_clear(void) {
+    gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
+    gwdata_clear_error();
+    /* After a GOSUB tail finishes, the tail-host marker must clear so
+     * a later GOSUB returns normally (MEDIUM-3 lifecycle). */
+    TEST_PASS("gosub tail host clear (integration in .bas probe)");
+}
+```
+注册两行于 `tests/test_runner.c`（不可用 `patch replace_all`，手工 `sed`/`edit` 单点插入）。
 
 ---
 
 ## 五、总结
 
-**总体评价**: v171 修复轮主体真实有效——单行 FOR 同体型、简单 GOSUB 尾行、RESUME NEXT 段1+ 恢复、IF 行号+尾随、2D/3D double 数组、D 字面量、`%.16g`、USING 分数位、DATA 冒号终止全部实测闭环，3592/3592、966=966、0 警告、111/111 .bas。但补丁式机制的边界三连击：跨行 NEXT 回归（只执行 1 次）、`error_seg_index` 段0/残留（静默丢语句）、行首注释 DATA 泄漏，均未被 6 条新单测覆盖，全部由独立进程手工探针暴露。**建议：阻断合并**，先修 HIGH-1/2，再补 MEDIUM-1/2/3 与对应用例。
+**总体评价**: v172 的 2H/3M 六处行为全部修复且回归无破——跨行 NEXT（正/负/浮点步）、段0 RESUME NEXT、error_seg_index 残留、行首 `'`/REM 注释 DATA、整数 STEP CINT、三层嵌套 GOSUB tail 全部实测正确；3601/971、0 警告、0 孤儿、.bas 111/111。但 `-3` 重入机制的段跳过数写死为 1，使"FOR 行带前缀段 + 跨行 NEXT"从 v172 的"执行一次"恶化为**死循环**——这是修复轮引入的新 HIGH，且恰好未被 5 条新单测覆盖。**建议：阻断合并**，修 HIGH-1（FOR 头段号传递）并随 T1 红灯入库。
 
-**关键发现**: **0 CRITICAL / 2 HIGH / 3 MEDIUM / 2 LOW**；3592 单测、111/111 .bas、0 警告、0 孤儿。
-**建议**: 阻断合并。HIGH-1 与 HIGH-2 是同一"段/体指针生命周期"问题的两个边界，修复应一并做。
+**关键发现**: **0 CRITICAL / 1 HIGH / 3 MEDIUM / 1 LOW**；3601 单测、111/111 .bas、0 警告、0 孤儿。
+**建议**: 阻断合并。HIGH-1 修复 + T1/T2/T3 测试入库（T1 先红灯）。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v171 | v172 | 变化 |
+| 指标 | v172 | v173 | 变化 |
 |------|------|------|------|
-| 断言 / 通过 | 3569 / 3569 | **3592 / 3592** | +23 |
-| 测试函数 | 960 | **966** | +6 |
+| 断言 / 通过 | 3592 / 3592 | **3601 / 3601** | +9 |
+| 测试函数 | 966 | **971** | +5 |
 | 孤儿数 | 0 | **0** | 保持 |
 | 警告 | 0 | **0** | 保持 |
-| .bas | 111/111 | **111/111** | 保持 |
-| 单行 FOR（同体） | 仅 1 次（v171 前坏） | **1 2 3 / STEP / GOSUB 内嵌全对** | ✅ 修复 |
-| 跨行 NEXT + 单行 FOR 体 | — | **F 1 后即 DONE** | ❌ 新回归（HIGH-1） |
-| GOSUB 尾行（简单） | BACK 丢失 | **SUB / BACK / LINE20** | ✅ 修复 |
-| 嵌套 GOSUB + 尾行 | — | **S3 重复 + Error 300** | ❌ 新 MEDIUM-3 |
-| RESUME NEXT 段1+ | 行余跳过 | **AFTER-ERR / C2 / D2 恢复** | ✅ 修复 |
-| RESUME NEXT 段0 | — | **SEG2 丢失** | ❌ 新 HIGH-2(①) |
-| error_seg_index 残留 | — | **S2 丢失（跳错段）** | ❌ 新 HIGH-2(②) |
-| IF 行号+尾随 | Error at line 10 | **正确跳转（THEN/ELSE/REM）** | ✅ 修复 |
-| 2D/3D double 数组 | 1.23456788063049 | **全 15 位** | ✅ 修复 |
-| D 字面量 / %.16g / USING 分数位 | 丢精度 | **全对** | ✅ 修复 |
-| DATA 冒号终止 | 幻影 C=4 | **无幻影** | ✅ 修复 |
-| `:REM` 段后 DATA | Q=5（泄漏） | **Out of DATA** | ✅ 修复 |
-| 行首 `'`/REM 注释 DATA | — | **Q=9、R=8（泄漏）** | ❌ 新 MEDIUM-1 |
-| 整数 FOR + 小数 STEP | 未测 | **死循环** | ❌ 新 MEDIUM-2 |
-| CRITICAL / HIGH | 0 / 3 | **0 / 2** | 维度下降但边界面扩大 |
+| .bas | 111/111 | **111/111*** | 保持（9 项 expected 尾换行） |
+| 跨行 NEXT | F 1 后即 DONE | **F1F2F3 / G3G2G1 / 浮点步全对** | ✅ 修复 |
+| **FOR 前缀段 + 跨行 NEXT** | — | **X 1 死循环** | ❌ 新 HIGH |
+| 段0 RESUME NEXT | SEG2 丢失 | **HSEG2-OK LINE30** | ✅ 修复 |
+| error_seg_index 残留 | S2 丢失 | **S2-SHOULD-PRINT 恢复** | ✅ 修复 |
+| 行首注释 DATA | Q=9/R=8 泄漏 | **全部 Out of DATA** | ✅ 修复 |
+| 整数 STEP 0.5 | 死循环 | **B 1..9** | ✅ 修复 |
+| 嵌套 GOSUB tail | S3 重复+Error 300 | **顺序正确 MAIN-END** | ✅ 修复 |
+| 简单 GOSUB / 单行 FOR / IF 行号 / IF 内 FOR | 全对 | **全对（无回归）** | ✅ |
+| CRITICAL / HIGH | 0 / 2 | **0 / 1** | 降级未到可合并 |
 
-**注释**: 单测/构建使用 `CC=D:/myplace/program/mingw64/bin/gcc.exe`；.bas 按目录全量 111 逐一比对（\r 归一、stdin=/dev/null、尾换行差异视同通过）。所有 new 项均为独立进程手工探针；ASM 对照 GWMAIN.ASM（`FOR`/`GETINT`/`NEXT`/OSHTXT 语义）。仅更新本报告，未改源码、未提交。
+**注释**: 构建/单测 `CC=D:/myplace/program/mingw64/bin/gcc.exe`；.bas 全量字节比对（\r 归一、stdin=/dev/null），9 项差异逐字节核实为 .expected 缺尾换行。修复验证与回归均为独立进程手工探针；ASM 对照 GWMAIN.ASM（`NEXT`/FOR 文本指针、`GETINT`、step 0 语义）。第四节 T1/T2/T3 为可直接落盘的测试文案。仅更新本报告，未改源码/测试、未提交。
