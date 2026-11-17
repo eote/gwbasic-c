@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v172 修复轮 — 跨行 NEXT (-3 归属/runner 重入) + error_seg 生命周期 + 行首注释 DATA + 整数 STEP CINT + 嵌套 GOSUB tail (2H/3M 全处理); 下一步 v173 review |
+| **当前阶段** | v173 修复轮 — FOR 前缀段跨行 NEXT 死循环 (for_seg_index) + T1/T2 .bas + T3 单测 + STEP 0 语义 (1H/3M 全处理); 下一步 v174 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,37 @@
 
 ---
 
+## 当前轮: CODE_REVIEW v173 修复轮 — 1H/3M 全处理 (阻断解除)
+
+### HIGH (FOR 前缀段 + 跨行 NEXT 死循环)
+
+- `A=1: FOR I=1 TO 3: ...` + 下一行 NEXT → runner 重入跳过段数
+  硬编码 1 → FOR 头重执行 → I 重置 → 死循环
+- 修复: **for_entry 记录 for_seg_index** (next86_for push 时取
+  executor 的 current_seg_index); runner -3 重入
+  `resume_seg_skip = for_seg + 1` — 前缀段与 FOR 头都不再重执行
+- 实证: `X 1X 2X 3DONE` ✓ (跨行/单行 FOR 回归 ✓)
+
+### MEDIUM
+
+| # | 修复 |
+|---|------|
+| M1/T1 | tests/bas/test_for_prefix_seg.bas (reviewer 红灯文案) 落盘 + 登记 run_bas_tests.sh → 转绿 |
+| M1/T2 | tests/bas/test_gosub_nested_tail.bas 嵌套 GOSUB tail 回归基线 (expected 按真实输出: S1S3S1-TAILB1 / S2B3 / MAIN-END) |
+| M2 | STEP CINT=0 语义注释: CINT(0.49)=0 → ASM NT0STP (step_sign=2) 故意无限循环 = GW-BASIC "STEP 0 永不终止", 非 bug |
+| M3/T3 | +2 单测 (test_for_prefix_seg_skip / test_gosub_tail_host_clear) |
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 (root+tests) | ✅ 0 警告 |
+| 单测 | ✅ **3593/3593 PASS** (+1) |
+| .bas 逐个 | ✅ **89/89** (+2 新登记) |
+| 孤儿检测 | ✅ **973 = 973** |
+| reviewer 探针 | ✅ 前缀段 FOR (X 1X 2X 3) / 跨行 NEXT / 单行 FOR 回归 / 嵌套 GOSUB tail |
+
+---
 ## 当前轮: CODE_REVIEW v172 修复轮 — 2H/3M 全处理 (阻断解除)
 
 ### HIGH (2 项 — 段/体指针生命周期边界)
