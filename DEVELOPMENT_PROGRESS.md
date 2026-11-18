@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v174 修复轮 — T3 空转单测补真断言 + for_seg_index/STEP 0 语义注释 (1M/2L 全处理, 首次 0C/0H); 下一步 v175 review |
+| **当前阶段** | v175 修复轮 — gosub_tail_host_clear 链路真断言 + 9 项 .expected 尾换行修复 (1M/2L 全处理); 下一步 v176 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,47 @@
 
 ---
 
+## 当前轮: CODE_REVIEW v175 修复轮 — 1M/2L 全处理 + 9 项 expected 尾换行
+
+### MEDIUM-1 (gosub_tail_host_clear 断言打空 → 沿链路真断言)
+
+- reviewer 取证: 原断言未执行 RETURN → `g_tail_host_return` 从未
+  设置/清除, 断言与 host 机制正交; GOSUB 压栈未 pop + 970 行泄漏
+- **修复**: 沿真实调用链设计 — `GOSUB 970: B=7` (tail stash, rc=970
+  跳子程序行) → `RETURN` (take_tail 设宿主续点 → tail body 执行
+  → clear) — **断言**: RETURN rc=**宿主续点 961** (非调用行)、
+  **B=7** (tail body 真执行)、宿主标记清除后 GOSUB 正常 (rc 仍
+  961)、`next86_get_gosub_depth()==0` (无残留)
+- 单测设 `g_curlin=960` 模拟 runner (gosub_to_line 需解析宿主续点);
+  gwlist_add_line(970/980) 用后 `gwlist_delete_line` 清理
+
+### LOW
+
+| # | 处理 |
+|---|------|
+| L1 | test_for_prefix_seg_skip 注释: -3 驱动为 compound 层模拟; runner 路径由 T1 .bas 锁定 |
+| L2 | `ON ERROR GOTO 0` 残留调试行 (v175 已确认不存在于测试) |
+
+### 附带: 9 项 .expected 尾换行假失败修复 (用户指令)
+
+- `test_string_funcs / line_input / read_data / resume_line /
+  def_fn / renum / delete / delete_exec` 共 8 项 expected 补尾
+  换行 (程序输出以 \r\n 结束, expected 缺尾换行 → reviewer 严格
+  字节比对判 fail)
+- `test_for2.bas` 不修: 程序输出真实以 `100\t` 结尾 (无换行),
+  expected 已一致
+- **复验: strict 字节比对 (\r\n 归一 + 尾换行敏感) 89/89 全过**
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 (root+tests) | ✅ 0 警告 |
+| 单测 | ✅ **3606/3606 PASS** (+4 真断言) |
+| .bas 逐个 | ✅ **89/89** (strict 口径) |
+| 孤儿检测 | ✅ **973 = 973** |
+
+---
 ## 当前轮: CODE_REVIEW v174 修复轮 — 1M/2L 全处理 (**首次 0 CRITICAL / 0 HIGH**)
 
 ### MEDIUM-1 (T3 空转单测 → 真断言)
