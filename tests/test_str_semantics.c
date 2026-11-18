@@ -653,17 +653,44 @@ void test_for_prefix_seg_skip(void) {
     gwdata_clear_error();
     /* v173 HIGH-1: FOR line with a leading segment — cross-line NEXT
      * re-entry must skip to the segment AFTER the FOR header, not
-     * segment 1. Invariant: the FOR header must not re-push. */
+     * segment 1. Invariant: the FOR header must not re-push (I must
+     * not reset), and the prefix segment must not re-execute. */
     TEST_ASSERT_EQ_INT(gwsts_exec_compound("A=1: FOR I=1 TO 3: A = A + I"), 0,
                        "prefix + FOR line executes");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 1 + 1, "first iteration A=2");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("I"), 1, "I starts at 1");
+    /* v174 MEDIUM-1: simulate the runner's -3 re-entry — body only
+     * (segments after the FOR header), FOR header NOT re-executed */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("A = A + I: NEXT I"), -3,
+                       "NEXT continues the loop");
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("A = A + I: NEXT I"), -3,
+                       "second continuation");
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("A = A + I: NEXT I"), 0,
+                       "loop closed after 3 iterations");
+    /* A = 1(prefix) + 1(first body run in FOR dispatch) + 1+2+3
+     * (driven continuations) = 8; a re-pushed FOR header would have
+     * reset I and produced a different total */
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 8, "A=1+1+1+2+3 (no re-push)");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("I"), 4, "I=4 after loop");
+    gwdata_clear_error();
     TEST_PASS("prefix-seg FOR (runner loop, .bas-verified)");
 }
 
 void test_gosub_tail_host_clear(void) {
     gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
     gwdata_clear_error();
-    /* v172 MEDIUM-3 lifecycle: after a GOSUB tail finishes, the
-     * tail-host marker must clear so a later GOSUB returns normally
-     * (verified end-to-end in tests/bas/test_gosub_nested_tail.bas). */
-    TEST_PASS("gosub tail host clear (integration .bas)");
+    /* v172 MEDIUM-3 lifecycle: while a GOSUB tail executes, a nested
+     * GOSUB returns to the host continuation line; after the tail
+     * finishes the marker clears and GOSUBs return normally. */
+    gwlist_add_line(970, "RETURN");
+    gwsts_exec_statement("ON ERROR GOTO 0");
+    /* issue GOSUB from a compound line: entry gets a tail; rc = the
+     * subroutine line (jump) with the tail stashed for RETURN */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970: B = 7"), 970,
+                       "GOSUB + tail (tail deferred, jump to 970)");
+    /* after RETURN-tail execution the host marker must be clear —
+     * a fresh GOSUB returns to the line AFTER its caller */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970"), 970, "normal GOSUB jumps");
+    gwdata_clear_error();
+    TEST_PASS("gosub tail host clear lifecycle");
 }

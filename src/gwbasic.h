@@ -655,7 +655,13 @@ struct for_entry {
     /* v173 HIGH-1: compound segment index of the FOR header — the
      * line runner skips for_seg_index+1 segments when re-entering
      * the FOR line (prefix segments before the FOR must not
-     * re-execute). */
+     * re-execute). v174 LOW-1: only meaningful on the compound
+     * execution path (the executor sets current_seg_index before
+     * dispatching); a FOR run outside a compound line leaves the
+     * field stale — verified harmless for standalone-line FORs
+     * (cross-line NEXT re-entry skips a stale segment without
+     * re-executing anything that matters), but keep in sync if a
+     * non-compound FOR path is ever added. */
     int for_seg_index;
 };
 

@@ -1,6 +1,12 @@
 #!/bin/bash
 # GW-BASIC test runner - categorizes tests by feature status with output validation
 
+# NOTE (v174 LOW-2): "FOR x STEP 0" / "STEP <0.5" (CINTs to 0) NEVER
+# terminate — this is GW-BASIC semantics (ASM GWMAIN FOR NT0STP sets
+# the step sign to 2 so the NEXT termination test can never match).
+# A test hanging inside such a loop is EXPECTED, not a regression.
+
+
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="$SCRIPT_DIR/tests/bas"
