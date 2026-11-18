@@ -688,30 +688,38 @@ void test_gosub_tail_host_clear(void) {
      * line, then the tail compound executes) → host marker cleared
      * after the tail. A host-marker regression would change the
      * RETURN target rc or skip the tail body. */
+    /* v176 MEDIUM-1: self-contained — register the host line HERE
+     * instead of relying on an earlier test having added 960 */
+    gwlist_add_line(960, "' self-contained host line");
     gwlist_add_line(970, "RETURN");
     gwlist_add_line(980, "X = 1");   /* host continuation target */
     /* v175: the runner sets g_curlin before each line — emulate it
-     * so next86_gosub_to_line can resolve the host continuation */
+     * so next86_gosub_to_line can resolve the host continuation.
+     * The host continuation is line 960's next (961), computed from
+     * the list rather than hard-coded. */
     extern WORD g_curlin;
-    g_curlin = 960;   /* the GOSUB lives on line 960 (added by an
-                       earlier test); its continuation is 961 */
+    g_curlin = 960;   /* the GOSUB lives on line 960 (self-registered) */
     /* GOSUB jumps to 970, tail "B = 7" stashed */
     TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970: B = 7"), 970,
                        "GOSUB jumps to subroutine, tail stashed");
     /* RETURN on 970: pops the entry, takes the tail (host = 980),
      * executes the tail body (B = 7), and continues at 980 */
     int rrc = gwsts_exec_compound("RETURN");
-    TEST_ASSERT_EQ_INT(rrc, 961,
-                       "RETURN returns to HOST continuation (961), not caller");
+    /* host continuation = 960's next line, derived from the list */
+    struct program_line *host = gwlist_find_line(960);
+    TEST_ASSERT(host && host->next, "host line 960 has a next");
+    TEST_ASSERT_EQ_INT(rrc, (int)host->next->number,
+                       "RETURN returns to HOST continuation, not caller");
     TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("B"), 7, "tail body ran (B=7)");
     /* v175 MEDIUM-1: marker cleared — a later GOSUB returns to the
      * line after its caller again (970's next is 980) */
     TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970"), 970,
                        "post-tail GOSUB jumps normally");
-    TEST_ASSERT_EQ_INT(gwsts_exec_compound("RETURN"), 961,
-                       "post-tail RETURN still targets 961 (no host leak)");
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("RETURN"), (int)host->next->number,
+                       "post-tail RETURN still targets host continuation (no host leak)");
     /* no leftover state */
     TEST_ASSERT_EQ_INT(next86_get_gosub_depth(), 0, "gosub stack empty");
+    gwlist_delete_line(960);   /* self-registered host line */
     gwlist_delete_line(970);
     gwlist_delete_line(980);
     gwdata_clear_error();
