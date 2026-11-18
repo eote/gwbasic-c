@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v175 修复轮 — gosub_tail_host_clear 链路真断言 + 9 项 .expected 尾换行修复 (1M/2L 全处理); 下一步 v176 review |
+| **当前阶段** | v176 修复轮 — gosub 测试自足 (自注册宿主行+动态续点) + test_on_error 尾换行 (1M/2L 全处理, strict 假失败归零); 下一步 v177 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,39 @@
 
 ---
 
+## 当前轮: CODE_REVIEW v176 修复轮 — 1M/2L 全处理 (strict 假失败归零)
+
+### MEDIUM-1 (gosub 测试隐式依赖前序测试行号 → 自足)
+
+- reviewer 取证: `g_curlin=960` 依赖 `test_line_start_comment_data`
+  先注册 960/961 — 注册顺序调整会脆断, 行号精简会假绿
+- **修复**: 测试**自足** — 开头自行 `gwlist_add_line(960, "' 
+  self-contained host line")`; 断言改为**动态推导** (gwlist 查
+  960 的 next 作为宿主续点期望, 不再硬编码 961); 自建 960 行
+  生命周期清理 (delete)
+
+### LOW
+
+| # | 处理 |
+|---|------|
+| L1 | `test_on_error.expected` 补尾换行 (程序输出以 \r\n 结束, expected 缺尾 → reviewer 严格比对判 fail) — 真值核对后补 \n |
+| L2 | 960/961 归属: 960 已自足注册并清理; 961 为前序测试行 (不属本测试生命周期) |
+
+### 附带: strict 字节比对假失败归零
+
+- reviewer 口径复验: .bas 全量 113/113 **严格字节全等**
+  (\r\n 归一 + 尾换行敏感) — v175 遗漏的 `test_on_error` 已补
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 (root+tests) | ✅ 0 警告 |
+| 单测 | ✅ **3607/3607 PASS** (+1 动态断言) |
+| .bas 逐个 | ✅ **89/89** (strict 口径, 0 假失败) |
+| 孤儿检测 | ✅ **973 = 973** |
+
+---
 ## 当前轮: CODE_REVIEW v175 修复轮 — 1M/2L 全处理 + 9 项 expected 尾换行
 
 ### MEDIUM-1 (gosub_tail_host_clear 断言打空 → 沿链路真断言)
