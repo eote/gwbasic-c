@@ -1,51 +1,39 @@
-# GW-BASIC C Port - Code Review v174
+# GW-BASIC C Port - Code Review v175
 
-**日期**: 2026-11-18
-**审查范围**: `06b94ef` → `afebac3`（v173 修复轮 `46c7073` + 进度登记 `afebac3`）
-**测试状态**: 断言 **3602/3602 通过** | 测试函数 **973 = 973**（0 孤儿）| 编译警告 **0** | .bas 目录全量 **113/113***（9 项仅 .expected 缺尾换行，逐字节确认非真实失败）
+**日期**: 2026-11-19
+**审查范围**: `afebac3` → `5b22dc0`（v174 修复轮 `b20b3ec` + 进度登记 `5b22dc0`）
+**测试状态**: 断言 **3611/3611 通过** | 测试函数 **973 = 973**（0 孤儿）| 编译警告 **0** | .bas 目录全量 **113/113***（9 项仅 .expected 缺尾换行，逐字节确认非真实失败）
 
-**总体评分**: **B-（接近可合并）** — **0 CRITICAL + 0 HIGH + 1 MEDIUM**（T3 单测无真实断言）+ **2 LOW**
+**总体评分**: **B-（可合并，建议顺手修 MEDIUM-1）** — **0 CRITICAL + 0 HIGH + 1 MEDIUM**（T3 gosub 断言打空 + 测试状态泄漏）+ **2 LOW**
 
 ---
 
 ## 一、概述
 
-`46c7073`（src 3 文件 + tests 4 文件 + run_bas_tests.sh）修复 v173 唯一 HIGH（FOR 前缀段跨行 NEXT 死循环），并入库 T1/T2/T3：
+`b20b3ec`（tests +37、gwbasic.h 注释 +6、run_bas_tests.sh 注释 +6）修复 v174 的 1M/2L。**src 无行为变更**，全部为测试断言补强与注释：
 
 | 文件 | 变更 |
 |------|------|
-| `src/gwbasic.h` | +5：`for_entry.for_seg_index`（FOR 头所在 compound 段索引） |
-| `src/next86.c` | +22：`next86_for` 记录 `for_seg_index`（取 `g_state->current_seg_index`）；`next86_current_for_seg()`；M2 语义注释（STEP CINT=0 → ASM NT0STP 故意无限循环，非 bug） |
-| `src/gwmain.c` | +7：runner `-3` 重入用 `resume_seg_skip = for_seg + 1`（前缀段不重执行） |
-| `tests/bas/` | +T1 `test_for_prefix_seg.bas/.expected`；+T2 `test_gosub_nested_tail.bas/.expected` |
-| `tests` | +T3 2 单测（`test_for_prefix_seg_skip`、`test_gosub_tail_host_clear`）；run_bas_tests.sh 89 登记（+2） |
+| `tests/test_str_semantics.c` | +37：`test_for_prefix_seg_skip` 补 6 断言（A=8/I=4 终值 + -3 续环驱动）；`test_gosub_tail_host_clear` 补 2 断言 |
+| `src/gwbasic.h` | 注释：`for_seg_index` 仅 compound 路径可信（v174 LOW-1） |
+| `run_bas_tests.sh` | 头注释：`STEP 0/0.49` 永不终止属 GW-BASIC 语义（ASM NT0STP，v174 LOW-2） |
 
 ### 验证结果
 
 | 项 | 结果 |
 |----|------|
 | 构建 | ✅ 0 警告 |
-| 单测 | ✅ **3602/3602**（v173: 3601，+1）；**973=973**（+2，0 孤儿） |
-| .bas 全量 | ✅ **113/113**（+T1/T2；9 项仅 expected 尾换行） |
-| **HIGH-1 前缀段死循环** | ✅ **修复**：`A=1: FOR I=1 TO 3: PRINT X: NEXT I` → X 1X 2X 3DONE |
-| T1（入库红灯） | ✅ `test_for_prefix_seg` 输出与 `.expected` 一致 |
-| T2（嵌套 GOSUB tail） | ✅ `S1S3S1-TAILB1 / S2B3 / MAIN-END` 与 `.expected` 一致 |
-| **多前缀段** | ✅ `A=1: B=2: FOR …` → P 1P 2P 3、AB=1 2（前缀不重执行） |
-| **嵌套跨行 FOR** | ✅ `FOR I…` / `FOR J…` / NEXT J / NEXT I → I1J1J2 I2J1J2；嵌套+前缀段 `A=1: FOR K…` 亦正确 |
-| 跨行 NEXT（无前缀/负步/浮点步） | ✅ F1F2F3、G3G2G1、M1/1.5/2/2.5 |
-| 单行 FOR 同体+尾随 / 内嵌 GOSUB | ✅ S1S2S3AFTER（AFTER 一次）、SUBSUBDONE2 |
-| 段0 RESUME NEXT / index 残留 | ✅ HSEG2-OK LINE30 / S2-SHOULD-PRINT LINE60 |
-| 整数 STEP 0.5 / STEP 0.49 语义 | ✅ B1..9；0.49→CINT 0→按 ASM NT0STP 死循环（语义注释，非 bug） |
-| IF 行号+尾随 / IF 内单行 FOR | ✅ TGT/ELSE-JUMP/TGT500、O1O2 |
+| 单测 | ✅ **3611/3611**（v174: 3602，+9 断言）；**973=973**，0 孤儿 |
+| .bas 全量 | ✅ **113/113**（9 项仅 expected 尾换行） |
+| 回归（src 无行为变化，.bas 全量确认） | ✅ 无回归 |
 
-### 转正闭环（v173 第四节建议）
+### v174 问题闭环
 
-| 建议 | 状态 |
+| v174 | 状态 |
 |------|------|
-| T1 红灯 → .bas + .expected | ✅ 已入库且通过（修复后转绿） |
-| T2 嵌套 GOSUB .bas 回归基线 | ✅ 已入库且通过 |
-| T3 两条单测 | ⚠️ 已注册（973=973），但**均为 TEST_PASS 无真实断言**（见 MEDIUM-1） |
-| 探针转正率 | ✅ 本轮 4/4（T1+T2+2 单测），上一轮唯一 HIGH 已带红灯闭环 |
+| M1 T3 空转单测 | ⚠️ **部分闭环**：`for_prefix_seg_skip` 断言有效（能捕获 FOR 头重推类回归）；`gosub_tail_host_clear` 断言**打空**（详见 MEDIUM-1） |
+| L1 for_seg_index 注释 | ✅ 已补（compound 路径可信说明） |
+| L2 STEP 0 语义记录 | ✅ 已写入 run_bas_tests.sh 头注释 |
 
 ---
 
@@ -57,15 +45,27 @@
 
 ### 🟧 HIGH
 
-无（v173 唯一 HIGH 已闭环，全部回归探针通过）。
+无。
 
 ### 🟨 MEDIUM
 
 | # | 描述 | 文件 | 行号 |
 |---|------|------|------|
-| 1 | **T3 两条新单测只有 `TEST_PASS` 无真实断言——`test_for_prefix_seg_skip`/`test_gosub_tail_host_clear` 实际是空转** | `tests/test_str_semantics.c` | 新增 2 函数 |
+| 1 | **`test_gosub_tail_host_clear` 的两条断言打空：未执行 RETURN → `g_tail_host_return` 从未被设置/清除，断言在 host 标识泄漏时也会通过；且两次 `GOSUB 970` 压栈未 pop、`gwlist_add_line(970)` 泄漏到后续测试** | `tests/test_str_semantics.c` | `test_gosub_tail_host_clear` |
 
-**详情:** 两条单测仅调用 `gwsts_exec_compound(...)` 后断言返回 0 一次（+1 断言），或直接 `TEST_PASS`（0 断言）。`test_for_prefix_seg_skip` 调 `gwsts_exec_compound("A=1: FOR I=1 TO 3: A = A + I")`——该 compound 不含 NEXT，单测路径**不触发 runner 的 -3 重入**（死循环发生点），因此本轮修复的核心逻辑（`for_seg_index` + `resume_seg_skip = for_seg+1`）**没有被单测实际锁定**，只是占位。真防护仍依赖 .bas T1（✅ 已入库，这才是有效锁）。既然 T1/T2 .bas 已是有效集成锁，T3 单测至多是"冗余且误导"（让人误以为有断言覆盖）。**修复建议:** 要么给 T3 加真实断言（模拟 NEXT 返回 -3 后 runner 重入段跳过的行为），要么删除 T3 两条空转单测、在注释中引用 T1/T2 作为覆盖载体，避免"有单测=有覆盖"的错觉。
+**详情（逐点取证）:**
+
+```c
+gwlist_add_line(970, "RETURN");
+TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970: B = 7"), 970, "...");  /* 断言① */
+TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970"), 970, "...");          /* 断言② */
+```
+
+1. **断言①** 验证的是"GOSUB 段返回目标行号 rc=970"——`next86_gosub_to_line` 的返回码与 `g_tail_host_return`（宿主续点）**无关**；且 tail `B = 7` 虽被 stash，但**测试从未执行 RETURN**，`next86_gosub_take_tail()`（`g_tail_host_return = e->text_ptr` 的唯一设置点，next86.c:565）从未被调用 → marker 全程为 0。
+2. **断言②** `"GOSUB 970"` 同理由——即使实现存在"host marker 泄漏为残留值"的回归，`next86_gosub_to_line` 会改用 `return_line = g_tail_host_return` 压栈，但**返回码 rc 仍是 970**，断言照样通过。**两条断言都无法失败于 host 生命周期 bug**，与 v174 MEDIUM-1 的意图（锁定 `g_tail_host_clear` 机制）不符。
+3. **状态泄漏**：两次 GOSUB 各自压栈（`g_gosub_sp` +2）而测试内**无 RETURN/clear**；`gwlist_add_line(970, "RETURN")` 向程序列表注入 970 行也未清理。若后续测试（如 `gwsts_on_gosub_syntax` 等）对 gosub 栈/程序列表状态敏感，会受影响——当前靠每个测试开头的 `gwdata_init()` 式重置掩盖（需确认 `gwinit_init()` 是否清 gosub 栈与程序列表）。
+
+**修复建议:** 单测层真正驱动 host 生命周期需要沿 look take_tail→tail 复合→clear 调用链（即必须执行 RETURN 使其 tail 生效）；更实用的是：既然 T2 `.bas`（`test_gosub_nested_tail.bas`）已端到端锁定该机制（v174 已验证通过），**删除 `test_gosub_tail_host_clear` 的两条空断言**，改为注释引 T2——避免"有断言=有覆盖"的错觉。若坚持单测，则需先 `next86_clear_gosub_stack()`、构造"执行 RETURN 完成 tail"的调用序列后再用第二条 GOSUB 断言其 text_ptr（这需要导出 gosub 栈状态，见长期建议）。
 
 ---
 
@@ -73,8 +73,8 @@
 
 | # | 描述 |
 |---|------|
-| 1 | `for_seg_index` 依赖 `g_state->current_seg_index`；若 FOR 头不在 compound 内执行（如独立行 FOR `10 FOR I=1 TO 3` 直接走语句执行器），current_seg_index 可能为陈旧值——实测独立行 FOR + 跨行 NEXT 均正确（G/J/M 循环通过），但建议注释该字段只对 compound 路径可信 |
-| 2 | STEP CINT=0 → 死循环标注"非 bug"但**未真机对照**（仅 ASM 推断 NT0STP 语义）；建议在 run_bas_tests.sh 或文档中明确记录 `STEP 0/0.49` 属于 GW-BASIC 语义，避免后续维护者误判为回归 |
+| 1 | `test_for_prefix_seg_skip` 的 -3 驱动是**直接调 `gwsts_exec_compound` 模拟**（body 文本 + NEXT），不经 `run_program_lines` 的 `resume_seg_skip = for_seg+1` 逻辑——能锁"FOR 头不重推/前缀不重执行"（A=8/I=4），但 runner 段的集成仍靠 T1 `.bas`；建议注释明确"单测层不覆盖 runner 路径" |
+| 2 | `gwsts_exec_statement("ON ERROR GOTO 0")` 一行在 `test_gosub_tail_host_clear` 中与测试目标无关（残留调试行），且 `gwlist_add_line(970, ...)` 无生命周期管理 |
 
 ---
 
@@ -82,51 +82,51 @@
 
 | 决策 | 评价 |
 |------|------|
-| `for_entry.for_seg_index` + runner `skip = for_seg+1` | ✅ 彻底封闭死循环：前缀段、多前缀、嵌套跨行 FOR 全对 |
-| T1 红灯先入库再修复 | ✅ 理想的 TDD 闭环（本轮红灯→转绿） |
-| T2 嵌套 GOSUB .bas 基线 | ✅ 防回归有效（上一轮修复唯一无测试项已补齐） |
-| M2 STEP 0 语义注释 | ✅ 与 ASM NT0STP 对齐；未真机验证（LOW-2） |
-| T3 无断言单测 | ⚠️ 占位式空转，反而制造"已覆盖"假象（MEDIUM-1） |
+| `for_prefix_seg_skip` 补真断言（A=8、I=4、-3/-3/0 三连） | ✅ 有效：A=1(前缀)+1(首体)+1+2+3=8 与 I=4 能捕获"FOR 头重推→I 重置"类回归 |
+| `gosub_tail_host_clear` 补断言 | ❌ 打空：未触发 take_tail/clear 任一设置点，断言与 host 机制正交（MEDIUM-1） |
+| src 注释（for_seg_index 可信范围、STEP 0 语义） | ✅ 到位且准确（run_bas_tests.sh 头注释对维护者友好） |
+| 本轮"src 零变更 + 纯测试" | ✅ 符合 MEDIUM/LOW 修复的最小化原则，回归面为零 |
 
-**根因**: 修复主体（for_seg_index 传递）方向正确、验证彻底；剩余问题集中在"测试真实性"——T3 单测占位无断言，以及两处需要真机/文档确认的语义（STEP 0、for_seg_index 非 compound 路径陈旧值）。
+**根因**: v174 报告建议被理解为"给 T3 加断言即可"；两处断言中 `for_prefix_seg` 恰好驱动了部分真实状态（FOR entry 的 -3），而 gosub host 机制的唯一入口是 RETURN 执行路径——没有沿路径设计测试，断言自然落空。**教训：补断言必须沿被测机制的调用链设计，纯结果断言在全局状态机制上经常失效。**
 
 ---
 
 ## 四、改进建议
 
 ### 短期
-1. **MEDIUM-1**: 给 T3 补真实断言（见下 T3'），或删除占位单测并在注释中显式指向 T1/T2。推荐补真断言——runner 重入段跳过是未来最可能的回归点，值得单测锁定。
+1. **MEDIUM-1**: 删除 `test_gosub_tail_host_clear` 空断言并注释引 T2 `.bas`（推荐）；或沿 take_tail→tail 复合→clear 链路补真断言。加 `next86_clear_gosub_stack()` 防泄漏。
+2. LOW-1: `test_for_prefix_seg_skip` 注释注明经 runner 的集成由 T1 `.bas` 承担。
 
 ### 中期
-2. 在 `tests/bas/` 或文档记录 `STEP 0`/`STEP 0.49` 的 GW-BASIC 语义（ASM NT0STP），标注"非回归"。
-3. `for_seg_index` 字段注释补充"仅 compound 路径可信"；若后续引入非 compound FOR 执行路径，需同步维护该字段。
+3. 保持"探针→红灯→修复→转正"循环；转正时优先选择能驱动目标机制最小状态的单测形态（或直接 .bas 集成），避免打空断言。
 
 ### 长期
-4. 继续推行"探针→红灯→修复→转正"循环；下一轮重点验证本轮未覆盖的新边界（如 FOR 跨行 + GOSUB tail 组合、三段嵌套 FOR）。
+4. 为 `next86_gosub_to_line`/`return_line` 机制考虑导出 g_gosub_stack 摘要查询（如 `next86_gosub_peek_return_line()`），使单测能断言压栈 text_ptr——避免此类"打空"断言反复出现。
 
 ---
 
 ## 五、总结
 
-**总体评价**: v173 唯一 HIGH（FOR 前缀段跨行 NEXT 死循环）已彻底修复——多前缀段、嵌套跨行 FOR 均正确，T1 红灯转绿、T2 基线入库，全部 9 组回归探针通过，3602/973/0W/0 孤儿、.bas 113/113。本轮无功能缺陷，**首次自 v158 起 0 CRITICAL / 0 HIGH**；剩余问题仅为测试真实性（T3 空转单测）与两处语义确认项。**建议：MEDIUM-1 修复后可合并**（或至少删除占位断言以免误导）。
+**总体评价**: v174 的 1M/2L 中，LOW-1/LOW-2 以注释精确闭环；MEDIUM-1（T3 空转）**部分闭环**——`for_prefix_seg_skip` 的 6 条断言真实有效（锁定 FOR 头不重推），但 `gosub_tail_host_clear` 的两条新断言**打空**（未触发 take_tail/clear 任何设置点，且断言结果与 host 标识正交，状态还泄漏至后续测试）。src 零行为变更，.bas 113/113、3611 断言、0 孤儿、0 警告。**功能上可合并（0C/0H）**；MEDIUM-1 属测试质量遗留：建议删除空断言改注释引 T2，或在单测中沿 RETURN→tail→clear 链路补真断言。
 
-**关键发现**: **0 CRITICAL / 0 HIGH / 1 MEDIUM / 2 LOW**；3602 单测、113/113 .bas、0 警告、0 孤儿。
-**建议**: 补 T3 真实断言（或删除占位单测）后即可合并；本轮为多轮以来首次无 HIGH/CRITICAL。
+**关键发现**: **0 CRITICAL / 0 HIGH / 1 MEDIUM / 2 LOW**；3611 单测、113/113 .bas、0 警告、0 孤儿。
+**建议**: 可合并；MEDIUM-1 顺手修（删空断言引 T2，或沿机制链路补断言）。
 
 ---
 
 ## 六、指标追踪
 
-| 指标 | v173 | v174 | 变化 |
+| 指标 | v174 | v175 | 变化 |
 |------|------|------|------|
-| 断言 / 通过 | 3601 / 3601 | **3602 / 3602** | +1 |
-| 测试函数 | 971 | **973** | +2 |
+| 断言 / 通过 | 3602 / 3602 | **3611 / 3611** | +9 |
+| 测试函数 | 973 | **973** | 保持 |
 | 孤儿数 | 0 | **0** | 保持 |
 | 警告 | 0 | **0** | 保持 |
-| .bas | 111/111 | **113/113** | +T1/T2 |
-| FOR 前缀段死循环 | X 1 死循环 | **X1X2X3、多前缀段、嵌套全对** | ✅ 修复（T1 红灯转绿） |
-| 嵌套 GOSUB tail 基线 | 无 .bas | **T2 入库通过** | ✅ |
-| 跨行 NEXT / 单行 FOR / RESUME / STEP | 全对 | **全对（无回归）** | ✅ |
-| CRITICAL / HIGH | 0 / 1 | **0 / 0** | 首次清零 ✅ |
+| .bas | 113/113 | **113/113** | 保持 |
+| src 行为 | — | **零变更** | ✅ 最小化 |
+| T3 for_prefix 断言 | 空转 | **A=8/I=4 有效** | ✅ 部分闭环 |
+| T3 gosub host 断言 | 空转 | **打空（无关机制）** | ❌ 遗留 MEDIUM-1 |
+| LOW-1/2 注释 | — | **已落实** | ✅ |
+| CRITICAL / HIGH | 0 / 0 | **0 / 0** | 保持可合并 |
 
-**注释**: 构建/单测 `CC=D:/myplace/program/mingw64/bin/gcc.exe`；.bas 全量字节比对（\r 归一、stdin=/dev/null），9 项差异逐字节核实为 .expected 缺尾换行。修复验证与回归均为独立进程手工探针；ASM 对照 GWMAIN.ASM（`NT0STP` step 0 语义、FOR 文本指针）。仅更新本报告，未改源码/测试、未提交。
+**注释**: 构建/单测 `CC=D:/myplace/program/mingw64/bin/gcc.exe`；.bas 全量字节比对（\r 归一、stdin=/dev/null），9 项差异逐字节核实为 .expected 缺尾换行。`g_tail_host_return` 设置点取证自 next86.c:565（take_tail）/清除点 507、gwsts.c:1846。仅更新本报告，未改源码/测试、未提交。
