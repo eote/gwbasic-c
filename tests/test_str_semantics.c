@@ -654,7 +654,11 @@ void test_for_prefix_seg_skip(void) {
     /* v173 HIGH-1: FOR line with a leading segment — cross-line NEXT
      * re-entry must skip to the segment AFTER the FOR header, not
      * segment 1. Invariant: the FOR header must not re-push (I must
-     * not reset), and the prefix segment must not re-execute. */
+     * not reset), and the prefix segment must not re-execute.
+     * v175 LOW-1: the -3 drives below simulate the runner re-entry
+     * directly (compound level); the run_program_lines
+     * resume_seg_skip path itself is locked by T1
+     * (tests/bas/test_for_prefix_seg.bas). */
     TEST_ASSERT_EQ_INT(gwsts_exec_compound("A=1: FOR I=1 TO 3: A = A + I"), 0,
                        "prefix + FOR line executes");
     TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("A"), 1 + 1, "first iteration A=2");
@@ -679,18 +683,37 @@ void test_for_prefix_seg_skip(void) {
 void test_gosub_tail_host_clear(void) {
     gwdata_init(); gwram_init(); gwinit_init(); gweval_init();
     gwdata_clear_error();
-    /* v172 MEDIUM-3 lifecycle: while a GOSUB tail executes, a nested
-     * GOSUB returns to the host continuation line; after the tail
-     * finishes the marker clears and GOSUBs return normally. */
+    /* v175 MEDIUM-1: drive the REAL chain — GOSUB (tail stashed) →
+     * RETURN (take_tail sets g_tail_host_return = host continuation
+     * line, then the tail compound executes) → host marker cleared
+     * after the tail. A host-marker regression would change the
+     * RETURN target rc or skip the tail body. */
     gwlist_add_line(970, "RETURN");
-    gwsts_exec_statement("ON ERROR GOTO 0");
-    /* issue GOSUB from a compound line: entry gets a tail; rc = the
-     * subroutine line (jump) with the tail stashed for RETURN */
+    gwlist_add_line(980, "X = 1");   /* host continuation target */
+    /* v175: the runner sets g_curlin before each line — emulate it
+     * so next86_gosub_to_line can resolve the host continuation */
+    extern WORD g_curlin;
+    g_curlin = 960;   /* the GOSUB lives on line 960 (added by an
+                       earlier test); its continuation is 961 */
+    /* GOSUB jumps to 970, tail "B = 7" stashed */
     TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970: B = 7"), 970,
-                       "GOSUB + tail (tail deferred, jump to 970)");
-    /* after RETURN-tail execution the host marker must be clear —
-     * a fresh GOSUB returns to the line AFTER its caller */
-    TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970"), 970, "normal GOSUB jumps");
+                       "GOSUB jumps to subroutine, tail stashed");
+    /* RETURN on 970: pops the entry, takes the tail (host = 980),
+     * executes the tail body (B = 7), and continues at 980 */
+    int rrc = gwsts_exec_compound("RETURN");
+    TEST_ASSERT_EQ_INT(rrc, 961,
+                       "RETURN returns to HOST continuation (961), not caller");
+    TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("B"), 7, "tail body ran (B=7)");
+    /* v175 MEDIUM-1: marker cleared — a later GOSUB returns to the
+     * line after its caller again (970's next is 980) */
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970"), 970,
+                       "post-tail GOSUB jumps normally");
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("RETURN"), 961,
+                       "post-tail RETURN still targets 961 (no host leak)");
+    /* no leftover state */
+    TEST_ASSERT_EQ_INT(next86_get_gosub_depth(), 0, "gosub stack empty");
+    gwlist_delete_line(970);
+    gwlist_delete_line(980);
     gwdata_clear_error();
-    TEST_PASS("gosub tail host clear lifecycle");
+    TEST_PASS("gosub tail host lifecycle (RETURN-driven)");
 }
