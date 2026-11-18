@@ -5,7 +5,7 @@
 | 维度 | 定义 |
 |------|------|
 | **里程碑** | M0 ✅ → M1 正式关闭 ✅ → **M2 进行中 2/3+审计** (GWLIST ✅ / .bas 基线+ON..GOTO ✅ / INSTR 正式闭环 ✅ / 字符串函数一致性审计 ✅) |
-| **当前阶段** | v173 修复轮 — FOR 前缀段跨行 NEXT 死循环 (for_seg_index) + T1/T2 .bas + T3 单测 + STEP 0 语义 (1H/3M 全处理); 下一步 v174 review |
+| **当前阶段** | v174 修复轮 — T3 空转单测补真断言 + for_seg_index/STEP 0 语义注释 (1M/2L 全处理, 首次 0C/0H); 下一步 v175 review |
 | **依赖顺序** | M0 ✅ → M1 ✅ → M2 → M3+ |
 | **TDD 工作流** | 7 步标准化流程 |
 
@@ -55,6 +55,33 @@
 
 ---
 
+## 当前轮: CODE_REVIEW v174 修复轮 — 1M/2L 全处理 (**首次 0 CRITICAL / 0 HIGH**)
+
+### MEDIUM-1 (T3 空转单测 → 真断言)
+
+- `test_for_prefix_seg_skip`: 驱动 -3 续环 (compound 三次调用),
+  断言 **A=1+1+1+2+3=8 / I=4** — FOR 头重推会使 I 重置、总值不同
+  → for_seg_index + runner 段跳过逻辑被单测实际锁定
+- `test_gosub_tail_host_clear`: GOSUB rc 语义断言 (970 跳子程序
+  行 + tail stash) + RETURN 后宿主标记清除生命周期
+
+### LOW
+
+| # | 处理 |
+|---|------|
+| L1 | gwbasic.h `for_seg_index` 注释: 仅 compound 路径可信 (独立行 FOR 陈旧值无害, 已实测); 引入非 compound FOR 路径时需同步维护 |
+| L2 | run_bas_tests.sh 头注释: STEP 0 / STEP <0.5 (CINT→0) 永不终止 = GW-BASIC 语义 (ASM NT0STP), 挂起非回归 |
+
+### 验证（一轮全套，全绿）
+
+| 验证项 | 结果 |
+|--------|------|
+| 干净重建 (root+tests) | ✅ 0 警告 |
+| 单测 | ✅ **3602/3602 PASS** (断言数持平, 真实性提升) |
+| .bas 逐个 | ✅ **89/89** |
+| 孤儿检测 | ✅ **973 = 973** |
+
+---
 ## 当前轮: CODE_REVIEW v173 修复轮 — 1H/3M 全处理 (阻断解除)
 
 ### HIGH (FOR 前缀段 + 跨行 NEXT 死循环)
