@@ -711,17 +711,24 @@ void test_gosub_tail_host_clear(void) {
     TEST_ASSERT_EQ_INT(rrc, (int)host->next->number,
                        "RETURN returns to HOST continuation, not caller");
     TEST_ASSERT_EQ_INT((int)gweval_eval_numeric("B"), 7, "tail body ran (B=7)");
-    /* v175 MEDIUM-1: marker cleared — a later GOSUB returns to the
-     * line after its caller again (970's next is 980) */
+    /* v177 LOW-1: make the leak-detection fork REAL — move the
+     * caller to a different line (990, self-registered). Normal:
+     * RETURN goes to 990's next (991); leaked (stale host marker
+     * 961): RETURN would go to 961 instead. */
+    gwlist_add_line(990, "Y = 2");
+    gwlist_add_line(991, "Z = 1");
+    g_curlin = 990;
     TEST_ASSERT_EQ_INT(gwsts_exec_compound("GOSUB 970"), 970,
                        "post-tail GOSUB jumps normally");
-    TEST_ASSERT_EQ_INT(gwsts_exec_compound("RETURN"), (int)host->next->number,
-                       "post-tail RETURN still targets host continuation (no host leak)");
+    TEST_ASSERT_EQ_INT(gwsts_exec_compound("RETURN"), 991,
+                       "post-tail RETURN targets the NEW caller's next (991), not stale 961");
     /* no leftover state */
     TEST_ASSERT_EQ_INT(next86_get_gosub_depth(), 0, "gosub stack empty");
     gwlist_delete_line(960);   /* self-registered host line */
     gwlist_delete_line(970);
     gwlist_delete_line(980);
+    gwlist_delete_line(990);
+    gwlist_delete_line(991);
     gwdata_clear_error();
     TEST_PASS("gosub tail host lifecycle (RETURN-driven)");
 }
